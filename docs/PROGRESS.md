@@ -71,13 +71,13 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 - ✅ (authorised 2026-11-01, D-010) `git push`, tag, and GitHub Release — maintainer approved. The release installer is built by **GitHub Actions on a windows-latest (MSVC) runner** on a pushed `v*` tag, since the local toolchain can't build the native app.
 
 ## Open blockers / needs-maintainer
-- **Website is deployed but not yet public.** The Vercel project has "Vercel Authentication"
-  deployment protection ON, so visitors must log in. Turning it off was blocked by the local
-  safety classifier ("Security Weaken"). To make https://web-flame-kappa-83.vercel.app public:
-  either (a) Vercel dashboard → Project "web" → Settings → Deployment Protection → turn OFF
-  "Vercel Authentication"; or (b) add a permission rule for
-  `mcp__plugin_vercel_vercel__update_project` and I'll flip it. (Optional later: add the
-  krovi.tech custom domain and rename the project to "krovi".)
+- **Website is deployed (now the richer v2) but not yet public.** https://web-flame-kappa-83.vercel.app
+  has "Vercel Authentication" deployment protection ON, so visitors must sign in. Turning it off
+  programmatically is blocked two ways: the local safety classifier flags it ("Security Weaken"),
+  and the Vercel MCP connection isn't authorised for the "naitiklearns-projects" team scope (403).
+  Routing around the safety denial via the CLI is deliberately NOT done. **One-click fix (maintainer):**
+  Vercel dashboard → Project "web" → Settings → Deployment Protection → turn OFF "Vercel
+  Authentication". (Optional: add the krovi.tech custom domain + rename the project to "krovi".)
 - **64-bit C toolchain missing.** Host Rust is `x86_64-pc-windows-gnu` with a 32-bit-only MinGW
   gcc. This blocks (1) the SQLite backend (`--features sqlite`) and (2) the native Tauri build —
   **confirmed**: `parking_lot_core` fails at `dlltool ... -m i386:x86-64` ("Invalid bfd target").
