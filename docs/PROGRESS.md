@@ -17,11 +17,21 @@ _Last updated: 2026-10-31_
 - ✅ Clipboard history (unpinned-cap ring, dedup-promote, pin-to-top, search/filter) — 13 tests
 - ✅ Paste stack (9 numbered slots, LIFO) — 5 tests
 - ✅ Timers + stopwatch (injected clock, pause/resume/finish, laps) — 9 tests
-- 🔄 Pomodoro state machine (to layer on `CountdownTimer`)
-- ⏳ File shelf (park/retrieve metadata model)
-- ⏳ Notes + to-do storage
-- ⏳ Local persistence layer (SQLite via rusqlite, local-only)
-- ⏳ Unit tests ≥ core logic coverage  _(27 passing so far)_
+- ✅ Pomodoro state machine (layered on `CountdownTimer`, work/break cycles) — 7 tests
+- ✅ File shelf (named shelves, park/retrieve/move metadata model) — 6 tests
+- ✅ Notes + to-do storage (in-memory models) — 8 tests
+- ✅ Screen-time aggregation (per-app/day, no titles/URLs, local-only) — 5 tests
+- ⏳ Local persistence layer (`krovi-store`: SQLite via rusqlite behind a trait; in-memory fake for core tests)
+- 🔄 Unit tests ≥ core logic coverage  _(**53 passing**; pure-logic layer complete)_
+
+### Autonomous overnight run (2026-10-31 night) — safe mode
+Maintainer asleep; authorised an unattended build "till morning, safe way". Operating rules:
+- **Local commits only. No push, tag, GitHub Release, or deploy** — all maintainer-gated.
+- Clean-room invariant (D-002) stays in force; GateGuard safety hook left **on**.
+- Each iteration: do the next pending item **test-first**, run `cargo test`, commit locally,
+  update this file + `DECISIONS.md`. Self-paced via a dynamic loop.
+- Next up: `krovi-store` (persistence trait + in-memory fake + SQLite impl), then Phase 2
+  requires installing the Tauri CLI before the UI shell.
 
 ## Phase 2 — Panel UI (the shelf)
 - ⏳ Window: frameless, always-on-top dropdown, hotkey + corner-click summon
