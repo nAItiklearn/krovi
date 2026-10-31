@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Krovi",
+  "version": "0.1.0",
+  "identifier": "tech.krovi.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Krovi",
+        "label": "main",
+        "width": 1080,
+        "height": 700,
+        "minWidth": 720,
+        "minHeight": 520,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "center": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "category": "Productivity",
+    "shortDescription": "Your everything shelf",
+    "longDescription": "Krovi is a free, open-source, local-first quick-access panel that gathers daily tools into one hotkey-summoned shelf."
+  }
+}

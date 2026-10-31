@@ -2,5 +2,41 @@
 resolver = "2"
 members = ["crates/krovi-core", "crates/krovi-store"]
 
-# Additional crates (krovi-store, krovi-sys, krovi-net) and the Tauri app crate
-# are added to `members` as they are scaffolded in later phases.
+# Additional crates (krovi-sys, krovi-net) join `members` as later phases
+# scaffold them. The Tauri app crate is the workspace *root* package below.
+
+[package]
+name = "krovi-app"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi desktop shell (Tauri 2). Thin #[tauri::command] bridges over krovi-core + krovi-store; no business logic lives here."
+repository = "https://github.com/nAItiklearn/krovi"
+publish = false
+default-run = "krovi-app"
+
+# A lib (for mobile/test reuse) plus the desktop binary, per Tauri 2 convention.
+[lib]
+name = "krovi_app_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "krovi-app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+krovi-core = { path = "crates/krovi-core" }
+krovi-store = { path = "crates/krovi-store" }
+
+[features]
+# Mirrors krovi-store: SQLite persistence is opt-in and needs a 64-bit C
+# compiler (see DECISIONS.md D-009). The default shell uses the in-memory store.
+default = []
+sqlite = ["krovi-store/sqlite"]

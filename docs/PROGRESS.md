@@ -34,11 +34,18 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 - Next up: `krovi-store` (persistence trait + in-memory fake + SQLite impl), then Phase 2
   requires installing the Tauri CLI before the UI shell.
 
-## Phase 2 — Panel UI (the shelf)
-- ⏳ Window: frameless, always-on-top dropdown, hotkey + corner-click summon
-- ⏳ Left tool rail + Home overview cards
-- ⏳ Per-tool views (clipboard, shelf, timers, notes, …)
-- ⏳ Demo mode for design review
+## Phase 2 — Panel UI (the shelf)  ✅ clickable demo
+- ✅ Svelte 5 + Vite + TS frontend; left tool rail, header, Home overview cards, Command Palette (Ctrl/Cmd+K)
+- ✅ 15 interactive per-tool views (home, clipboard, paste stack, timers, pomodoro, file shelf, media, calendar, weather, notes, world clocks, convert, calculator, screen-time, settings)
+- ✅ Demo mode (auto-detects no Tauri → in-memory fixtures); fully runnable in a browser
+- ✅ Tauri shell authored (frameless / always-on-top / skipTaskbar, Ctrl+Alt+Space summon, thin commands over `krovi-core` + `MemStore`) — **native build is toolchain-blocked locally** (see blockers); builds on CI/MSVC
+- ✅ Frontend tests: **26 vitest green**; `svelte-check` 0 errors; `vite build` green
+- ▶️ **Run the demo:** `cd D:\krovi; npm install; npm run dev` → http://localhost:5173
+
+> **Rust build note:** the workspace now includes the `krovi-app` crate, which only compiles on a
+> 64-bit (MSVC) toolchain. Run local Rust tests **per-crate**:
+> `cargo test --manifest-path D:\krovi\src-tauri\Cargo.toml -p krovi-core -p krovi-store`.
+> A whole-workspace `cargo test` fails locally until the toolchain is fixed; CI (windows-latest/MSVC) builds everything.
 
 ## Phase 3 — Integrations
 - ⏳ Media session (now-playing + transport) via GSMTC (windows-rs)
@@ -72,9 +79,11 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
   `mcp__plugin_vercel_vercel__update_project` and I'll flip it. (Optional later: add the
   krovi.tech custom domain and rename the project to "krovi".)
 - **64-bit C toolchain missing.** Host Rust is `x86_64-pc-windows-gnu` with a 32-bit-only MinGW
-  gcc. This blocks (1) the SQLite backend (`--features sqlite`) and likely (2) a full native
-  Tauri build. Fix: install **Visual Studio Build Tools (C++ workload)** and
-  `rustup default stable-x86_64-pc-windows-msvc` (or install a 64-bit MinGW). Until then: core
-  uses `MemStore`, and the panel UI ships as a runnable browser (Vite) demo.
+  gcc. This blocks (1) the SQLite backend (`--features sqlite`) and (2) the native Tauri build —
+  **confirmed**: `parking_lot_core` fails at `dlltool ... -m i386:x86-64` ("Invalid bfd target").
+  Fix: install **Visual Studio Build Tools (C++ workload)** and
+  `rustup default stable-x86_64-pc-windows-msvc` (or a proper 64-bit MinGW-w64). Until then: core
+  uses `MemStore`, and the panel UI ships as a runnable browser (Vite) demo. The release installer
+  is produced by CI on MSVC, so this does not block shipping a download.
 - `git push`, tag, and GitHub Release are now **authorised** (D-010); the release installer is built
   by GitHub Actions on an MSVC `windows-latest` runner when a `v*` tag is pushed.
