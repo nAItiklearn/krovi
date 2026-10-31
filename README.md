@@ -1,2 +1,0 @@
-# KROVI !!
-an ai agen
