@@ -17,8 +17,8 @@ use krovi_core::{
     ClipKind, ClipboardHistory, FileShelf, Notes, PasteStack, Pomodoro, ScreenTime, TodoList,
     DEFAULT_SHELF,
 };
-use krovi_store::{screen_time_records, stored_shelves, MemStore, Store};
 use krovi_net::{Rates, WeatherData};
+use krovi_store::{screen_time_records, stored_shelves, MemStore, Store};
 use krovi_sys::{MediaTrack, Sampler, TransportCommand};
 
 // ---------------------------------------------------------------------------
@@ -112,7 +112,11 @@ impl AppState {
     fn seeded() -> Self {
         // A little starter content so the shell isn't empty on first launch.
         let mut clipboard = ClipboardHistory::default();
-        clipboard.add(ClipKind::Text, "Welcome to Krovi — your everything shelf", 0);
+        clipboard.add(
+            ClipKind::Text,
+            "Welcome to Krovi — your everything shelf",
+            0,
+        );
         clipboard.add(ClipKind::Link, "https://krovi.tech", 1);
 
         let mut notes = Notes::new();
@@ -175,7 +179,12 @@ fn load_clipboard(state: State<AppState>) -> CmdResult<Vec<ClipDto>> {
 }
 
 #[tauri::command]
-fn add_clip(state: State<AppState>, kind: String, content: String, now: u64) -> CmdResult<Vec<ClipDto>> {
+fn add_clip(
+    state: State<AppState>,
+    kind: String,
+    content: String,
+    now: u64,
+) -> CmdResult<Vec<ClipDto>> {
     let kind = parse_kind(&kind)?;
     if content.trim().is_empty() {
         return Err("empty clipboard content".into());
@@ -507,7 +516,9 @@ fn foreground_tick(state: State<AppState>, now: u64) -> CmdResult<Option<ScreenT
             st.record(day, app.as_str(), ms);
             let records = screen_time_records(&st);
             let mut store = state.store.lock().map_err(lock_err)?;
-            store.save_screen_time(&records).map_err(|e| e.to_string())?;
+            store
+                .save_screen_time(&records)
+                .map_err(|e| e.to_string())?;
             Ok(Some(ScreenTimeDto { day, app, ms }))
         }
         None => Ok(None),
@@ -547,14 +558,17 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
-                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+                use tauri_plugin_global_shortcut::{
+                    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
+                };
                 let summon = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space);
                 let handle = app.handle().clone();
-                app.global_shortcut().on_shortcut(summon, move |_app, _scut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        toggle_window(&handle);
-                    }
-                })?;
+                app.global_shortcut()
+                    .on_shortcut(summon, move |_app, _scut, event| {
+                        if event.state() == ShortcutState::Pressed {
+                            toggle_window(&handle);
+                        }
+                    })?;
             }
             Ok(())
         })

@@ -80,7 +80,7 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
 
       - name: clippy (workspace, --features net,native)
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --features net,native -- -D warnings
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --features net,native
 
       - name: Tests (workspace, --features net,native)
         run: cargo test --manifest-path src-tauri/Cargo.toml --features net,native

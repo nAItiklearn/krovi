@@ -146,7 +146,10 @@ mod tests {
 
     #[test]
     fn normalize_strips_path_keeping_exe() {
-        assert_eq!(normalize_process(r"C:\Program Files\App\app.exe"), "app.exe");
+        assert_eq!(
+            normalize_process(r"C:\Program Files\App\app.exe"),
+            "app.exe"
+        );
         assert_eq!(normalize_process("/usr/bin/code"), "code");
         assert_eq!(normalize_process("notepad.exe"), "notepad.exe");
         assert_eq!(normalize_process("  spaced.exe  "), "spaced.exe");

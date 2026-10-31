@@ -12,34 +12,89 @@ use crate::{ScreenTimeRecord, Store, StoredShelf};
 
 pub fn sample_clips() -> Vec<ClipEntry> {
     vec![
-        ClipEntry { id: 2, kind: ClipKind::Link, content: "https://krovi.tech".into(), pinned: true, created_at: 20 },
-        ClipEntry { id: 1, kind: ClipKind::Text, content: "hello world".into(), pinned: false, created_at: 10 },
-        ClipEntry { id: 3, kind: ClipKind::Image, content: "blobs/img-1".into(), pinned: false, created_at: 30 },
+        ClipEntry {
+            id: 2,
+            kind: ClipKind::Link,
+            content: "https://krovi.tech".into(),
+            pinned: true,
+            created_at: 20,
+        },
+        ClipEntry {
+            id: 1,
+            kind: ClipKind::Text,
+            content: "hello world".into(),
+            pinned: false,
+            created_at: 10,
+        },
+        ClipEntry {
+            id: 3,
+            kind: ClipKind::Image,
+            content: "blobs/img-1".into(),
+            pinned: false,
+            created_at: 30,
+        },
     ]
 }
 
 pub fn sample_notes() -> Vec<Note> {
     vec![
-        Note { id: 5, body: "buy milk".into(), created_at: 1, updated_at: 9 },
-        Note { id: 2, body: "multi\nline\nnote".into(), created_at: 2, updated_at: 7 },
+        Note {
+            id: 5,
+            body: "buy milk".into(),
+            created_at: 1,
+            updated_at: 9,
+        },
+        Note {
+            id: 2,
+            body: "multi\nline\nnote".into(),
+            created_at: 2,
+            updated_at: 7,
+        },
     ]
 }
 
 pub fn sample_tasks() -> Vec<Task> {
     vec![
-        Task { id: 1, title: "open task".into(), done: false, created_at: 1, completed_at: None },
-        Task { id: 2, title: "done task".into(), done: true, created_at: 2, completed_at: Some(50) },
+        Task {
+            id: 1,
+            title: "open task".into(),
+            done: false,
+            created_at: 1,
+            completed_at: None,
+        },
+        Task {
+            id: 2,
+            title: "done task".into(),
+            done: true,
+            created_at: 2,
+            completed_at: Some(50),
+        },
     ]
 }
 
 pub fn sample_shelves() -> Vec<StoredShelf> {
     vec![
-        StoredShelf { name: "Default".into(), items: vec![] },
+        StoredShelf {
+            name: "Default".into(),
+            items: vec![],
+        },
         StoredShelf {
             name: "Work".into(),
             items: vec![
-                ShelfItem { id: 10, name: "b.txt".into(), stored_path: "blobs/b".into(), size_bytes: 20, added_at: 2 },
-                ShelfItem { id: 9, name: "a.txt".into(), stored_path: "blobs/a".into(), size_bytes: 10, added_at: 1 },
+                ShelfItem {
+                    id: 10,
+                    name: "b.txt".into(),
+                    stored_path: "blobs/b".into(),
+                    size_bytes: 20,
+                    added_at: 2,
+                },
+                ShelfItem {
+                    id: 9,
+                    name: "a.txt".into(),
+                    stored_path: "blobs/a".into(),
+                    size_bytes: 10,
+                    added_at: 1,
+                },
             ],
         },
     ]
@@ -48,9 +103,21 @@ pub fn sample_shelves() -> Vec<StoredShelf> {
 pub fn sample_screen_time() -> Vec<ScreenTimeRecord> {
     // canonical order: day asc, then app asc
     vec![
-        ScreenTimeRecord { day: 10, app: "a.exe".into(), ms: 500 },
-        ScreenTimeRecord { day: 10, app: "b.exe".into(), ms: 1000 },
-        ScreenTimeRecord { day: 11, app: "a.exe".into(), ms: 250 },
+        ScreenTimeRecord {
+            day: 10,
+            app: "a.exe".into(),
+            ms: 500,
+        },
+        ScreenTimeRecord {
+            day: 10,
+            app: "b.exe".into(),
+            ms: 1000,
+        },
+        ScreenTimeRecord {
+            day: 11,
+            app: "a.exe".into(),
+            ms: 250,
+        },
     ]
 }
 
@@ -62,7 +129,8 @@ pub fn seed<S: Store>(s: &mut S) {
     s.save_shelves(&sample_shelves()).unwrap();
     s.save_screen_time(&sample_screen_time()).unwrap();
     s.set_setting("theme", "dark").unwrap();
-    s.set_setting("data_dir", r"C:\Users\x\AppData\Roaming\Krovi").unwrap();
+    s.set_setting("data_dir", r"C:\Users\x\AppData\Roaming\Krovi")
+        .unwrap();
 }
 
 /// Assert that `s` holds exactly what [`seed`] wrote.
@@ -75,7 +143,10 @@ pub fn assert_seeded<S: Store>(s: &S) {
 
     let mut expected = BTreeMap::new();
     expected.insert("theme".to_string(), "dark".to_string());
-    expected.insert("data_dir".to_string(), r"C:\Users\x\AppData\Roaming\Krovi".to_string());
+    expected.insert(
+        "data_dir".to_string(),
+        r"C:\Users\x\AppData\Roaming\Krovi".to_string(),
+    );
     assert_eq!(s.settings().unwrap(), expected);
     assert_eq!(s.get_setting("theme").unwrap(), Some("dark".to_string()));
 }
@@ -118,7 +189,13 @@ pub fn exercise<S: Store>(s: &mut S) {
 
     // A task with completed_at = None must round-trip as NULL/None, and a
     // single note re-save must not accumulate.
-    let tasks = vec![Task { id: 7, title: "solo".into(), done: false, created_at: 3, completed_at: None }];
+    let tasks = vec![Task {
+        id: 7,
+        title: "solo".into(),
+        done: false,
+        created_at: 3,
+        completed_at: None,
+    }];
     s.save_tasks(&tasks).unwrap();
     assert_eq!(s.load_tasks().unwrap(), tasks);
 }

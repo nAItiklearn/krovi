@@ -22,5 +22,6 @@ pub fn get(url: &str) -> crate::Result<String> {
         .timeout(TIMEOUT)
         .call()
         .map_err(|e| NetError::Request(e.to_string()))?;
-    resp.into_string().map_err(|e| NetError::Request(e.to_string()))
+    resp.into_string()
+        .map_err(|e| NetError::Request(e.to_string()))
 }

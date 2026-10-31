@@ -21,7 +21,10 @@ use std::path::Path;
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::{ClipEntry, ClipKind, Note, Result, ScreenTimeRecord, Store, StoredShelf, StoreError, ShelfItem, Task};
+use crate::{
+    ClipEntry, ClipKind, Note, Result, ScreenTimeRecord, ShelfItem, Store, StoreError, StoredShelf,
+    Task,
+};
 
 /// The current on-disk schema version.
 pub const SCHEMA_VERSION: i64 = 1;
@@ -54,7 +57,9 @@ impl SqliteStore {
     pub fn schema_version(&self) -> Result<i64> {
         let v = self
             .conn
-            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| r.get(0))?;
+            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| {
+                r.get(0)
+            })?;
         Ok(v)
     }
 
@@ -111,9 +116,9 @@ impl SqliteStore {
              COMMIT;",
         )?;
 
-        let count: i64 =
-            self.conn
-                .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))?;
+        let count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))?;
         if count == 0 {
             self.conn.execute(
                 "INSERT INTO schema_version (version) VALUES (?1)",
@@ -358,9 +363,11 @@ impl Store for SqliteStore {
     fn get_setting(&self, key: &str) -> Result<Option<String>> {
         let v = self
             .conn
-            .query_row("SELECT value FROM settings WHERE key = ?1", params![key], |r| {
-                r.get::<_, String>(0)
-            })
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                params![key],
+                |r| r.get::<_, String>(0),
+            )
             .optional()?;
         Ok(v)
     }
@@ -382,10 +389,10 @@ impl Store for SqliteStore {
     }
 
     fn settings(&self) -> Result<BTreeMap<String, String>> {
-        let mut stmt = self.conn.prepare("SELECT key, value FROM settings ORDER BY key")?;
-        let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-        })?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT key, value FROM settings ORDER BY key")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         let mut map = BTreeMap::new();
         for row in rows {
             let (k, v) = row?;

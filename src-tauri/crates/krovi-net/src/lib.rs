@@ -33,8 +33,8 @@ mod http;
 pub use cache::TtlCache;
 pub use currency::{convert, fetch_rates, parse_rates, rates_url, Rates, DEFAULT_BASE};
 pub use weather::{
-    fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon, DayPoint,
-    HourPoint, WeatherData,
+    fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
+    DayPoint, HourPoint, WeatherData,
 };
 
 /// Errors from the network layer.

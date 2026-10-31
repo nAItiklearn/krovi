@@ -58,8 +58,10 @@ pub fn convert(amount: f64, from: &str, to: &str, rates: &Rates) -> crate::Resul
             rates.rates.get(code).copied()
         }
     };
-    let rf = rate_of(&from).ok_or_else(|| NetError::InvalidInput(format!("unknown currency: {from}")))?;
-    let rt = rate_of(&to).ok_or_else(|| NetError::InvalidInput(format!("unknown currency: {to}")))?;
+    let rf = rate_of(&from)
+        .ok_or_else(|| NetError::InvalidInput(format!("unknown currency: {from}")))?;
+    let rt =
+        rate_of(&to).ok_or_else(|| NetError::InvalidInput(format!("unknown currency: {to}")))?;
     Ok(amount * rt / rf)
 }
 
@@ -99,7 +101,10 @@ mod tests {
 
     #[test]
     fn url_uppercases_base() {
-        assert_eq!(rates_url("usd"), "https://api.frankfurter.app/latest?from=USD");
+        assert_eq!(
+            rates_url("usd"),
+            "https://api.frankfurter.app/latest?from=USD"
+        );
     }
 
     #[test]

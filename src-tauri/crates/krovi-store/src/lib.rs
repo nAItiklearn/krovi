@@ -207,9 +207,21 @@ mod tests {
         assert_eq!(
             recs,
             vec![
-                ScreenTimeRecord { day: 10, app: "a.exe".into(), ms: 5 },
-                ScreenTimeRecord { day: 10, app: "b.exe".into(), ms: 7 },
-                ScreenTimeRecord { day: 11, app: "a.exe".into(), ms: 3 },
+                ScreenTimeRecord {
+                    day: 10,
+                    app: "a.exe".into(),
+                    ms: 5
+                },
+                ScreenTimeRecord {
+                    day: 10,
+                    app: "b.exe".into(),
+                    ms: 7
+                },
+                ScreenTimeRecord {
+                    day: 11,
+                    app: "a.exe".into(),
+                    ms: 3
+                },
             ]
         );
 
@@ -222,11 +234,26 @@ mod tests {
     #[test]
     fn screen_time_from_records_drops_zero_ms() {
         let recs = vec![
-            ScreenTimeRecord { day: 1, app: "x".into(), ms: 0 },
-            ScreenTimeRecord { day: 1, app: "y".into(), ms: 4 },
+            ScreenTimeRecord {
+                day: 1,
+                app: "x".into(),
+                ms: 0,
+            },
+            ScreenTimeRecord {
+                day: 1,
+                app: "y".into(),
+                ms: 4,
+            },
         ];
         let st = screen_time_from_records(&recs);
-        assert_eq!(screen_time_records(&st), vec![ScreenTimeRecord { day: 1, app: "y".into(), ms: 4 }]);
+        assert_eq!(
+            screen_time_records(&st),
+            vec![ScreenTimeRecord {
+                day: 1,
+                app: "y".into(),
+                ms: 4
+            }]
+        );
     }
 
     #[test]

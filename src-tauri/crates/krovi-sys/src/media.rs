@@ -138,8 +138,14 @@ mod native {
             .map_err(err)?
             .get()
             .map_err(err)?;
-        let title = props.Title().map(|h| h.to_string_lossy()).unwrap_or_default();
-        let artist = props.Artist().map(|h| h.to_string_lossy()).unwrap_or_default();
+        let title = props
+            .Title()
+            .map(|h| h.to_string_lossy())
+            .unwrap_or_default();
+        let artist = props
+            .Artist()
+            .map(|h| h.to_string_lossy())
+            .unwrap_or_default();
         let album = props
             .AlbumTitle()
             .map(|h| h.to_string_lossy())
@@ -155,8 +161,14 @@ mod native {
         // Windows TimeSpan is in 100ns ticks → seconds.
         let (position_sec, duration_sec) = match session.GetTimelineProperties() {
             Ok(tl) => {
-                let pos = tl.Position().map(|d| (d.Duration / 10_000_000) as u64).unwrap_or(0);
-                let end = tl.EndTime().map(|d| (d.Duration / 10_000_000) as u64).unwrap_or(0);
+                let pos = tl
+                    .Position()
+                    .map(|d| (d.Duration / 10_000_000) as u64)
+                    .unwrap_or(0);
+                let end = tl
+                    .EndTime()
+                    .map(|d| (d.Duration / 10_000_000) as u64)
+                    .unwrap_or(0);
                 (pos, end)
             }
             Err(_) => (0, 0),
@@ -207,10 +219,22 @@ mod tests {
 
     #[test]
     fn transport_parse_is_case_insensitive_with_aliases() {
-        assert_eq!(TransportCommand::from_str("PLAY"), Some(TransportCommand::Play));
-        assert_eq!(TransportCommand::from_str("prev"), Some(TransportCommand::Previous));
-        assert_eq!(TransportCommand::from_str("skip"), Some(TransportCommand::Next));
-        assert_eq!(TransportCommand::from_str("toggle"), Some(TransportCommand::PlayPause));
+        assert_eq!(
+            TransportCommand::from_str("PLAY"),
+            Some(TransportCommand::Play)
+        );
+        assert_eq!(
+            TransportCommand::from_str("prev"),
+            Some(TransportCommand::Previous)
+        );
+        assert_eq!(
+            TransportCommand::from_str("skip"),
+            Some(TransportCommand::Next)
+        );
+        assert_eq!(
+            TransportCommand::from_str("toggle"),
+            Some(TransportCommand::PlayPause)
+        );
         assert_eq!(TransportCommand::from_str("eject"), None);
     }
 
@@ -241,6 +265,9 @@ mod tests {
     #[test]
     fn reads_are_noops_without_native() {
         assert_eq!(read_now_playing().unwrap(), None);
-        assert!(matches!(send_transport(TransportCommand::Play), Err(SysError::Unsupported)));
+        assert!(matches!(
+            send_transport(TransportCommand::Play),
+            Err(SysError::Unsupported)
+        ));
     }
 }

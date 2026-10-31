@@ -30,12 +30,16 @@ impl<T: Clone> TtlCache<T> {
     /// Milliseconds since the stored value was cached, or `None` if empty.
     /// Saturates at 0 if `now_ms` is earlier than the stored stamp.
     pub fn age_ms(&self, now_ms: u64) -> Option<u64> {
-        self.entry.as_ref().map(|(_, at)| now_ms.saturating_sub(*at))
+        self.entry
+            .as_ref()
+            .map(|(_, at)| now_ms.saturating_sub(*at))
     }
 
     /// Whether a value is present and still within its TTL.
     pub fn is_fresh(&self, now_ms: u64) -> bool {
-        self.age_ms(now_ms).map(|age| age <= self.ttl_ms).unwrap_or(false)
+        self.age_ms(now_ms)
+            .map(|age| age <= self.ttl_ms)
+            .unwrap_or(false)
     }
 
     /// The value if it is present and still fresh, else `None`.
