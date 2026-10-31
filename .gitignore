@@ -1,0 +1,39 @@
+# --- Rust / Tauri ---
+/target/
+**/target/
+src-tauri/target/
+Cargo.lock.bak
+*.pdb
+
+# --- Node / frontend ---
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# --- Tauri build artifacts ---
+src-tauri/gen/
+src-tauri/WixTools/
+*.msi
+*.exe.bak
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# --- Secrets / local env (never commit) ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# --- Reference material (copyrighted third-party assets must never be committed) ---
+reference/
+*-reference/
