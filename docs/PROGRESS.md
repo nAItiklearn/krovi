@@ -54,8 +54,8 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 - ✅ Calendar view + reminders, world clocks, unit conversion, calculator, command palette — implemented in the panel UI (Phase 2), interactive, with tests.
 - Rust tests now: core 53 + store 8 + net 21 + sys 17 = **99 passing** (per-crate). Only **2 outbound sockets** total (weather, currency); the update-check is manual-only. Native/HTTP are compiled + verified on CI/MSVC, not this host.
 
-## Phase 4 — Security review
-- ⏳ `docs/SECURITY-network-audit.md` — literal audit of every outbound call
+## Phase 4 — Security review  ✅
+- ✅ `docs/SECURITY-network-audit.md` — literal tree-wide grep; exactly **2 live keyless sockets** (weather = Open-Meteo, currency = Frankfurter) + a **manual-only** update check; `reqwest`/`hyper` noted as transitive (Tauri), not called by our code; website makes **zero** requests. Recommends a binary-level network trace in CI as belt-and-braces.
 
 ## Phase 5 — Website (krovi.tech)  ✅ built & deployed (one toggle from public)
 - ✅ Original pure-static site under `web/` (no trackers, system fonts) — hero, features, privacy, about, FAQ, download CTA
@@ -68,6 +68,13 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 - ⏳ Original icon set, MSI installer, CI, release workflow
 - ✅ (authorised) Website deploy to **Vercel** — maintainer-approved 2026-11-01 (D-008)
 - ✅ (authorised 2026-11-01, D-010) `git push`, tag, and GitHub Release — maintainer approved. The release installer is built by **GitHub Actions on a windows-latest (MSVC) runner** on a pushed `v*` tag, since the local toolchain can't build the native app.
+
+## Phase 7 — Post-ship enhancements (maintainer-requested backlog)
+After the core ship, research the web/Reddit for tasteful additions and implement them —
+**every feature must be accurate and actually working**, same test-first + clean-room rules:
+- A dynamic, **macOS-style panel view / dock-style** presentation + animation option.
+- Richer, polished **animations / micro-interactions** across the panel.
+- Additional genuinely-useful shelf tools surfaced from research (validated, not gimmicks).
 
 ## Open blockers / needs-maintainer
 - **Website is deployed (now the richer v2) but not yet public.** https://web-flame-kappa-83.vercel.app
