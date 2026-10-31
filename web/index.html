@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Krovi — your everything-shelf for Windows</title>
+  <meta name="description" content="Krovi is a free, open-source everything-shelf for Windows: clipboard history, timers, a file shelf, notes, weather, media controls and more in one dropdown. Local-first, no account, no ads, no telemetry." />
+  <meta name="theme-color" content="#0e9e8f" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b1211" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta property="og:title" content="Krovi — your everything-shelf for Windows" />
+  <meta property="og:description" content="A free, open-source quick-access panel of small daily tools. Local-first and verifiably private." />
+  <meta property="og:type" content="website" />
+  <!-- Prevent theme flash: apply saved preference before first paint. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("krovi-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ===== Nav ===== -->
+  <header class="nav">
+    <nav class="wrap" aria-label="Primary">
+      <a class="brand" href="index.html" aria-label="Krovi home">
+        <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+          <rect x="6" y="6" width="52" height="52" rx="14" fill="#0c1413"/>
+          <rect x="13" y="15" width="8" height="34" rx="4" fill="currentColor" style="color:var(--accent)"/>
+          <rect x="27" y="17" width="22" height="6" rx="3" fill="#e9f6f4"/>
+          <rect x="27" y="29" width="22" height="6" rx="3" fill="#8fb8b2"/>
+          <rect x="27" y="41" width="14" height="6" rx="3" fill="#8fb8b2"/>
+        </svg>
+        <span>Krovi<span class="tld">.tech</span></span>
+      </a>
+
+      <button class="icon-btn nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/></svg>
+      </button>
+
+      <div class="nav-links" id="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="compare.html">Compare</a>
+        <a href="index.html#download">Download</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="https://github.com/nAItiklearn/krovi" rel="noopener">GitHub</a>
+        <a class="btn btn-primary" href="index.html#download">Download</a>
+      </div>
+
+      <div class="nav-tools">
+        <a class="btn btn-primary btn-nav-cta" href="index.html#download">Download</a>
+        <button class="icon-btn theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark theme" title="Toggle theme">
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+
+    <!-- ===== Hero ===== -->
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow">Free &amp; open source, forever</span>
+        <h1>Your everything-shelf for Windows.</h1>
+        <p class="lead">One dropdown for the small daily tools you keep hunting for — clipboard history, timers, a file shelf, notes, weather, media controls and more. Summon it with a hotkey or a corner click.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="index.html#download">Download for Windows</a>
+          <a class="btn btn-ghost btn-lg" href="compare.html">Compare Krovi</a>
+        </div>
+        <div class="hero-trust" aria-label="Privacy guarantees">
+          <span><span class="dot">&bull;</span> No account</span>
+          <span><span class="dot">&bull;</span> No ads</span>
+          <span><span class="dot">&bull;</span> No tracking</span>
+          <span><span class="dot">&bull;</span> No telemetry</span>
+          <span><span class="dot">&bull;</span> MIT licensed</span>
+        </div>
+
+        <!-- Original Krovi panel mock: left tool rail + glanceable card grid -->
+        <div class="panel-mock" role="img" aria-label="Illustration of the Krovi panel: a left tool rail and a grid of glanceable cards for clipboard, timers, weather, notes, media and screen-time.">
+          <div class="panel-bar">
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="panel-title">Krovi</span>
+            <span class="panel-hint" aria-hidden="true">Ctrl + Alt + Space</span>
+          </div>
+          <div class="panel-body">
+            <div class="panel-rail" aria-hidden="true">
+              <i class="on">&#9633;</i><i>&#9998;</i><i>&#9201;</i><i>&#9834;</i><i>&#9729;</i><i>&#9776;</i>
+            </div>
+            <div class="panel-grid" aria-hidden="true">
+              <div class="panel-card"><div class="pc-label">Clipboard</div><div class="pc-value">42 items</div><div class="pc-sub">3 pinned</div></div>
+              <div class="panel-card"><div class="pc-label">Focus</div><div class="pc-value">12:30</div><div class="pc-sub">Pomodoro &middot; 2/4</div></div>
+              <div class="panel-card"><div class="pc-label">Weather</div><div class="pc-value">7&deg;C</div><div class="pc-sub">Clear</div></div>
+              <div class="panel-card span2"><div class="pc-label">Notes</div><div class="pc-value">Ship the compare page</div><div class="pc-sub">autosaved just now</div></div>
+              <div class="panel-card"><div class="pc-label">Screen time</div><div class="pc-value">3h 14m</div><div class="pc-sub">today, local only</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Feature showcase ===== -->
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">The shelf</span>
+          <h2>A dozen tiny utilities, folded into one panel.</h2>
+          <p class="lead">Krovi gathers the tools you reach for all day behind a single hotkey, so you stop juggling scattered apps and browser tabs. Everything is keyboard-driven and glanceable.</p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="3" width="8" height="4" rx="1"/><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 12h6M9 16h4" stroke-linecap="round"/></svg></div>
+            <h3>Clipboard history</h3>
+            <p>A searchable history of recent copies — text, images and links — with pin-to-top and type filters. Re-copying promotes an item instead of duplicating it.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h10M5 7h14l-2 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 7z"/><path d="M10 11l4 4m0-4l-4 4" stroke-linecap="round"/></svg></div>
+            <h3>Paste stack</h3>
+            <p>Nine numbered slots you actively push and pop — a LIFO workbench for repetitive paste workflows, kept distinct from the passive history.</p>
+            <span class="tag">Krovi original</span>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6" stroke-linecap="round"/></svg></div>
+            <h3>Timers, stopwatch &amp; Pomodoro</h3>
+            <p>Run several countdowns and a stopwatch, or switch to work/break Pomodoro cycles on the same engine. Notified the moment time's up.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M12 11v5m-2.5-2.5h5" stroke-linecap="round"/></svg></div>
+            <h3>File shelf</h3>
+            <p>Drag files in to park them for a minute or an hour; drag them back out into any app when you need them. Name shelves for different jobs.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18V6a2 2 0 0 1 2-2h8l6 6v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M10 9v6l5-3-5-3z" fill="currentColor" stroke="none"/></svg></div>
+            <h3>Media now-playing</h3>
+            <p>Reads the Windows media session to show the current track with play, pause, next and previous — no audio is captured, ever.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 0 1 17 18H7z"/></svg></div>
+            <h3>Weather</h3>
+            <p>Current conditions and a short local forecast from a keyless public API and your Windows location. No account, nothing stored in the cloud.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h7M8 13h7M8 17h4" stroke-linecap="round"/></svg></div>
+            <h3>Quick notes &amp; to-do</h3>
+            <p>Fast scratch notes with autosave and a lightweight checkable task list — the thoughts and tasks that don't deserve a whole app.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M2 12h3M19 12h3" stroke-linecap="round"/></svg></div>
+            <h3>World clocks</h3>
+            <p>Keep several time zones in view at a glance — handy when the people you work with aren't in your city.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M16 15h0M8 19h6" stroke-linecap="round"/></svg></div>
+            <h3>Calculator, units &amp; currency</h3>
+            <p>An expression calculator plus offline unit conversion and currency via cached keyless rates — numbers sorted without leaving the panel.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Command palette</h3>
+            <p>One search box to launch installed apps and run Krovi actions — the keyboard spine of the whole shelf.</p>
+            <span class="tag">Krovi original</span>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16" stroke-linecap="round"/><rect x="8" y="11" width="3" height="5"/><rect x="13" y="8" width="3" height="8"/></svg></div>
+            <h3>Screen-time tracking</h3>
+            <p>A local-only picture of where your day went, aggregated per app. It never leaves your machine and is never reported anywhere.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 3v3M17 3v3M3 9h18M8 13h3M8 17h3" stroke-linecap="round"/></svg></div>
+            <h3>Home overview</h3>
+            <p>A card grid that surfaces the state that matters right now — focus, clipboard, weather, notes and screen-time — the moment the panel opens.</p>
+          </article>
+
+          <article class="card">
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 15H4.5a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 11 4.6V4.5a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.1a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.3.9z"/></svg></div>
+            <h3>Yours to configure</h3>
+            <p>Rebind the hotkey, set a hot-corner, choose start-with-Windows, pick a theme, toggle individual tools and move your data folder.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Verifiable privacy ===== -->
+    <section id="privacy" class="band">
+      <div class="wrap">
+        <div class="split">
+          <div>
+            <span class="eyebrow">Verifiable privacy</span>
+            <h2>Private because it's checkable — not because we say so.</h2>
+            <p class="lead">Krovi is local-first. Your clipboard, notes, shelf files and screen-time live in a folder on your own machine and stay there. Plenty of apps claim privacy; Krovi ships the source and documents every outbound call so you — or anyone — can confirm it.</p>
+            <ul class="value-list">
+              <li><span class="vk" aria-hidden="true">&#10003;</span><div><strong>Local-first storage</strong><span>A single data folder under your profile holds everything. Fully usable offline, minus live weather and currency.</span></div></li>
+              <li><span class="vk" aria-hidden="true">&#10003;</span><div><strong>A documented-network-calls promise</strong><span>Every call Krovi can make is listed below. The security review greps the build to assert the list is exhaustive — no hidden sockets.</span></div></li>
+              <li><span class="vk" aria-hidden="true">&#10003;</span><div><strong>No account, no telemetry, no ads</strong><span>There is nothing to sign into and nothing phoning home. Network access is isolated behind one small, auditable module.</span></div></li>
+            </ul>
+          </div>
+          <div>
+            <div class="audit" aria-label="Documented outbound network calls">
+              <div class="row"><span class="comment"># Every outbound call Krovi can make</span></div>
+              <div class="row"><span class="k">weather</span><span class="v">keyless public API &middot; coarse lat/long only &middot; opt-out</span></div>
+              <div class="row"><span class="k">currency</span><span class="v">keyless FX rates &middot; no personal data &middot; cache offline</span></div>
+              <div class="row"><span class="k">update</span><span class="v">GitHub releases &middot; manual check only &middot; never automatic</span></div>
+              <div class="row"><span class="comment"># telemetry / analytics / accounts: none</span></div>
+            </div>
+            <p class="muted" style="margin-top:0.9rem;font-size:0.9rem;">Each of these is opt-out, and the full audit will live in the repository's security notes once the review phase lands.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Free & open source ===== -->
+    <section id="open-source">
+      <div class="wrap">
+        <div class="section-head center">
+          <span class="eyebrow">No catch</span>
+          <h2>Free and open source. Forever.</h2>
+          <p class="lead center">Krovi is MIT licensed. There's no licence key, no trial clock, no paywalled "pro" tier and no upsell. Read the code, fork it, ship your own build — the software is genuinely yours.</p>
+        </div>
+        <div class="pillars">
+          <div class="pillar"><div class="big">$0</div><h3>No price, no trial</h3><p class="muted">Download and use everything. No feature is held back behind a purchase or an expiring trial.</p></div>
+          <div class="pillar"><div class="big">MIT</div><h3>Open licence</h3><p class="muted">Permissive and well understood. Use it personally or commercially; the source is public.</p></div>
+          <div class="pillar"><div class="big">0</div><h3>Trackers on this site</h3><p class="muted">This page carries no analytics, no ad scripts and no CDN fonts — we practise the privacy we preach.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== About ===== -->
+    <section id="about" class="band">
+      <div class="wrap">
+        <span class="eyebrow">About</span>
+        <h2>An original "everything shelf".</h2>
+        <div class="prose">
+          <p>Krovi is an original, clean-room take on the quick-access dropdown utility — in the spirit of menu-bar and notch panels, but with its own name, design language, left tool rail, palette and icons. It is not a fork, re-skin or reverse-engineering of any existing product; the design, copy and all code are original.</p>
+          <p>It's built Windows-first on <a href="https://tauri.app" rel="noopener">Tauri 2</a> with a small, testable Rust core, deliberately keeping a tiny dependency surface so the privacy posture stays easy to audit. Krovi is early in development and built in the open — the <a href="https://github.com/nAItiklearn/krovi" rel="noopener">source, roadmap and progress</a> are all public.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FAQ ===== -->
+    <section id="faq">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">FAQ</span>
+          <h2>Questions, answered.</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Is Krovi really free?</summary>
+            <div class="answer"><p>Yes — free and open source under the MIT licence, with no key, trial, paywall or "pro" tier. Every feature is available to everyone.</p></div>
+          </details>
+          <details>
+            <summary>What are the keyboard shortcuts?</summary>
+            <div class="answer">
+              <p>Summon or dismiss the panel with a global hotkey (default <strong>Ctrl + Alt + Space</strong>), which you can rebind in settings. You can also open it by clicking a configurable screen hot-corner, and dismiss with <strong>Esc</strong>, a click away, or the hotkey again.</p>
+              <p>Inside the panel, the command palette is the fastest way to jump between tools and run actions without the mouse.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Does Krovi send my data anywhere?</summary>
+            <div class="answer"><p>No. Your clipboard, notes, shelf files and screen-time stay in a local folder on your machine. The only outbound calls are optional weather and currency fetches, plus a manual update check against GitHub — all documented in the <a href="index.html#privacy">privacy section</a>.</p></div>
+          </details>
+          <details>
+            <summary>Which platforms are supported?</summary>
+            <div class="answer"><p>Windows only for now. The Rust core is kept portable so other platforms are possible later, but there's no macOS, Linux or mobile build today.</p></div>
+          </details>
+          <details>
+            <summary>How does it compare to paid alternatives like Vayli?</summary>
+            <div class="answer"><p>Krovi's differentiators are being free, open source and verifiably private. For an honest, clean-room feature-by-feature breakdown — including where more mature paid apps may still be ahead — see the <a href="compare.html">comparison page</a>.</p></div>
+          </details>
+          <details>
+            <summary>Can I contribute?</summary>
+            <div class="answer"><p>Yes. Krovi is built in the open on <a href="https://github.com/nAItiklearn/krovi" rel="noopener">GitHub</a>. Issues, ideas and pull requests are welcome as the core stabilises.</p></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Download CTA ===== -->
+    <section id="download">
+      <div class="wrap">
+        <div class="cta-box">
+          <h2>Get the shelf.</h2>
+          <p>Krovi is in early development. Builds will be published on GitHub Releases — grab one there, or watch the repository to know the moment the first release lands.</p>
+          <div class="hero-cta" style="justify-content:center;margin-top:1.6rem;">
+            <a class="btn btn-primary btn-lg" href="https://github.com/nAItiklearn/krovi/releases" rel="noopener">Download from GitHub Releases</a>
+            <a class="btn btn-ghost btn-lg" href="https://github.com/nAItiklearn/krovi" rel="noopener">View the source</a>
+          </div>
+          <p class="cta-meta">Windows &middot; MIT licensed &middot; no account required. (Releases page is a placeholder until the first build ships.)</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="index.html" aria-label="Krovi home">
+            <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+              <rect x="6" y="6" width="52" height="52" rx="14" fill="#0c1413"/>
+              <rect x="13" y="15" width="8" height="34" rx="4" fill="currentColor" style="color:var(--accent)"/>
+              <rect x="27" y="17" width="22" height="6" rx="3" fill="#e9f6f4"/>
+              <rect x="27" y="29" width="22" height="6" rx="3" fill="#8fb8b2"/>
+              <rect x="27" y="41" width="14" height="6" rx="3" fill="#8fb8b2"/>
+            </svg>
+            <span>Krovi<span class="tld">.tech</span></span>
+          </a>
+          <p>Your everything-shelf for Windows. Free, open source and local-first.</p>
+        </div>
+
+        <nav class="footer-col" aria-label="Get started">
+          <h4>Get started</h4>
+          <ul>
+            <li><a href="index.html#download">Download</a></li>
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="compare.html">Compare</a></li>
+            <li><a href="index.html#faq">Keyboard shortcuts</a></li>
+          </ul>
+        </nav>
+
+        <nav class="footer-col" aria-label="Project">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/nAItiklearn/krovi" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/nAItiklearn/krovi" rel="noopener">Roadmap</a></li>
+            <li><a href="https://github.com/nAItiklearn/krovi" rel="noopener">Changelog</a></li>
+            <li><a href="index.html#faq">FAQ</a></li>
+          </ul>
+        </nav>
+
+        <nav class="footer-col" aria-label="Privacy">
+          <h4>Privacy</h4>
+          <ul>
+            <li><a href="index.html#privacy">Network audit</a></li>
+            <li><a href="index.html#privacy">Privacy</a></li>
+            <li><a href="https://github.com/nAItiklearn/krovi" rel="noopener">Security</a></li>
+          </ul>
+        </nav>
+
+        <nav class="footer-col" aria-label="Krovi">
+          <h4>Krovi</h4>
+          <ul>
+            <li><a href="index.html#about">About</a></li>
+            <li><a href="https://github.com/nAItiklearn/krovi" rel="noopener">License &middot; MIT</a></li>
+            <li><a href="https://github.com/nAItiklearn/krovi" rel="noopener">Contributing</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div class="footer-bottom">
+        <span class="footer-trust">No account &middot; No ads &middot; No tracking &middot; No telemetry &middot; Free &amp; open source</span>
+        <span class="footer-copy">&copy; 2026 Naitik Sahu &amp; the Krovi contributors. Your data stays on your device.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+[package]
+name = "krovi-store"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Local-first persistence for Krovi: a UI-agnostic Store trait with an in-memory implementation and an optional SQLite backend."
+repository = "https://github.com/nAItiklearn/krovi"
+publish = false
+
+[features]
+# SQLite is opt-in. The default build pulls in NO third-party crates (only the
+# path dependency on krovi-core), so `cargo test -p krovi-store` is green on any
+# machine regardless of the C/MSVC toolchain or network. Enable `sqlite` to
+# compile the rusqlite-backed `SqliteStore` (bundled SQLite => needs a C compiler).
+default = []
+sqlite = ["dep:rusqlite"]
+
+[dependencies]
+krovi-core = { path = "../krovi-core" }
+# Optional: only compiled when the `sqlite` feature is on. "bundled" builds the
+# amalgamated SQLite C source, which requires a working C/MSVC compiler.
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }

@@ -4,6 +4,22 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-009 · 2026-11-01 · Persistence shape + toolchain finding + website live
+- **krovi-store** = a UI-agnostic `Store` trait (per-collection load/replace + a settings bag) with
+  two impls: `MemStore` (in-memory, zero deps, always available) and `SqliteStore` (rusqlite
+  "bundled", behind an **off-by-default `sqlite` feature**). The default build keeps zero
+  third-party deps (error type hand-rolled, not `thiserror`).
+- **Toolchain finding:** this host is `x86_64-pc-windows-gnu` with a 32-bit-only MinGW gcc, so
+  bundled SQLite will not compile ("64-bit mode not compiled in"). Kept the suite green by
+  feature-gating `SqliteStore` off; documented loudly, never silently degraded. The same missing
+  64-bit C/MSVC compiler likely blocks a full native Tauri build — to be confirmed in Phase 2;
+  mitigation is shipping the Vite browser demo as the clickable UI.
+- **Website** built as an original pure-static site and **deployed to Vercel** (authorised, D-008):
+  https://web-flame-kappa-83.vercel.app . Making it publicly viewable needs the project's
+  Vercel-Authentication protection turned off — attempted via the API, blocked by the local safety
+  classifier as a "Security Weaken"; surfaced to the maintainer (PROGRESS blockers). No app
+  push/tag/release performed.
+
 ## D-008 · 2026-11-01 · Expanded scope: website + comparison table; Vercel deploy authorised
 Maintainer directed (awake): build all phases; keep the product/site original; add a `/compare`
 table demonstrating Krovi's advantages over Vayli and similar apps; ship a full scaffold-style

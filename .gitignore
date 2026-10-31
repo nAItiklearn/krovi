@@ -12,6 +12,9 @@ dist-ssr/
 .vite/
 *.local
 
+# --- Vercel ---
+.vercel/
+
 # --- Tauri build artifacts ---
 src-tauri/gen/
 src-tauri/WixTools/

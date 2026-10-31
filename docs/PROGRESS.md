@@ -21,8 +21,8 @@ _Last updated: 2026-10-31_
 - ✅ File shelf (named shelves, park/retrieve/move metadata model) — 6 tests
 - ✅ Notes + to-do storage (in-memory models) — 8 tests
 - ✅ Screen-time aggregation (per-app/day, no titles/URLs, local-only) — 5 tests
-- ⏳ Local persistence layer (`krovi-store`: SQLite via rusqlite behind a trait; in-memory fake for core tests)
-- 🔄 Unit tests ≥ core logic coverage  _(**53 passing**; pure-logic layer complete)_
+- ✅ Local persistence (`krovi-store`): `Store` trait + in-memory `MemStore` — 8 tests. **SQLite (`SqliteStore`, rusqlite bundled) deferred** — host is `x86_64-pc-windows-gnu` with 32-bit-only MinGW gcc ("64-bit mode not compiled in"); behind an off-by-default `sqlite` feature, needs an MSVC / 64-bit C toolchain to activate (see blockers).
+- ✅ Unit tests ≥ core logic coverage  _(**61 passing**: 53 core + 8 store)_
 
 ### Autonomous overnight run (2026-10-31 night) — safe mode
 Maintainer asleep; authorised an unattended build "till morning, safe way". Operating rules:
@@ -51,12 +51,12 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 ## Phase 4 — Security review
 - ⏳ `docs/SECURITY-network-audit.md` — literal audit of every outbound call
 
-## Phase 5 — Website (krovi.tech)  _(maintainer emphasised; may be built right after Phase 1–2)_
-- ⏳ Original static site under `web/` — hero, feature showcase, privacy value prop, FAQ, download CTA
-- ⏳ `/compare` table (Krovi vs Vayli vs generics) — honest cells, legend, "where others are ahead"
-- ⏳ Full scaffold-style footer — every link resolves (no dead `#`)
-- ⏳ Light + dark, responsive, no trackers/analytics
-- ⏳ **Deploy to Vercel** (authorised, D-008) → record the production URL here + in README
+## Phase 5 — Website (krovi.tech)  ✅ built & deployed (one toggle from public)
+- ✅ Original pure-static site under `web/` (no trackers, system fonts) — hero, features, privacy, about, FAQ, download CTA
+- ✅ `/compare` table (Krovi vs Vayli vs generics) — honest ✓/✗/Paid/Partial/Not-verified cells, legend, candid "where Krovi is behind" section (clean-room: Vayli unknowns = "Not verified")
+- ✅ Full scaffold-style footer — every link resolves (0 dead `#`)
+- ✅ Light + dark, responsive, accessible
+- ✅ **Deployed to Vercel:** https://web-flame-kappa-83.vercel.app  ⚠️ currently gated by Vercel Authentication — see blockers to make it publicly viewable
 
 ## Phase 6 — Release engineering
 - ⏳ Original icon set, MSI installer, CI, release workflow
@@ -64,6 +64,17 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 - ⛔ App-binary tag / GitHub Release / `git push` — **still requires explicit maintainer go-ahead**
 
 ## Open blockers / needs-maintainer
-- Bash tool classifier intermittently unavailable this session; PowerShell used as the
-  working shell (Windows-native anyway).
-- No tag/release/deploy will happen without an explicit request.
+- **Website is deployed but not yet public.** The Vercel project has "Vercel Authentication"
+  deployment protection ON, so visitors must log in. Turning it off was blocked by the local
+  safety classifier ("Security Weaken"). To make https://web-flame-kappa-83.vercel.app public:
+  either (a) Vercel dashboard → Project "web" → Settings → Deployment Protection → turn OFF
+  "Vercel Authentication"; or (b) add a permission rule for
+  `mcp__plugin_vercel_vercel__update_project` and I'll flip it. (Optional later: add the
+  krovi.tech custom domain and rename the project to "krovi".)
+- **64-bit C toolchain missing.** Host Rust is `x86_64-pc-windows-gnu` with a 32-bit-only MinGW
+  gcc. This blocks (1) the SQLite backend (`--features sqlite`) and likely (2) a full native
+  Tauri build. Fix: install **Visual Studio Build Tools (C++ workload)** and
+  `rustup default stable-x86_64-pc-windows-msvc` (or install a 64-bit MinGW). Until then: core
+  uses `MemStore`, and the panel UI ships as a runnable browser (Vite) demo.
+- App `git push` / tag / GitHub Release remain maintainer-gated; the website deploy is the only
+  authorised external action.

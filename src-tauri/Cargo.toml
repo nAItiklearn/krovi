@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/krovi-core"]
+members = ["crates/krovi-core", "crates/krovi-store"]
 
 # Additional crates (krovi-store, krovi-sys, krovi-net) and the Tauri app crate
 # are added to `members` as they are scaffolded in later phases.
