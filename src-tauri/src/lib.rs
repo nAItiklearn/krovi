@@ -18,6 +18,8 @@ use krovi_core::{
     DEFAULT_SHELF,
 };
 use krovi_store::{screen_time_records, stored_shelves, MemStore, Store};
+use krovi_net::{Rates, WeatherData};
+use krovi_sys::{MediaTrack, Sampler, TransportCommand};
 
 // ---------------------------------------------------------------------------
 // Serializable DTOs (the wire shape mirrors src/lib/types.ts exactly).
@@ -102,6 +104,8 @@ pub struct AppState {
     #[allow(dead_code)]
     pomodoro: Mutex<Pomodoro>,
     store: Mutex<MemStore>,
+    /// Screen-time interval tracker driven by `foreground_tick` (SPEC C11).
+    sampler: Mutex<Sampler>,
 }
 
 impl AppState {
@@ -129,6 +133,7 @@ impl AppState {
             screen: Mutex::new(ScreenTime::new()),
             pomodoro: Mutex::new(Pomodoro::default()),
             store: Mutex::new(MemStore::new()),
+            sampler: Mutex::new(Sampler::new()),
         }
     }
 }
@@ -430,6 +435,86 @@ fn load_calendar() -> serde_json::Value {
 }
 
 // ---------------------------------------------------------------------------
+// Integration commands (SPEC C5/C7/C10/C11). These are the thin bridges over
+// krovi-net (keyless weather + FX — the app's ONLY outbound calls) and krovi-sys
+// (read-only GSMTC media, foreground-process screen-time sampling). All product
+// logic — URL building, parsing, conversion math, caching, interval tracking —
+// lives in those crates; these commands only validate, call, and return typed
+// JSON. The live network/OS paths require the `net`/`native` features (built in
+// CI); without them the crates return a disabled/absent result, so the shell
+// still links and the seed commands above keep the demo UI populated.
+// ---------------------------------------------------------------------------
+
+/// Fetch live weather for a coordinate (SPEC C7). The coordinate is validated
+/// and **coarsened** before any request, so only a coarse lat/long leaves the
+/// device — the only weather data ever sent.
+#[tauri::command]
+fn fetch_weather(lat: f64, lon: f64) -> CmdResult<WeatherData> {
+    if !krovi_sys::valid_coords(lat, lon) {
+        return Err("invalid coordinates".into());
+    }
+    let (lat, lon) = krovi_sys::coarsen(lat, lon);
+    krovi_net::fetch_forecast(lat, lon).map_err(|e| e.to_string())
+}
+
+/// Fetch the latest keyless FX rates for `base` (SPEC C10). Only the base code
+/// is sent. The frontend caches the result and reuses it offline via
+/// [`convert_currency`].
+#[tauri::command]
+fn fetch_currency_rates(base: String) -> CmdResult<Rates> {
+    if base.trim().is_empty() {
+        return Err("empty base currency".into());
+    }
+    krovi_net::fetch_rates(&base).map_err(|e| e.to_string())
+}
+
+/// Convert an amount between currencies using already-fetched (cached) rates —
+/// no network call, works offline (SPEC C10).
+#[tauri::command]
+fn convert_currency(amount: f64, from: String, to: String, rates: Rates) -> CmdResult<f64> {
+    krovi_net::convert(amount, &from, &to, &rates).map_err(|e| e.to_string())
+}
+
+/// Read the current system media session (SPEC C5): track metadata + transport
+/// state. Read-only — no audio capture. `None` when nothing is playing (or in a
+/// build without the `native` feature).
+#[tauri::command]
+fn now_playing() -> CmdResult<Option<MediaTrack>> {
+    krovi_sys::read_now_playing().map_err(|e| e.to_string())
+}
+
+/// Send a transport command to the active media session (SPEC C5):
+/// `play` / `pause` / `playpause` / `next` / `previous`.
+#[tauri::command]
+fn media_transport(command: String) -> CmdResult<()> {
+    let cmd = TransportCommand::from_str(&command)
+        .ok_or_else(|| format!("unknown transport command: {command}"))?;
+    krovi_sys::send_transport(cmd).map_err(|e| e.to_string())
+}
+
+/// Sample the foreground app for screen-time (SPEC C11). Called on a timer with
+/// the current `now` (epoch ms). Credits the previously-focused app with the
+/// elapsed time, records it locally, and persists the aggregate. Returns the
+/// recorded slice (or `None` if nothing to credit yet). No titles/URLs, and
+/// nothing is ever reported off-device.
+#[tauri::command]
+fn foreground_tick(state: State<AppState>, now: u64) -> CmdResult<Option<ScreenTimeDto>> {
+    let process = krovi_sys::foreground_process().map_err(|e| e.to_string())?;
+    let mut sampler = state.sampler.lock().map_err(lock_err)?;
+    match sampler.tick(process, now) {
+        Some((day, app, ms)) => {
+            let mut st = state.screen.lock().map_err(lock_err)?;
+            st.record(day, app.as_str(), ms);
+            let records = screen_time_records(&st);
+            let mut store = state.store.lock().map_err(lock_err)?;
+            store.save_screen_time(&records).map_err(|e| e.to_string())?;
+            Ok(Some(ScreenTimeDto { day, app, ms }))
+        }
+        None => Ok(None),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Window summon/dismiss, wired to a global shortcut (default Ctrl+Alt+Space).
 // ---------------------------------------------------------------------------
 
@@ -494,7 +579,13 @@ pub fn run() {
             load_media,
             load_world_clocks,
             load_currency_rates,
-            load_calendar
+            load_calendar,
+            fetch_weather,
+            fetch_currency_rates,
+            convert_currency,
+            now_playing,
+            media_transport,
+            foreground_tick
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Krovi application");

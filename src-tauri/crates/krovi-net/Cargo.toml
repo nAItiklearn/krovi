@@ -1,0 +1,28 @@
+[package]
+name = "krovi-net"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi's one and only outbound network layer: keyless weather (Open-Meteo-class) and keyless FX rates. URL building, response parsing, conversion math and TTL caching are pure/default and unit-tested; the actual HTTP GET is isolated behind the off-by-default `net` feature (rustls), which is built and exercised only in CI."
+repository = "https://github.com/nAItiklearn/krovi"
+publish = false
+
+[features]
+# The default build contains NO socket code and pulls only the pure-Rust serde
+# crates, so `cargo test -p krovi-net` is green on any host (including this
+# 32-bit-gcc one — DECISIONS.md D-009) with no network access. Enable `net` to
+# compile the HTTP client (ureq + rustls, a pure-Rust TLS stack with no OpenSSL
+# C dependency); that path is only built/run in CI on a full toolchain.
+default = []
+net = ["dep:ureq"]
+
+[dependencies]
+# Pure Rust, compiles everywhere. Used to deserialize API responses into typed
+# structs and to serialize the normalized DTOs the Tauri layer returns.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Optional, CI-only: a minimal HTTP client using the pure-Rust rustls TLS stack
+# (avoids the OpenSSL C dependency). Off by default so the pure logic above
+# always builds and tests locally even without a 64-bit C compiler.
+ureq = { version = "2", optional = true }

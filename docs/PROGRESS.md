@@ -47,13 +47,12 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 > `cargo test --manifest-path D:\krovi\src-tauri\Cargo.toml -p krovi-core -p krovi-store`.
 > A whole-workspace `cargo test` fails locally until the toolchain is fixed; CI (windows-latest/MSVC) builds everything.
 
-## Phase 3 — Integrations
-- ⏳ Media session (now-playing + transport) via GSMTC (windows-rs)
-- ⏳ Weather (keyless API + Windows location)
-- ⏳ Currency conversion (keyless rates API, cached)
-- ⏳ Calendar view + reminders
-- ⏳ Screen-time tracking (local only)
-- ⏳ World clocks, unit conversion, calculator, command palette
+## Phase 3 — Integrations  ✅ (pure logic tested; native + network = CI-only, D-009)
+- ✅ `krovi-net` — keyless weather (Open-Meteo: `GET api.open-meteo.com/v1/forecast`) + FX rates (Frankfurter/ECB: `GET api.frankfurter.app/latest`), TTL cache + offline cross-rate convert — **21 tests**. Real socket is `#[cfg(feature="net")]` (ureq + rustls), CI-only.
+- ✅ `krovi-sys` — windows-rs: GSMTC media now-playing + transport, `GetForegroundWindow` screen-time sampler, coarse location — **17 tests** (pure logic). Native paths `#[cfg(all(windows, feature="native"))]`, CI-only.
+- ✅ Thin Tauri commands wired: `fetch_weather`, `fetch_currency_rates`, `convert_currency`, `now_playing`, `media_transport`, `foreground_tick`.
+- ✅ Calendar view + reminders, world clocks, unit conversion, calculator, command palette — implemented in the panel UI (Phase 2), interactive, with tests.
+- Rust tests now: core 53 + store 8 + net 21 + sys 17 = **99 passing** (per-crate). Only **2 outbound sockets** total (weather, currency); the update-check is manual-only. Native/HTTP are compiled + verified on CI/MSVC, not this host.
 
 ## Phase 4 — Security review
 - ⏳ `docs/SECURITY-network-audit.md` — literal audit of every outbound call

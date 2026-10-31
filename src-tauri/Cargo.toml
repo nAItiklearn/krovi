@@ -1,9 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/krovi-core", "crates/krovi-store"]
+members = [
+    "crates/krovi-core",
+    "crates/krovi-store",
+    "crates/krovi-net",
+    "crates/krovi-sys",
+]
 
-# Additional crates (krovi-sys, krovi-net) join `members` as later phases
-# scaffold them. The Tauri app crate is the workspace *root* package below.
+# The Tauri app crate is the workspace *root* package below.
 
 [package]
 name = "krovi-app"
@@ -34,9 +38,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 krovi-core = { path = "crates/krovi-core" }
 krovi-store = { path = "crates/krovi-store" }
+krovi-net = { path = "crates/krovi-net" }
+krovi-sys = { path = "crates/krovi-sys" }
 
 [features]
 # Mirrors krovi-store: SQLite persistence is opt-in and needs a 64-bit C
 # compiler (see DECISIONS.md D-009). The default shell uses the in-memory store.
+# `net`/`native` enable the integration crates' real I/O (keyless HTTP, windows-rs)
+# — both off by default and built only in CI on a full toolchain.
 default = []
 sqlite = ["krovi-store/sqlite"]
+net = ["krovi-net/net"]
+native = ["krovi-sys/native"]
