@@ -64,8 +64,11 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 - ✅ Light + dark, responsive, accessible
 - ✅ **Deployed to Vercel:** https://web-flame-kappa-83.vercel.app  ⚠️ currently gated by Vercel Authentication — see blockers to make it publicly viewable
 
-## Phase 6 — Release engineering
-- ⏳ Original icon set, MSI installer, CI, release workflow
+## Phase 6 — Release engineering  ✅ authored (fires on CI)
+- ✅ CI (`.github/workflows/ci.yml`): frontend build/`check`/`test` + Rust `fmt`/`clippy`/`test` with `--features net,native` on windows-latest/MSVC.
+- ✅ Release (`.github/workflows/release.yml`): tauri-action builds NSIS+MSI on a pushed `v*` tag → publishes the GitHub Release; `workflow_dispatch` = artifacts only. Default `GITHUB_TOKEN`, no secrets.
+- ✅ `tauri.conf.json` bundle targets `[nsis, msi]`; icon array matches the 4 files on disk; issue/PR templates added. Authored but unrun locally (toolchain) — verified on CI.
+- 🔜 **Release ops:** pushing fires CI. Monitor via the **public** API (gh not installed): `Invoke-RestMethod "https://api.github.com/repos/nAItiklearn/krovi/actions/runs?per_page=5"`. Once CI is green, push tag `v0.1.0` to build + publish the installer; iterate (fix → push → re-tag) if red.
 - ✅ (authorised) Website deploy to **Vercel** — maintainer-approved 2026-11-01 (D-008)
 - ✅ (authorised 2026-11-01, D-010) `git push`, tag, and GitHub Release — maintainer approved. The release installer is built by **GitHub Actions on a windows-latest (MSVC) runner** on a pushed `v*` tag, since the local toolchain can't build the native app.
 

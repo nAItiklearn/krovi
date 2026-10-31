@@ -34,9 +34,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "icon": ["icons/icon.png"],
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
     "category": "Productivity",
+    "copyright": "Copyright (c) 2026 Krovi contributors. MIT licensed.",
     "shortDescription": "Your everything shelf",
     "longDescription": "Krovi is a free, open-source, local-first quick-access panel that gathers daily tools into one hotkey-summoned shelf."
   }

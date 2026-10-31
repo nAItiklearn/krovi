@@ -1,0 +1,77 @@
+name: Release
+
+# Builds the Windows installer on a windows-latest (MSVC) runner via
+# tauri-apps/tauri-action, with the real integrations compiled in
+# (--features net,native). The maintainer's local host cannot build the
+# native app (x86_64-pc-windows-gnu, 32-bit-only gcc — docs/DECISIONS.md D-009),
+# so this workflow is how a downloadable, ready-to-use build is produced.
+#
+# Triggers:
+#   * push tag v*          -> build + publish a GitHub Release with the
+#                             installer attached (uses the default GITHUB_TOKEN).
+#   * workflow_dispatch     -> build installer artifacts only; upload them as
+#                             a workflow artifact. NOTHING is published.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Needed so tauri-action can create the Release with the default token.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build Windows installer (MSVC)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Setup Rust (stable, MSVC host)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # tauri-action runs the configured beforeBuildCommand (npm run build) as
+      # part of `tauri build`, then bundles the NSIS + MSI Windows installers.
+      # On a v* tag it also publishes a Release; on workflow_dispatch tagName is
+      # empty, so it only builds (no publish) and we upload the artifacts below.
+      - name: Build Tauri app (net + native) and release on tag
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && format('Krovi {0}', github.ref_name) || '' }}
+          releaseBody: 'Krovi Windows installer. Local-first quick-access shelf. See the README and the network audit for the privacy details.'
+          releaseDraft: false
+          prerelease: false
+          args: --features net,native
+
+      # workflow_dispatch has no tag, so no Release is created — surface the
+      # built installers as a downloadable workflow artifact instead.
+      - name: Upload installer artifacts (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: krovi-windows-installers
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error

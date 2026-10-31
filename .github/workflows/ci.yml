@@ -1,0 +1,86 @@
+name: CI
+
+# Fast, green-focused checks for every push / PR to clean-main.
+# Runner is windows-latest, whose default Rust host is MSVC — which is what
+# Krovi needs to compile the whole workspace incl. the `krovi-app` Tauri crate
+# and the feature-gated real I/O (net = keyless HTTP, native = windows-rs).
+# (The maintainer's local host is x86_64-pc-windows-gnu with 32-bit-only gcc,
+# so the native app only builds here on CI — see docs/DECISIONS.md D-009.)
+
+on:
+  push:
+    branches: [clean-main]
+  pull_request:
+    branches: [clean-main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (Svelte 5 + Vite)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend (vite -> dist/)
+        run: npm run build
+
+      - name: Type-check (svelte-check)
+        run: npm run check
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+  rust:
+    name: Rust workspace (MSVC, net + native)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Tauri crate embeds the built frontend via generate_context!, so the
+      # Rust build needs dist/ to exist before it can compile krovi-app.
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend deps + build (for generate_context!)
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup Rust (stable, MSVC host)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: rustfmt (check)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+
+      - name: clippy (workspace, --features net,native)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --features net,native -- -D warnings
+
+      - name: Tests (workspace, --features net,native)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features net,native
