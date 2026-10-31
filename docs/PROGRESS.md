@@ -4,23 +4,24 @@ Legend: ✅ done · 🔄 in progress · ⏳ queued · ⛔ blocked · ❎ descope
 
 _Last updated: 2026-10-31_
 
-## Phase 0 — Foundation
+## Phase 0 — Foundation  ✅
 - ✅ Clean the repo to empty slate (commit `d471ffd`)
 - ✅ LICENSE (MIT), README, .gitignore
 - ✅ `docs/DECISIONS.md`, `docs/PROGRESS.md`
-- 🔄 `docs/SPEC.md` — full feature spec
-- 🔄 `docs/ADR-001-stack.md`
-- ⏳ `.claude/agents/*` — per-task agent definitions
+- ✅ `docs/SPEC.md` — full feature spec (committed `f6c996a`)
+- ✅ `docs/ADR-001-stack.md` (committed `f6c996a`)
+- ✅ `.claude/agents/*` — 8 agent definitions with strict, non-overlapping file ownership
 
-## Phase 1 — Core Rust engine (unit-tested before UI)
-- ⏳ Workspace scaffold (`src-tauri/`, `krovi-core` crate)
-- ⏳ Clipboard history store (ring buffer + search + pin)
-- ⏳ Paste stack (numbered slots)
-- ⏳ Timers + stopwatch + Pomodoro state machine
+## Phase 1 — Core Rust engine (unit-tested before UI)  🔄
+- ✅ Workspace scaffold (`src-tauri/`, `krovi-core` crate) — `cargo test` green
+- ✅ Clipboard history (unpinned-cap ring, dedup-promote, pin-to-top, search/filter) — 13 tests
+- ✅ Paste stack (9 numbered slots, LIFO) — 5 tests
+- ✅ Timers + stopwatch (injected clock, pause/resume/finish, laps) — 9 tests
+- 🔄 Pomodoro state machine (to layer on `CountdownTimer`)
 - ⏳ File shelf (park/retrieve metadata model)
 - ⏳ Notes + to-do storage
 - ⏳ Local persistence layer (SQLite via rusqlite, local-only)
-- ⏳ Unit tests ≥ core logic coverage
+- ⏳ Unit tests ≥ core logic coverage  _(27 passing so far)_
 
 ## Phase 2 — Panel UI (the shelf)
 - ⏳ Window: frameless, always-on-top dropdown, hotkey + corner-click summon

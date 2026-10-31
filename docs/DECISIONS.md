@@ -4,6 +4,23 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-007 · 2026-10-31 · Core engine design invariants (deterministic, UI-independent)
+Decisions made while building the first `krovi-core` modules (clipboard, paste stack,
+timers/stopwatch):
+- **Injected clock, not wall-clock.** Every time-dependent query takes a caller-supplied
+  `now` (epoch ms). The core holds no clock, so all logic is deterministic and unit-testable
+  without sleeping or mocking system time. Real time is applied at the integration boundary.
+- **Clipboard capacity applies to *unpinned* entries only**; pinned items are never evicted
+  and float to the top. Re-copying existing content **promotes** it (refreshes timestamp,
+  keeps pin) instead of creating a duplicate. Default cap 200 (SPEC C2).
+- **Paste stack is a bounded 9-slot LIFO** (SPEC O2), slot 1 = top; pushing past 9 drops the
+  oldest. Kept deliberately distinct from the passive clipboard history.
+- **Zero third-party dependencies** in `krovi-core` so far — supports the small-surface /
+  verifiable-privacy posture. New deps require justification.
+- Workspace rooted at `src-tauri/` with crates under `src-tauri/crates/`; the Tauri app crate
+  and `krovi-store`/`krovi-sys`/`krovi-net` join `members` as later phases scaffold them.
+First green suite: 27 unit tests (commit recorded in PROGRESS).
+
 ## D-006 · 2026-10-31 · "Beyond Vayli" original feature set (focused, not scope-creep)
 From the candidate list we commit to a **focused** set that fits the "quick-access shelf"
 identity and build the strongest few first:

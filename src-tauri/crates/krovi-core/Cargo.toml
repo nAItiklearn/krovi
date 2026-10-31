@@ -1,0 +1,13 @@
+[package]
+name = "krovi-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Pure, UI-independent logic core for Krovi (clipboard, timers, shelf, notes, to-do, screen-time)."
+repository = "https://github.com/nAItiklearn/krovi"
+publish = false
+
+[dependencies]
+# Intentionally empty for now: the logic core takes no third-party deps.
+# Anything added here must be justified (small dependency surface supports the
+# verifiable-privacy claim). No networking, no OS bindings in this crate.
