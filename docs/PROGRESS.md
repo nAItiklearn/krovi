@@ -61,7 +61,7 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 ## Phase 6 — Release engineering
 - ⏳ Original icon set, MSI installer, CI, release workflow
 - ✅ (authorised) Website deploy to **Vercel** — maintainer-approved 2026-11-01 (D-008)
-- ⛔ App-binary tag / GitHub Release / `git push` — **still requires explicit maintainer go-ahead**
+- ✅ (authorised 2026-11-01, D-010) `git push`, tag, and GitHub Release — maintainer approved. The release installer is built by **GitHub Actions on a windows-latest (MSVC) runner** on a pushed `v*` tag, since the local toolchain can't build the native app.
 
 ## Open blockers / needs-maintainer
 - **Website is deployed but not yet public.** The Vercel project has "Vercel Authentication"
@@ -76,5 +76,5 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
   Tauri build. Fix: install **Visual Studio Build Tools (C++ workload)** and
   `rustup default stable-x86_64-pc-windows-msvc` (or install a 64-bit MinGW). Until then: core
   uses `MemStore`, and the panel UI ships as a runnable browser (Vite) demo.
-- App `git push` / tag / GitHub Release remain maintainer-gated; the website deploy is the only
-  authorised external action.
+- `git push`, tag, and GitHub Release are now **authorised** (D-010); the release installer is built
+  by GitHub Actions on an MSVC `windows-latest` runner when a `v*` tag is pushed.
