@@ -127,4 +127,42 @@ this table is exhaustive.
 ## 9. Milestones
 
 Tracked in `docs/PROGRESS.md`. Order: core engine (tested) → panel UI → integrations →
-security audit → website → packaging. No release without explicit maintainer go-ahead.
+security audit → website → packaging. No app-binary release without explicit maintainer go-ahead.
+
+## 10. Website — krovi.tech `[brief]`
+
+Static, privacy-first marketing + download site. **Original design** (not a clone of any site);
+design *cues* only from the maintainer's own site (scaffold). Built under `web/`; **deployed to
+Vercel** (maintainer-authorised 2026-11-01 — `DECISIONS.md` D-008).
+
+**Sections:** hero (tagline + dual CTA: Download, Compare) → feature showcase (the shelf + each
+tool) → local-first/verifiable-privacy value prop → "Free & open source forever" → `/compare` →
+FAQ → final download CTA.
+
+**Nav:** Features · Compare · Download · FAQ · GitHub.
+
+**Footer (scaffold-style, every link must resolve — never a dead `#`):** multi-column —
+- *Get started:* Download, Features, Compare, Keyboard shortcuts
+- *Project:* GitHub repo, Roadmap, Changelog, FAQ
+- *Privacy:* Network audit (→ the audit doc), Privacy, Security
+- *Krovi:* About, License (MIT), Contributing
+- Bottom bar: Krovi wordmark + tagline, trust line "No account · No ads · No tracking · No
+  telemetry · Free & open source", "© 2026 Naitik Sahu & the Krovi contributors. Your data stays
+  on your device."
+
+**Comparison table (`/compare`) — honest + clean-room:**
+- Columns: **Krovi** (featured, highlighted, first) vs **Vayli** vs 1–2 generic alternatives
+  (e.g. "Typical paid utility suite", "A pile of separate free tools").
+- Row groups: *Cost & ownership* (price / free, open source, no account, fully offline, local
+  files, no telemetry) · *Daily tools* (clipboard history, paste stack, timers, Pomodoro, file
+  shelf, media controls, weather, notes, to-do, world clocks, unit & currency, calculator,
+  command palette, screen-time) · *Platform* (Windows, auto-start, global hotkey, hot-corner).
+- Cells: ✓ / ✗ / "Paid" / "Partial" / **"Not verified"**, with a legend.
+- **Clean-room honesty rule (D-002):** the Vayli column is filled from its **public listing only**;
+  anything not publicly confirmable is **"Not verified"**, never guessed and never derived from its
+  binary. Include a candid "Where others may be ahead today" note (Krovi is Windows-only for now,
+  newer / less battle-tested). Honesty is the brand.
+
+**Constraints:** no third-party trackers/analytics/ads on the site either; fast, accessible,
+responsive, light + dark; highlighted Krovi column; sticky table header; mobile-friendly. The
+Download button targets GitHub Releases as a **placeholder** until a real release exists.

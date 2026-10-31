@@ -26,7 +26,8 @@ _Last updated: 2026-10-31_
 
 ### Autonomous overnight run (2026-10-31 night) — safe mode
 Maintainer asleep; authorised an unattended build "till morning, safe way". Operating rules:
-- **Local commits only. No push, tag, GitHub Release, or deploy** — all maintainer-gated.
+- **Local git commits only.** Website **deploy to Vercel is authorised** (D-008). Still NOT
+  authorised: pushing the git repo, tags, and app-binary GitHub Releases.
 - Clean-room invariant (D-002) stays in force; GateGuard safety hook left **on**.
 - Each iteration: do the next pending item **test-first**, run `cargo test`, commit locally,
   update this file + `DECISIONS.md`. Self-paced via a dynamic loop.
@@ -50,12 +51,17 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 ## Phase 4 — Security review
 - ⏳ `docs/SECURITY-network-audit.md` — literal audit of every outbound call
 
-## Phase 5 — Website (krovi.tech)
-- ⏳ Original feature showcase + download page
+## Phase 5 — Website (krovi.tech)  _(maintainer emphasised; may be built right after Phase 1–2)_
+- ⏳ Original static site under `web/` — hero, feature showcase, privacy value prop, FAQ, download CTA
+- ⏳ `/compare` table (Krovi vs Vayli vs generics) — honest cells, legend, "where others are ahead"
+- ⏳ Full scaffold-style footer — every link resolves (no dead `#`)
+- ⏳ Light + dark, responsive, no trackers/analytics
+- ⏳ **Deploy to Vercel** (authorised, D-008) → record the production URL here + in README
 
 ## Phase 6 — Release engineering
 - ⏳ Original icon set, MSI installer, CI, release workflow
-- ⛔ Tag / GitHub Release / deploy — **requires explicit maintainer go-ahead**
+- ✅ (authorised) Website deploy to **Vercel** — maintainer-approved 2026-11-01 (D-008)
+- ⛔ App-binary tag / GitHub Release / `git push` — **still requires explicit maintainer go-ahead**
 
 ## Open blockers / needs-maintainer
 - Bash tool classifier intermittently unavailable this session; PowerShell used as the

@@ -4,6 +4,22 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-008 · 2026-11-01 · Expanded scope: website + comparison table; Vercel deploy authorised
+Maintainer directed (awake): build all phases; keep the product/site original; add a `/compare`
+table demonstrating Krovi's advantages over Vayli and similar apps; ship a full scaffold-style
+footer with every link working; **deploy the website to Vercel**; take design cues from the
+maintainer's own site (https://scaffold-rho-dusky.vercel.app). All tests must stay green.
+- **Website deployment to Vercel is now explicitly maintainer-authorised** (previously gated).
+  Scope of this authorisation = the **website only**. Pushing the git repo, creating tags, and
+  publishing a GitHub **Release of the app binary** remain **NOT** authorised until asked separately.
+- If the Vercel CLI/MCP needs login or a token that isn't present, that is a `needs-maintainer`
+  blocker: build the site, attempt deploy, and if credentials are missing, STOP and record how to
+  finish (maintainer runs `vercel login` or supplies a token) rather than guessing.
+- Comparison table obeys the clean-room rule (D-002): Vayli's column uses public listing info only;
+  anything unconfirmed is "Not verified". A candid "where others are ahead" note is included.
+- Panel-UI phase re-views the user-supplied conceptual screenshots in
+  `D:\krovi-reference\vayli-landing\` (9 PNGs; not committed; conceptual only). See SPEC §10.
+
 ## D-007 · 2026-10-31 · Core engine design invariants (deterministic, UI-independent)
 Decisions made while building the first `krovi-core` modules (clipboard, paste stack,
 timers/stopwatch):
