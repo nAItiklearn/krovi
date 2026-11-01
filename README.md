@@ -110,7 +110,7 @@ Quick Transfer runs a server on your own LAN only while a share is open. No tele
 
 ## Website
 
-🌐 **https://web-flame-kappa-83.vercel.app** — features, the live browser demo, full voice
+🌐 **https://web-flame-kappa-83.vercel.app/** — features, the live browser demo, full voice
 documentation, an honest comparison vs. alternatives, and the changelog.
 
 ## Download
