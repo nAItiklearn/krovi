@@ -1,0 +1,14 @@
+[package]
+name = "krovi-voice"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi local speech: on-device dictation (notes) and voice commands. No cloud."
+publish = false
+
+[features]
+default = []
+native = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

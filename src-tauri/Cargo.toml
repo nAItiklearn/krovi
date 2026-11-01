@@ -5,6 +5,7 @@ members = [
     "crates/krovi-store",
     "crates/krovi-net",
     "crates/krovi-sys",
+    "crates/krovi-voice",
 ]
 
 # The Tauri app crate is the workspace *root* package below.
@@ -22,7 +23,9 @@ default-run = "krovi-app"
 # A lib (for mobile/test reuse) plus the desktop binary, per Tauri 2 convention.
 [lib]
 name = "krovi_app_lib"
-crate-type = ["lib", "cdylib", "staticlib"]
+# Desktop-only: `cdylib` (mobile) overflows GNU ld's export-ordinal limit on the
+# WinLibs MinGW toolchain ("export ordinal too large"), so it is not built.
+crate-type = ["lib"]
 
 [[bin]]
 name = "krovi-app"
@@ -32,21 +35,24 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 krovi-core = { path = "crates/krovi-core" }
 krovi-store = { path = "crates/krovi-store" }
 krovi-net = { path = "crates/krovi-net" }
 krovi-sys = { path = "crates/krovi-sys" }
+krovi-voice = { path = "crates/krovi-voice" }
 
 [features]
-# Mirrors krovi-store: SQLite persistence is opt-in and needs a 64-bit C
-# compiler (see DECISIONS.md D-009). The default shell uses the in-memory store.
-# `net`/`native` enable the integration crates' real I/O (keyless HTTP, windows-rs)
-# — both off by default and built only in CI on a full toolchain.
-default = []
+# v0.2 (D-011): the REAL integrations are on by default. The v0.1 release shipped
+# fake data partly because these were opt-in; a Tauri build must never fall back
+# to fixtures. The 64-bit WinLibs MinGW toolchain builds all of them locally
+# (docs/CONTRACTS.md §0). Fixtures remain only for the browser demo.
+default = ["net", "native"]
 sqlite = ["krovi-store/sqlite"]
 net = ["krovi-net/net"]
-native = ["krovi-sys/native"]
+native = ["krovi-sys/native", "krovi-voice/native"]
