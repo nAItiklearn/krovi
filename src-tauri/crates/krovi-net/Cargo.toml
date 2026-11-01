@@ -26,3 +26,7 @@ serde_json = "1"
 # (avoids the OpenSSL C dependency). Off by default so the pure logic above
 # always builds and tests locally even without a 64-bit C compiler.
 ureq = { version = "2", optional = true }
+
+[[example]]
+name = "net_probe"
+required-features = ["net"]

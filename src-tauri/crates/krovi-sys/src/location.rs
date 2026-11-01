@@ -38,28 +38,45 @@ pub fn current_location() -> crate::Result<Option<(f64, f64)>> {
 }
 
 // ---------------------------------------------------------------------------
-// Native implementation — CI-only.
-//
-// Authored against windows-rs 0.58. Not compiled/exercised on the local
-// 32-bit-gcc host; no local test results claimed. Returns ONLY a coarsened
-// coordinate — nothing finer ever leaves this function.
+// Native implementation. Returns ONLY a coarsened coordinate — nothing finer ever
+// leaves this function. The WinRT call blocks, so it runs on its own short-lived
+// MTA thread (never the caller's, which may be the STA UI thread) and is abandoned
+// after a timeout: with Windows Location off or denied the call fails (or hangs), and
+// the caller then falls back to asking for a city.
 // ---------------------------------------------------------------------------
 #[cfg(all(windows, feature = "native"))]
 mod native {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
     use crate::SysError;
     use windows::Devices::Geolocation::Geolocator;
+    use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 
     fn err<E: std::fmt::Display>(e: E) -> SysError {
         SysError::Message(e.to_string())
     }
 
-    pub(super) fn current_location() -> crate::Result<Option<(f64, f64)>> {
+    fn locate() -> crate::Result<Option<(f64, f64)>> {
         let geo = Geolocator::new().map_err(err)?;
         let position = geo.GetGeopositionAsync().map_err(err)?.get().map_err(err)?;
         let coordinate = position.Coordinate().map_err(err)?;
         let point = coordinate.Point().map_err(err)?;
         let basic = point.Position().map_err(err)?;
         Ok(Some(super::coarsen(basic.Latitude, basic.Longitude)))
+    }
+
+    pub(super) fn current_location() -> crate::Result<Option<(f64, f64)>> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("krovi-location".into())
+            .spawn(move || {
+                let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+                let _ = tx.send(locate());
+            })
+            .map_err(err)?;
+        rx.recv_timeout(Duration::from_secs(12))
+            .map_err(|_| SysError::Message("location request timed out".into()))?
     }
 }
 

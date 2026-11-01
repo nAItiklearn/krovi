@@ -1,217 +1,471 @@
 <script lang="ts">
-  import { activeTool, paletteOpen, pinned, themePref } from '../lib/stores';
-  import { TOOLS } from '../lib/tools';
-  import type { ToolId } from '../lib/types';
+  import { onMount, tick } from 'svelte';
   import Icon from './Icon.svelte';
+  import { match, segments } from './search';
+  import {
+    activeTool,
+    emitIntent,
+    openTool,
+    paletteOpen,
+    pomodoroStart,
+    pushToast,
+    voiceHelpOpen,
+  } from '../lib/stores';
+  import { TOOLS } from '../lib/tools';
+  import { mediaTransport } from '../lib/live';
+  import { startVoice } from '../lib/voice';
+  import { quit } from '../lib/shell';
+  import { tryEvaluate } from '../lib/calc';
+  import { roundDisplay } from '../lib/units';
+  import { pop } from '../lib/motion';
+  import type { IconName } from '../lib/icons';
 
-  interface Action {
+  // Spotlight for Krovi: one input, tools + actions, inline calculator. Everything is local.
+  interface Cmd {
     id: string;
     label: string;
     hint: string;
-    icon: string;
+    icon: IconName;
+    group: 'Tools' | 'Actions';
+    keywords: string[];
+    kbd?: string;
     run: () => void;
   }
 
-  const actions: Action[] = [
-    ...TOOLS.map((t) => ({
+  const commands: Cmd[] = [
+    ...TOOLS.map<Cmd>((t) => ({
       id: `go:${t.id}`,
-      label: `Open ${t.label}`,
+      label: t.label,
       hint: t.hint,
       icon: t.icon,
-      run: () => activeTool.set(t.id as ToolId),
+      group: 'Tools',
+      keywords: t.keywords,
+      run: () => openTool(t.id),
     })),
     {
-      id: 'act:theme',
-      label: 'Cycle theme',
-      hint: 'light → dark → auto',
-      icon: 'moon',
-      run: () => themePref.update((t) => (t === 'light' ? 'dark' : t === 'dark' ? 'auto' : 'light')),
+      id: 'pomo',
+      label: 'Start a focus session',
+      hint: 'Pomodoro, 25 minutes',
+      icon: 'pomodoro',
+      group: 'Actions',
+      keywords: ['pomodoro', 'focus', 'work'],
+      run: () => {
+        pomodoroStart();
+        openTool('pomodoro');
+      },
     },
     {
-      id: 'act:pin',
-      label: 'Toggle pin',
-      hint: 'keep the panel open',
-      icon: 'pin',
-      run: () => pinned.update((p) => !p),
+      id: 'playpause',
+      label: 'Play / pause media',
+      hint: 'Whatever is playing right now',
+      icon: 'play',
+      group: 'Actions',
+      keywords: ['music', 'song', 'spotify'],
+      run: () => void mediaTransport('playpause'),
+    },
+    {
+      id: 'next',
+      label: 'Next track',
+      hint: 'Skip forward',
+      icon: 'next',
+      group: 'Actions',
+      keywords: ['skip', 'music'],
+      run: () => void mediaTransport('next'),
+    },
+    {
+      id: 'prev',
+      label: 'Previous track',
+      hint: 'Skip back',
+      icon: 'prev',
+      group: 'Actions',
+      keywords: ['back', 'music'],
+      run: () => void mediaTransport('previous'),
+    },
+    {
+      id: 'voice',
+      label: 'Voice command',
+      hint: 'Say "open calendar", "start pomodoro"…',
+      icon: 'mic',
+      group: 'Actions',
+      keywords: ['speak', 'listen', 'dictate'],
+      run: () => void startVoice('command'),
+    },
+    {
+      id: 'voice-help',
+      label: 'What can I say?',
+      hint: 'The phrases Voice understands',
+      icon: 'circleHelp',
+      group: 'Actions',
+      keywords: ['voice', 'commands', 'help', 'phrases', 'speak', 'listen'],
+      run: () => voiceHelpOpen.set(true),
+    },
+    {
+      id: 'theme',
+      label: 'Change appearance',
+      hint: 'Themes and the idle companion',
+      icon: 'sun',
+      group: 'Actions',
+      keywords: ['theme', 'dark', 'light', 'mode', 'colour', 'color', 'idle', 'eyes'],
+      run: () => openTool('settings'),
+    },
+    {
+      id: 'close',
+      label: 'Close panel',
+      hint: 'Return to the pill',
+      icon: 'close',
+      group: 'Actions',
+      keywords: ['hide', 'collapse', 'dismiss'],
+      kbd: 'Esc',
+      run: () => emitIntent('collapse'),
+    },
+    {
+      id: 'quit',
+      label: 'Quit Krovi',
+      hint: 'Exit completely',
+      icon: 'power',
+      group: 'Actions',
+      keywords: ['exit', 'close app'],
+      kbd: 'Ctrl Q',
+      run: () => void quit(),
     },
   ];
 
   let q = $state('');
   let sel = $state(0);
-  let inputEl: HTMLInputElement;
+  let inputEl: HTMLInputElement | undefined = $state();
+  let listEl: HTMLElement | undefined = $state();
+  let opener: Element | null = null;
 
-  const filtered = $derived(
-    actions.filter((a) => {
-      const n = q.trim().toLowerCase();
-      if (!n) return true;
-      return a.label.toLowerCase().includes(n) || a.hint.toLowerCase().includes(n);
-    }),
-  );
+  interface Row {
+    cmd: Cmd;
+    score: number;
+    ranges: [number, number][];
+  }
 
-  $effect(() => {
-    // keep selection in range when the filter changes
-    if (sel >= filtered.length) sel = Math.max(0, filtered.length - 1);
+  const rows = $derived.by<Row[]>(() => {
+    const out: Row[] = [];
+    for (const cmd of commands) {
+      const m = match(q, cmd.label, [cmd.hint, ...cmd.keywords]);
+      if (m) out.push({ cmd, score: m.score, ranges: m.ranges });
+    }
+    if (q.trim()) out.sort((a, b) => b.score - a.score);
+    return out;
   });
 
-  $effect(() => {
-    inputEl?.focus();
+  // inline calculator: "12*7+3" -> 87 (Enter copies it)
+  const calc = $derived.by(() => {
+    const s = q.trim();
+    if (!s || !/[0-9]/.test(s) || !/[-+*/%^()]/.test(s.replace(/^-/, ''))) return null;
+    const r = tryEvaluate(s);
+    return r.ok ? String(roundDisplay(r.value, 8)) : null;
   });
 
-  function choose(a: Action) {
-    a.run();
+  const total = $derived(rows.length + (calc ? 1 : 0));
+
+  $effect(() => {
+    // keep the selection in range when the result set changes
+    if (sel >= total) sel = Math.max(0, total - 1);
+  });
+
+  function close() {
     paletteOpen.set(false);
+  }
+
+  async function copyResult(v: string) {
+    try {
+      await navigator.clipboard?.writeText(v);
+      pushToast(`Copied ${v}`);
+    } catch {
+      pushToast(`= ${v}`);
+    }
+  }
+
+  function runAt(i: number) {
+    if (calc && i === 0) {
+      void copyResult(calc);
+      close();
+      return;
+    }
+    const r = rows[i - (calc ? 1 : 0)];
+    if (!r) return;
+    close();
+    r.cmd.run();
   }
 
   function onKey(e: KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      sel = Math.min(sel + 1, filtered.length - 1);
+      sel = total ? (sel + 1) % total : 0;
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      sel = Math.max(sel - 1, 0);
+      sel = total ? (sel - 1 + total) % total : 0;
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const a = filtered[sel];
-      if (a) choose(a);
+      runAt(sel);
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      paletteOpen.set(false);
+      e.stopPropagation();
+      close();
+    } else if (e.key === 'Tab') {
+      e.preventDefault(); // focus stays in the field; the list is arrow-driven
     }
   }
+
+  $effect(() => {
+    void sel;
+    void tick().then(() => listEl?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }));
+  });
+
+  onMount(() => {
+    opener = document.activeElement;
+    // the panel may still be opening (Ctrl+K from the pill): keep trying until the field can take focus
+    let tries = 0;
+    const focusTimer = setInterval(() => {
+      inputEl?.focus({ preventScroll: true });
+      if (document.activeElement === inputEl || ++tries > 20) clearInterval(focusTimer);
+    }, 50);
+    inputEl?.focus({ preventScroll: true });
+    return () => {
+      clearInterval(focusTimer);
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true });
+    };
+  });
+
+  const currentId = $derived(`pal-opt-${sel}`);
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="scrim" role="presentation" onclick={() => paletteOpen.set(false)}>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
+<div
+  class="overlay"
+  role="presentation"
+  onpointerdown={(e) => {
+    if (e.target === e.currentTarget) close();
+  }}
+  transition:pop|global={{ duration: 180, from: 1, y: 0 }}>
   <div
-    class="palette"
+    class="box"
     role="dialog"
     aria-modal="true"
     aria-label="Command palette"
-    tabindex="-1"
-    onclick={(e) => e.stopPropagation()}>
-    <div class="search">
+    transition:pop|global={{ duration: 280, from: 0.95, y: -10 }}>
+    <div class="field">
       <Icon name="search" size={18} />
       <input
         bind:this={inputEl}
         bind:value={q}
-        class="pinput"
-        placeholder="Search tools and actions…"
-        aria-label="Command palette search"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="pal-list"
+        aria-activedescendant={total ? currentId : undefined}
+        aria-label="Search tools and actions"
+        placeholder="Search tools, run an action, or calculate"
+        autocomplete="off"
+        spellcheck="false"
         onkeydown={onKey} />
       <kbd>Esc</kbd>
     </div>
-    <ul class="list scroll" role="listbox" aria-label="Commands">
-      {#each filtered as a, i (a.id)}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
+
+    <ul class="list scroll" id="pal-list" role="listbox" aria-label="Results" bind:this={listEl}>
+      {#if calc}
         <li
+          id="pal-opt-0"
           role="option"
-          aria-selected={i === sel}
-          class:selected={i === sel}
-          onmousemove={() => (sel = i)}
-          onclick={() => choose(a)}>
-          <Icon name={a.icon} size={17} />
-          <span class="lbl">{a.label}</span>
-          <span class="hint faint">{a.hint}</span>
+          aria-selected={sel === 0}
+          class="item calc"
+          class:sel={sel === 0}
+          onpointerenter={() => (sel = 0)}
+          onclick={() => runAt(0)}
+          onkeydown={() => {}}>
+          <span class="ico"><Icon name="calculator" size={16} /></span>
+          <span class="lbl num">= {calc}</span>
+          <span class="hint">Copy result</span>
+          {#if sel === 0}<kbd><Icon name="enter" size={11} /></kbd>{/if}
         </li>
-      {:else}
-        <li class="empty faint">No matching commands</li>
+      {/if}
+      {#each rows as r, i (r.cmd.id)}
+        {@const idx = i + (calc ? 1 : 0)}
+        <li
+          id="pal-opt-{idx}"
+          role="option"
+          aria-selected={sel === idx}
+          class="item"
+          class:sel={sel === idx}
+          class:current={r.cmd.id === `go:${$activeTool}`}
+          onpointerenter={() => (sel = idx)}
+          onclick={() => runAt(idx)}
+          onkeydown={() => {}}>
+          <span class="ico"><Icon name={r.cmd.icon} size={16} /></span>
+          <span class="lbl">
+            {#each segments(r.cmd.label, r.ranges) as s, k (k)}{#if s.hit}<mark>{s.text}</mark>{:else}{s.text}{/if}{/each}
+          </span>
+          <span class="hint ellipsis">{r.cmd.hint}</span>
+          {#if sel === idx}
+            <kbd aria-hidden="true"><Icon name="enter" size={11} /></kbd>
+          {:else if r.cmd.kbd}
+            <kbd aria-hidden="true">{r.cmd.kbd}</kbd>
+          {:else}
+            <span class="grp">{r.cmd.group === 'Tools' ? 'Tool' : 'Action'}</span>
+          {/if}
+        </li>
       {/each}
+      {#if !total}
+        <li class="none" role="presentation">Nothing matches &ldquo;{q}&rdquo;</li>
+      {/if}
     </ul>
-    <div class="foot faint">
-      <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-      <span><kbd>↵</kbd> run</span>
-      <span><kbd>Ctrl</kbd>+<kbd>K</kbd> toggle</span>
+
+    <div class="foot" aria-hidden="true">
+      <span><kbd><Icon name="arrowUp" size={11} /></kbd><kbd><Icon name="arrowDown" size={11} /></kbd> Navigate</span>
+      <span><kbd><Icon name="enter" size={11} /></kbd> Run</span>
+      <span class="push"><kbd>Ctrl</kbd><kbd>K</kbd> Toggle</span>
     </div>
   </div>
 </div>
 
 <style>
-  .scrim {
-    position: fixed;
+  .overlay {
+    position: absolute;
     inset: 0;
-    background: rgba(8, 12, 15, 0.45);
-    backdrop-filter: blur(2px);
-    display: grid;
-    justify-items: center;
-    align-items: start;
-    padding-top: 12vh;
     z-index: 50;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 64px;
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    backdrop-filter: blur(10px) saturate(1.2);
+    border-radius: var(--r-panel);
   }
-  .palette {
-    width: min(540px, 92vw);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    box-shadow: var(--shadow);
+    .box {
+    width: 580px;
+    max-height: 470px;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
+    border-radius: var(--r-4);
+    background: var(--pop-bg);
+    border: 1px solid var(--line-strong);
+    box-shadow: var(--shadow-pop);
+    -webkit-backdrop-filter: blur(28px) saturate(1.7);
+    backdrop-filter: blur(28px) saturate(1.7);
   }
-  .search {
+  .field {
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text-dim);
+    gap: 12px;
+    padding: 0 16px;
+    height: 56px;
+    border-bottom: 1px solid var(--line);
+    color: var(--text-2);
+    flex: none;
   }
-  .pinput {
+  input {
     flex: 1;
-    border: none;
+    min-width: 0;
+    height: 100%;
+    border: 0;
     background: transparent;
     color: var(--text);
-    font-size: 15px;
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
     outline: none;
-    font-family: inherit;
+  }
+  input::placeholder {
+    color: var(--text-3);
   }
   .list {
-    max-height: 46vh;
-    margin: 0;
     padding: 6px;
-    list-style: none;
+    min-height: 0;
+    flex: 1;
   }
-  .list li {
+  .item {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 9px 11px;
-    border-radius: 9px;
+    gap: 12px;
+    height: 44px;
+    padding: 0 10px;
+    border-radius: var(--r-3);
     color: var(--text);
     cursor: pointer;
+    transition: background var(--dur-1);
   }
-  .list li.selected {
-    background: var(--accent-soft);
-    color: var(--accent);
+  .item.sel {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
-  .list li .lbl {
-    font-size: 13.5px;
-    font-weight: 550;
+  .ico {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    color: var(--text-2);
+    flex: none;
+    transition:
+      color var(--dur-1),
+      transform 0.45s var(--spring-bouncy);
   }
-  .list li .hint {
-    margin-left: auto;
-    font-size: 12px;
+  .sel .ico {
+    color: var(--text);
+    transform: scale(1.08);
   }
-  .list li.selected .hint {
-    color: var(--accent);
-    opacity: 0.8;
+  .lbl {
+    font-size: var(--t-md);
+    font-weight: 560;
+    white-space: nowrap;
   }
-  .empty {
-    justify-content: center;
-    cursor: default;
+  mark {
+    background: none;
+    color: var(--text);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
+  }
+  .hint {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-size: var(--t-xs);
+    color: var(--text-3);
+  }
+  .grp {
+    font-size: var(--t-micro);
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    min-width: 40px;
+    text-align: right;
+  }
+  .calc .lbl {
+    font-size: var(--t-lg);
+  }
+  .none {
+    padding: 28px 12px;
+    text-align: center;
+    color: var(--text-3);
+    font-size: var(--t-sm);
   }
   .foot {
     display: flex;
-    gap: 14px;
-    padding: 8px 14px;
-    border-top: 1px solid var(--border);
-    font-size: 11.5px;
+    gap: 16px;
+    align-items: center;
+    height: 38px;
+    padding: 0 16px;
+    border-top: 1px solid var(--line);
+    font-size: var(--t-xs);
+    color: var(--text-3);
+    flex: none;
   }
-  kbd {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    padding: 1px 5px;
-    margin: 0 1px;
+  .foot span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .push {
+    margin-left: auto;
   }
 </style>

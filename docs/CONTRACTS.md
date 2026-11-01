@@ -75,7 +75,27 @@ separator, `Quit Krovi`.
 | `shell_get_config` | — | `ShellConfig` |
 | `shell_set_config` | `config: ShellConfig` | `ShellConfig` (re-registers shortcut; errors if invalid) |
 
-`ShellConfig = { shortcut: string /* "Ctrl+Alt+Space" */, showPill: boolean, collapseOnBlur: boolean, launchAtLogin: boolean }`
+| `shell_set_hit_rect` | `rect: {x,y,w,h}` (logical px, window-relative) | `()` |
+
+`ShellConfig = { shortcut: string /* "Ctrl+Alt+Space" */, showPill: boolean, collapseOnBlur: boolean, launchAtLogin: boolean, hideInFullscreen: boolean }`
+
+**Click-through (critical on Windows).** Transparent window pixels still swallow clicks,
+so the invisible headroom around the pill would block e.g. the middle of a maximized
+browser's tab strip. The UI reports the *visible* shape's bounding rect via
+`shell_set_hit_rect` whenever it changes (ResizeObserver; also during/after morphs).
+Rust samples the cursor (~30 Hz) and toggles `set_ignore_cursor_events` so clicks
+outside that rect pass through to whatever is underneath. In `panel` mode, a click
+outside the panel therefore lands on the other app → focus loss → collapse.
+
+**Additions (panel-shell, as built):** `shell_get_mode → mode`; `shell_set_mode` returns
+the mode actually applied (`pill`→`hidden` when the pill is off); Rust sends resolved
+`expand`/`collapse` in `shell-request` (never `toggle`); `shell.ts` also exports
+`onOpenTool(cb)` and `HitRect`; `Krovi.exe --quit` closes a running instance; the
+bundled exe is `Krovi.exe`; capabilities are `core:default` only (Rust does all window
+mutation). Alt+F4 collapses, never kills.
+
+**Fullscreen**: when `hideInFullscreen` and the foreground window covers its whole
+monitor (game, video, presentation), the pill hides; it returns when that ends.
 
 Events: `shell-mode {mode}`, `shell-request {action}`, `shell-open-tool {tool: ToolId}`
 (tray "Settings…" emits `{tool:"settings"}` after expanding).
@@ -130,6 +150,42 @@ change), plus `startLive()` (idempotent; called once from `App.svelte`). In demo
 Privacy: entries flagged `ExcludeClipboardContentFromMonitorProcessing` (password
 managers) are never stored. All data persists locally (SQLite in the app data dir).
 
+Other data events (live-data): `notes-changed` (payload `Note[]`) is emitted by
+`commands::create_note_from` (used by voice) — the Notes view must listen for it.
+
+### Additional live-data commands (append-only, live-data)
+
+| command | args | returns |
+|---|---|---|
+| `load_media` | — | `MediaState \| null` (latest hub sample, position advanced to now) |
+| `weather_status` | `force?: bool` | `WeatherReply` — `{status:"ok"\|"offline"\|"needs-city", weather, stale, fetchedAt, place, error}` |
+| `load_weather` | — | `WeatherData \| null` |
+| `weather_search` | `query` | `{name,lat,lon}[]` (keyless geocode of the typed text) |
+| `weather_set_place` | `name, lat, lon` | `WeatherReply` |
+| `weather_set_city` | `query` | `WeatherReply` (best geocode match) |
+| `load_currency_rates` | — | `{[code]: perUSD}` (empty offline with nothing cached) |
+| `load_currency_info` | `force?: bool` | `{rates, base, date, updatedAt, stale, error}` |
+| `load_calendar` / `add_calendar_event` / `remove_calendar_event` | — / `date,title,time?` / `id` | `{id,date,title,time?}[]` (chronological; persisted) |
+
+Weather and FX are real keyless fetches cached in the store (weather 20 min, FX 6 h; an
+out-of-date cache is served flagged `stale` when offline). `needs-city` means Windows
+Location was unavailable: the UI asks for a city. Outbound hosts (audit): `api.open-meteo.com`
+(coarse lat/long), `geocoding-api.open-meteo.com` (the typed city text only),
+`api.frankfurter.dev` (base currency only). Persisted: clipboard (cap 200 unpinned),
+notes, tasks, calendar, screen time, shelves, weather place + caches → `krovi.db` in the
+app data dir; full-resolution copies of clipboard images are kept as `clipimg/<hash>.png`
+beside it. Bridge additions (`src/lib/bridge.ts`): `loadWeatherStatus`, `searchPlaces`,
+`setWeatherPlace`, `setWeatherCity`, `loadMediaState`, `loadCurrencyInfo`,
+`addCalendarEvent`, `removeCalendarEvent`, `onNotesChanged`, `listen`, `invoke`;
+`loadWeather`/`loadMedia` now resolve `null` when there is nothing to show.
+
+### Browser demo / website embed
+In the browser (`mode()==='demo'`) the app renders a desktop-like backdrop with the
+pill at top-centre; clicking expands exactly like the native app. With `?embed=1` the
+page background is transparent (the website supplies the wallpaper/mockup) and the
+panel auto-expands ~700ms after load. The web build is `vite build --base=/demo/
+--outDir web/demo` and is served at `/demo/` on the website.
+
 ## 3. Voice (owner: voice)
 
 | command | args | returns |
@@ -150,12 +206,156 @@ Frontend: `src/lib/voice.ts` exports `voiceState` store, `startVoice(mode)`,
 creates the note (through the shared notes state) and emits `voice-result`; the UI
 refreshes notes on that event.
 
+### Voice v2 (as built — see DECISIONS D-013)
+`voice_start({mode, captureContext?})`, `voice_get_settings`, `voice_set_settings({settings})`.
+`VoiceResult = {mode, text, command, context, feedback, executed}`;
+`VoiceContext = {kind:'text',value,app?} | {kind:'files',value:string[],app?} | {kind:'app',value}`.
+New `VoiceCommand` kinds: `add-reminder{date,time?,title}` (executed in Rust),
+`shelf-add{paths,text?}`, `transfer-send{paths,text?}`, `media{command}` (executed in Rust),
+`timer-control{action,target}`. `VoiceSettings = {localOnly:true, storeAudio:false (both locked),
+keepTranscripts, contextCapture:'off'|'selection'|'selection+clipboard-fallback', cleanTranscription}`.
+New event `calendar-changed` (`CalendarDto[]`) from `commands::add_calendar_event_from`.
+
 ## 4. Holidays (owner: holidays)
 
 `src/lib/holidays/index.ts` exports
 `holidaysFor(year: number, region?: string /* default 'IN' */): Holiday[]` and `REGIONS`.
 `Holiday = { date: 'yyyy-mm-dd', name: string, type: 'gazetted'|'restricted'|'observance', region: string }`.
 Bundled, offline dataset with a documented source per year — no network call.
+Regions: `IN` (DoPT central-govt), `US` (OPM federal), `GB` (England & Wales),
+`GB-SCT`, `GB-NIR` (GOV.UK bank holidays); years 2025–2027.
+Extra exports: `nextHoliday(fromISO, region='IN', types=['gazetted']) → Holiday|null`,
+`sourceFor(year, region) → source|null`, `availableYears(region)`. Unknown year/region → `[]`.
+
+## 6. Quick Transfer (owner: transfer)
+
+LAN-only file transfer desktop ⇄ phone. Drop a file → a QR appears → the phone scans
+it and downloads over the same Wi-Fi; the same page can upload phone → desktop. No
+cloud relay, no account. The local HTTP server exists **only while a share is open**,
+binds to the active LAN interface (never 0.0.0.0 on public networks), serves only
+unguessable token URLs, and auto-closes on expiry/stop/app quit.
+
+| command | args | returns |
+|---|---|---|
+| `transfer_share` | `paths: string[]` | `Share` |
+| `transfer_receive` | — | `Share` (an upload-only page; files land in `Downloads\Krovi`) |
+| `transfer_stop` | `id?: string` | `()` |
+| `transfer_status` | — | `{ active: Share[] }` |
+
+`Share = { id, url, qrSvg, files: {name,size}[], mode: "send"|"receive", expiresAt, downloads, lanIp, port }`.
+Events: `transfer-progress {id, file, bytes, total, direction}`, `transfer-done {id, file, direction, savedPath?}`,
+`transfer-closed {id, reason: "expired"|"stopped"|"quit"}`.
+Frontend: `src/lib/transfer.ts` + `src/views/Transfer.svelte` (ToolId `'transfer'`).
+
+As built (additive): `transfer_pick_files() → string[]` (native dialog; wrapped in
+`shell.hold`), `transfer_get_config()/transfer_set_config(config)` →
+`{maxUploadBytes, ttlSecs, requirePin, receiveDir}`, `transfer_open_folder()`,
+`transfer_reveal(path)`, `transfer_firewall_status() → {lanIp, adapter, ruleInstalled, profile, exe}`,
+`transfer_firewall_allow()` (UAC; explicit click only). `transfer_share(paths, opts?)` /
+`transfer_receive(opts?)` with `opts = {pin?, ttlSecs?}`. Share extra fields: `createdAt,
+uploads, reached, pin|null, maxUploadBytes, receivedBytes, saveDir|null`. Events: direction is
+`"send"|"receive"` (desktop's view); `transfer-done` has `size`; `transfer-closed.reason` may
+be `"locked"`; new `transfer-reached {id}`, `transfer-failed {id, file, direction, message}`.
+Boot: `App.svelte` calls `setToaster(pushToast); void startTransfer();` once.
+
+## 7. Themes + idle companion (owner: personalization)
+
+`src/lib/theme.ts`: `THEMES: {id, name, scheme:'dark'|'light', swatch:[bg,fg,accent]}[]`
+(graphite, porcelain, mochi, arcade, terracotta, tide), `themeChoice` store
+(`'system' | <id>`, persisted, default `'system'`), `resolvedTheme` readable, `startTheme()`
+(idempotent; sets `data-theme=<id>` and `data-scheme=dark|light` on `<html>`, follows OS
+when `'system'`). This **supersedes** `themePref/applyTheme` in `stores.ts`.
+Themes are CSS files in `src/styles/themes/<id>.css` that only override the shared token
+vocabulary defined by frontend-design in `src/styles/tokens.css` (+ `--eye-*` tokens).
+UI code must never hardcode a colour — tokens only.
+
+`src/lib/idle.ts`: `idleSettings` store (`{enabled, style, personality, delayMs: 5500}`,
+persisted), `IDLE_STYLES`, `PERSONALITIES`, `isIdle` readable, `markActivity()` (the pill
+calls it on hover/click/pulse/shortcut/mode change; any call wakes instantly).
+`src/components/idle/IdleCompanion.svelte` — props `{ active: boolean }`; it renders the
+eyes inside the pill's shape (fills the pill's content box), reads `shell-cursor` itself.
+Event `shell-cursor {dx, dy, dist}` (logical px from pill centre; ≤10 Hz; only in pill
+mode with the cursor within 400 px) — emitted by panel-shell. A final
+`{dx:0,dy:0,dist:9999}` is sent once when the cursor leaves range or the panel/fullscreen
+hides the pill; consumers recentre on `dist >= 9999`. Values are rounded integers; skip
+threshold 2 px; silent while out of range.
+
+## 8. Reminders & alarms (owner: reminders)
+
+A reminder is a calendar event with a `time` (local wall-clock). A Rust background
+scheduler (`src-tauri/src/reminders.rs`) fires a real Windows toast
+(`tauri-plugin-notification`, from Rust — no webview permission) plus an optional sound
+AT that time, whatever the window mode (pill, panel, hidden). Each fire is persisted
+(`firedAt`) so it never double-fires; reminders missed while Krovi was closed fire once
+on next start, marked "missed". Snooze 5/10 min. Event `reminder-fired {id, title, date, time, missed}`.
+Voice path: voice parses the phrase → `commands::add_calendar_event_from` (same store) →
+`voice-result.feedback` echoes the exact resolved time ("Reminder set for today 5:00 PM: …").
+
+### Reminders — as built (append-only, reminders; see DECISIONS D-reminders)
+
+**Data.** `CalendarEvent` / `CalendarDto` gained `remind` (alert at `time`; default **true** when a time
+is set, never for all-day), `sound` (default true), `firedAt?` and `snoozedUntil?` (epoch ms) and
+`missed` — camelCase on the wire. SQLite schema **v3** adds the columns in place (existing rows kept;
+timed rows become reminders, all-day rows do not). A reminder whose time already passed (> 90 s) is
+stored with `remind:false` (it could never ring).
+
+**Scheduler** (`src-tauri/src/reminders.rs`, thread `krovi-reminders`): sleeps on a condvar for
+`min(time to next alert, 30 s)`, wakes at once on `reminders::wake_scheduler(&AppHandle)` (called by
+add/remove/snooze/dismiss). Due times = local wall clock + the OS zone (DST-correct, tested in
+`krovi_core::calendar`). When due: persist `firedAt` **first**, then toast
+(`tauri-plugin-notification`) + sound (`PlaySoundW` "Notification.Reminder") + `reminder-fired`. Missed
+while closed: fires once with `missed:true`; > 24 h overdue is only marked; 4+ at once share one summary
+toast. Sound is skipped while Do Not Disturb / alarms-only is on (the toast then waits in the
+notification centre; the in-app banner still shows).
+
+**Commands:** `reminders_status → {now, nowLocal, utcOffsetMinutes, pending[], next, scheduler{…lastFire},
+environment{toastIdentity, appUserModelId, toasts, focus, toastMayBeHidden}, persistenceError}`,
+`reminder_add(date,title,time?,remind?,sound?)`, `reminder_set(id,remind?,sound?)`,
+`reminder_snooze(id, minutes: f64)` (5/10 in the UI; fractions for QA), `reminder_dismiss(id)`,
+`reminder_test_fire(id, ignoreFocus?)` (QA) — each mutator returns the whole `CalendarDto[]`.
+`add_calendar_event` / `add_calendar_event_from` (voice) now create reminders and wake the scheduler.
+
+**Events:** `reminder-fired {id,title,date,time?,missed,firedAt,sound,test}`; `calendar-changed` also
+after the scheduler marks a reminder fired or a toast button is used.
+
+**Frontend:** `src/lib/reminders.ts` (`addReminder`, `setReminderAlert`, `snoozeReminder`,
+`dismissReminder`, `remindersStatus`, `startReminders(sink)` — called once from `App.svelte`).
+
+**Toast identity.** The plugin sets the AppUserModelID to the identifier (`tech.krovi.app`) unless the
+exe sits in a `target\debug|release` folder. Installed builds: the NSIS Start-menu shortcut carries that
+AUMID (verified on the maintainer's machine), toasts read "Krovi". Dev builds: "Windows PowerShell".
+Toast body click opens the Calendar; the toast's Snooze 5 / Snooze 10 / Dismiss buttons work while the
+banner is on screen (a limit of the plugin: a click after the toast moved to the notification centre is
+not delivered to the app).
+
+## 9. Voice v3 — local OS actions (owner: voice)
+
+Command intents `open-folder`, `open-app`, `search-files`, `list-folder` (see SPEC §11.13 for
+the exact phrasings). Folders resolve only against a known set (Known Folders + Quick
+Access/recent folders + pinned), apps against Start-menu entries, search uses the Windows
+Search index (SystemIndex), listing uses std::fs. Results shown in-panel via
+`voice-result` (`results: [...]`). **Zero network calls** in this flow — verified by a
+socket capture recorded in the security audit.
+
+As built (D-014): `voice_known_targets() → {ready, folders:[{name,path}], apps:[string]}`,
+`voice_open_result({path}) → string` (only paths from the latest result; folders open, files are
+revealed never run, apps launch). `VoiceCommand += open-folder{name,path} | open-app{name,path} |
+search-files{query} | list-folder{name,path}`. `VoiceResult += results: {kind:'folder'|'app'|'file',
+name, path, detail?}[]`. All four are `executed:true` in Rust; the UI shows `feedback` + rows only.
+App launches are gated at SAPI confidence ≥ 0.75 (below: "say it again", nothing launched).
+
+## 10. Explain (owner: explain)
+
+Paste any text → **summary** (on-device, extractive) + **read aloud**. Maintainer decision
+(2026-11-01, revised): **summary only for now — no LLM explanation** (no Ollama, no cloud model).
+- Summary: on-device only, no network.
+- Read aloud: Windows built-in on-device voices by default; **optional** ElevenLabs with each
+  user's own key (easy setup: link, paste, Test, voice picker, Remove), labelled "sends text to
+  ElevenLabs"; automatic fallback to the Windows voice on failure. No relay, no shared key.
+- Keys stored in Windows Credential Manager (never plaintext, never in SQLite/localStorage).
+Commands: `explain_summarize`, `explain_explain`, `explain_speak`, `explain_stop_speaking`,
+`explain_get_settings`, `explain_set_settings`, `explain_set_key`, `explain_engines`.
+Frontend: `src/lib/explain.ts` + `src/views/Explain.svelte` (ToolId `'explain'`).
 
 ## 5. File ownership (strict)
 
@@ -167,6 +367,11 @@ Bundled, offline dataset with a documented source per year — no network call.
 | voice | `src-tauri/crates/krovi-voice/**`, `src-tauri/src/voice.rs`, `src/lib/voice.ts`, `[voice]` handler block |
 | frontend-design | `index.html`, `src/main.ts`, `src/App.svelte`, `src/components/**`, `src/views/**`, `src/styles/**`, `src/lib/{stores,tools,icons,motion}.ts` |
 | holidays | `src/lib/holidays/**` |
+| explain | `src-tauri/crates/krovi-explain/**`, `src-tauri/src/explain.rs`, `[explain]` handler block, `src/lib/explain.ts`, `src/views/Explain.svelte`, Explain sections of `docs/SECURITY-network-audit.md` + `docs/DECISIONS.md` |
+| reminders | `src-tauri/src/reminders.rs`, `[reminders]` handler block, reminder fields in `crates/krovi-core/src/calendar.rs` + `krovi-store` calendar persistence, the reminder UI parts of `src/views/Calendar.svelte`, `src/lib/reminders.ts` |
+| personalization | `src/lib/theme.ts`, `src/lib/idle.ts`, `src/styles/themes/**`, `src/components/idle/**` |
+| ui-polish | `docs/research/**`, `qa/polish/**`; `web/**` only after the web agent hands off |
+| transfer | `src-tauri/crates/krovi-transfer/**`, `src-tauri/src/transfer.rs`, `src/lib/transfer.ts`, `src/views/Transfer.svelte`, `[transfer]` handler block, the Quick Transfer section of `docs/SECURITY-network-audit.md` |
 | web | `web/**` (except `web/demo/`, which is build output), `scripts/build-web.*` |
 
 Need a change in a file you don't own? Don't edit it — describe the exact change in

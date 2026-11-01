@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::{ClipEntry, Note, Result, ScreenTimeRecord, Store, StoredShelf, Task};
+use crate::{CalendarEvent, ClipEntry, Note, Result, ScreenTimeRecord, Store, StoredShelf, Task};
 
 /// A fully in-memory store. Non-durable: state is lost when dropped.
 #[derive(Debug, Default, Clone)]
@@ -16,6 +16,7 @@ pub struct MemStore {
     tasks: Vec<Task>,
     shelves: Vec<StoredShelf>,
     screen_time: Vec<ScreenTimeRecord>,
+    calendar: Vec<CalendarEvent>,
     settings: BTreeMap<String, String>,
 }
 
@@ -64,6 +65,14 @@ impl Store for MemStore {
     }
     fn save_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()> {
         self.screen_time = records.to_vec();
+        Ok(())
+    }
+
+    fn load_calendar(&self) -> Result<Vec<CalendarEvent>> {
+        Ok(self.calendar.clone())
+    }
+    fn save_calendar(&mut self, events: &[CalendarEvent]) -> Result<()> {
+        self.calendar = events.to_vec();
         Ok(())
     }
 

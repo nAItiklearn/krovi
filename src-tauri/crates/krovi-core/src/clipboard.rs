@@ -53,6 +53,27 @@ impl ClipboardHistory {
         }
     }
 
+    /// Rebuild a history from persisted entries (any order). Internal recency is
+    /// restored by id (ids are monotonic, so a larger id is a newer copy) and
+    /// `next_id` continues after the largest persisted id so ids never collide
+    /// with restored ones. Capacity is applied to the unpinned entries.
+    pub fn from_entries(cap: usize, mut entries: Vec<ClipEntry>) -> Self {
+        entries.sort_by(|a, b| b.id.cmp(&a.id));
+        let next_id = entries.iter().map(|e| e.id).max().unwrap_or(0) + 1;
+        let mut h = Self {
+            cap: cap.max(1),
+            next_id,
+            entries,
+        };
+        h.evict();
+        h
+    }
+
+    /// The most recently created entry (largest id), pinned or not.
+    pub fn newest(&self) -> Option<&ClipEntry> {
+        self.entries.iter().max_by_key(|e| e.id)
+    }
+
     /// The unpinned-entry capacity.
     pub fn cap(&self) -> usize {
         self.cap
@@ -99,6 +120,27 @@ impl ClipboardHistory {
         );
         self.evict();
         id
+    }
+
+    /// Like [`add`](Self::add), but a copy identical (same kind and content) to the
+    /// **newest** entry is ignored and `None` is returned. Some applications write
+    /// the clipboard several times for one copy; that must neither create a second
+    /// entry nor read as a second "new copy" to the UI. Copying an *older* entry again
+    /// still promotes it (and returns the new id).
+    pub fn add_if_new(
+        &mut self,
+        kind: ClipKind,
+        content: impl Into<String>,
+        created_at: u64,
+    ) -> Option<u64> {
+        let content = content.into();
+        if self
+            .newest()
+            .is_some_and(|n| n.kind == kind && n.content == content)
+        {
+            return None;
+        }
+        Some(self.add(kind, content, created_at))
     }
 
     /// Drop oldest unpinned entries until the unpinned count is within `cap`.
@@ -347,6 +389,95 @@ mod tests {
         let combined = h.query(Some(ClipKind::Link), Some("rust"));
         assert_eq!(combined.len(), 1);
         assert_eq!(combined[0].content, "https://rust-lang.org");
+    }
+
+    #[test]
+    fn add_if_new_ignores_a_repeat_of_the_newest_entry() {
+        let mut h = ClipboardHistory::new(10);
+        assert_eq!(h.add_if_new(ClipKind::Text, "a", 1), Some(1));
+        assert_eq!(h.add_if_new(ClipKind::Text, "a", 2), None);
+        assert_eq!(h.len(), 1);
+        assert_eq!(h.visible()[0].created_at, 1); // untouched
+    }
+
+    #[test]
+    fn add_if_new_promotes_an_older_entry_with_a_new_id() {
+        let mut h = ClipboardHistory::new(10);
+        h.add_if_new(ClipKind::Text, "a", 1);
+        h.add_if_new(ClipKind::Text, "b", 2);
+        let id = h.add_if_new(ClipKind::Text, "a", 3).expect("promoted");
+        assert_eq!(h.len(), 2);
+        assert_eq!(h.newest().unwrap().id, id);
+        assert_eq!(h.visible()[0].content, "a");
+    }
+
+    #[test]
+    fn add_if_new_treats_a_different_kind_as_new() {
+        let mut h = ClipboardHistory::new(10);
+        h.add_if_new(ClipKind::Text, "http://x.y", 1);
+        assert!(h.add_if_new(ClipKind::Link, "http://x.y", 2).is_some());
+        assert_eq!(h.len(), 2);
+    }
+
+    #[test]
+    fn from_entries_restores_recency_and_continues_ids() {
+        let saved = vec![
+            ClipEntry {
+                id: 2,
+                kind: ClipKind::Text,
+                content: "pinned-old".into(),
+                pinned: true,
+                created_at: 5,
+            },
+            ClipEntry {
+                id: 9,
+                kind: ClipKind::Text,
+                content: "newest".into(),
+                pinned: false,
+                created_at: 90,
+            },
+            ClipEntry {
+                id: 4,
+                kind: ClipKind::Link,
+                content: "https://x.y".into(),
+                pinned: false,
+                created_at: 40,
+            },
+        ];
+        let mut h = ClipboardHistory::from_entries(10, saved);
+        assert_eq!(h.len(), 3);
+        assert_eq!(h.newest().unwrap().content, "newest");
+        // pinned floats first in the display order, then newest-first.
+        let order: Vec<_> = h.visible().iter().map(|e| e.content.clone()).collect();
+        assert_eq!(order, vec!["pinned-old", "newest", "https://x.y"]);
+        // a fresh copy must not reuse a restored id.
+        let id = h.add(ClipKind::Text, "fresh", 100);
+        assert_eq!(id, 10);
+        assert_eq!(h.newest().unwrap().content, "fresh");
+    }
+
+    #[test]
+    fn from_entries_enforces_cap_on_unpinned_only() {
+        let mk = |id: u64, pinned: bool| ClipEntry {
+            id,
+            kind: ClipKind::Text,
+            content: format!("c{id}"),
+            pinned,
+            created_at: id,
+        };
+        let h = ClipboardHistory::from_entries(
+            2,
+            vec![mk(1, true), mk(2, false), mk(3, false), mk(4, false)],
+        );
+        let order: Vec<_> = h.visible().iter().map(|e| e.content.clone()).collect();
+        assert_eq!(order, vec!["c1", "c4", "c3"]);
+    }
+
+    #[test]
+    fn from_entries_of_nothing_starts_at_one() {
+        let mut h = ClipboardHistory::from_entries(5, Vec::new());
+        assert!(h.newest().is_none());
+        assert_eq!(h.add(ClipKind::Text, "a", 1), 1);
     }
 
     #[test]

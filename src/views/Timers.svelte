@@ -1,275 +1,250 @@
 <script lang="ts">
-  import { now } from '../lib/stores';
-  import { formatClock, formatStopwatch } from '../lib/time';
+  import { flip } from 'svelte/animate';
   import Icon from '../components/Icon.svelte';
+  import Ring from '../components/Ring.svelte';
+  import RollingText from '../components/RollingText.svelte';
+  import State from '../components/State.svelte';
+  import { clockText } from '../components/pillModel';
+  import {
+    now,
+    stopwatch,
+    swElapsed,
+    swLap,
+    swReset,
+    swToggle,
+    timerAdd,
+    timerDone,
+    timerProgress,
+    timerRemaining,
+    timerRemove,
+    timerReset,
+    timerToggle,
+    timers,
+  } from '../lib/stores';
+  import { formatStopwatch } from '../lib/time';
+  import { arrive, depart, spotlight } from '../lib/motion';
 
-  interface T {
-    id: number;
-    label: string;
-    duration: number;
-    accumulated: number;
-    runningSince: number | null;
+  let label = $state('');
+  let minutes = $state(5);
+
+  function add(start: boolean, mins = minutes, name = label) {
+    timerAdd(name, Math.max(1, Math.min(600, Math.round(mins || 1))), start);
+    label = '';
   }
 
-  let nextId = 4;
-  let timers = $state<T[]>([
-    { id: 1, label: 'Tea steep', duration: 3 * 60_000, accumulated: 0, runningSince: Date.now() - 48_000 },
-    { id: 2, label: 'Standup', duration: 10 * 60_000, accumulated: 0, runningSince: null },
-    { id: 3, label: 'Oven', duration: 20 * 60_000, accumulated: 7 * 60_000, runningSince: null },
-  ]);
-  let newLabel = $state('');
-  let newMin = $state(5);
-
-  function raw(t: T, n: number): number {
-    return t.accumulated + (t.runningSince != null ? Math.max(0, n - t.runningSince) : 0);
-  }
-  function remaining(t: T, n: number): number {
-    return Math.max(0, t.duration - Math.min(t.duration, raw(t, n)));
-  }
-  function finished(t: T, n: number): boolean {
-    return raw(t, n) >= t.duration;
-  }
-  function progress(t: T, n: number): number {
-    return Math.min(1, raw(t, n) / t.duration);
-  }
-
-  function start(t: T) {
-    if (t.runningSince == null && !finished(t, $now)) t.runningSince = $now;
-    timers = [...timers];
-  }
-  function pause(t: T) {
-    if (t.runningSince != null) {
-      t.accumulated += Math.max(0, $now - t.runningSince);
-      t.runningSince = null;
+  // stopwatch needs sub-second ticks: drive it from rAF only while it runs
+  let sw = $state(Date.now());
+  $effect(() => {
+    if ($stopwatch.runningSince == null) {
+      sw = Date.now();
+      return;
     }
-    timers = [...timers];
-  }
-  function reset(t: T) {
-    t.accumulated = 0;
-    t.runningSince = null;
-    timers = [...timers];
-  }
-  function remove(id: number) {
-    timers = timers.filter((t) => t.id !== id);
-  }
-  function add() {
-    const mins = Math.max(1, Math.round(newMin || 0));
-    timers = [
-      ...timers,
-      { id: nextId++, label: newLabel.trim() || `${mins} min`, duration: mins * 60_000, accumulated: 0, runningSince: null },
-    ];
-    newLabel = '';
-  }
-
-  // ---- stopwatch ----
-  let sw = $state<{ accumulated: number; runningSince: number | null; laps: number[] }>({
-    accumulated: 0,
-    runningSince: null,
-    laps: [],
+    let id = 0;
+    const loop = () => {
+      sw = Date.now();
+      id = requestAnimationFrame(loop);
+    };
+    id = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(id);
   });
-  const swElapsed = $derived(sw.accumulated + (sw.runningSince != null ? Math.max(0, $now - sw.runningSince) : 0));
-  function swStart() {
-    if (sw.runningSince == null) sw.runningSince = $now;
-  }
-  function swPause() {
-    if (sw.runningSince != null) {
-      sw.accumulated += Math.max(0, $now - sw.runningSince);
-      sw.runningSince = null;
-    }
-  }
-  function swLap() {
-    sw.laps = [swElapsed, ...sw.laps];
-  }
-  function swReset() {
-    sw = { accumulated: 0, runningSince: null, laps: [] };
-  }
+  const swTime = $derived(swElapsed($stopwatch, sw));
+  const swRunning = $derived($stopwatch.runningSince != null);
+
+  const statusOf = (t: (typeof $timers)[number]) =>
+    timerDone(t, $now) ? 'Done' : t.runningSince != null ? 'Running' : t.accumulated > 0 ? 'Paused' : 'Ready';
 </script>
 
-<div class="cols">
-  <section>
-    <div class="adder">
-      <input class="input" placeholder="Timer name" bind:value={newLabel} />
-      <input class="input mins" type="number" min="1" max="600" bind:value={newMin} aria-label="minutes" />
-      <button class="btn accent" onclick={add}><Icon name="plus" size={16} /> Add</button>
-    </div>
-
-    <div class="timers">
-      {#each timers as t (t.id)}
-        {@const done = finished(t, $now)}
-        {@const running = t.runningSince != null && !done}
-        <div class="timer" class:done>
-          <div class="ring" style={`--p:${progress(t, $now)}`}>
-            <span class="time mono">{formatClock(remaining(t, $now))}</span>
-          </div>
-          <div class="info">
-            <div class="label">{t.label}</div>
-            <div class="state faint">
-              {done ? 'Finished' : running ? 'Running' : t.accumulated > 0 ? 'Paused' : 'Ready'}
-            </div>
-          </div>
-          <div class="ctl">
-            {#if running}
-              <button class="mini" title="Pause" onclick={() => pause(t)}><Icon name="pause" size={15} /></button>
-            {:else}
-              <button class="mini" title="Start" onclick={() => start(t)} disabled={done}>
-                <Icon name="play" size={15} />
-              </button>
-            {/if}
-            <button class="mini" title="Reset" onclick={() => reset(t)}><Icon name="reset" size={15} /></button>
-            <button class="mini" title="Remove" onclick={() => remove(t.id)}><Icon name="trash" size={15} /></button>
-          </div>
-        </div>
-      {/each}
-    </div>
-  </section>
-
-  <section class="sw card">
-    <p class="eyebrow"><Icon name="lap" size={13} /> Stopwatch</p>
-    <div class="sw-time mono">{formatStopwatch(swElapsed)}</div>
-    <div class="sw-ctl">
-      {#if sw.runningSince != null}
-        <button class="btn" onclick={swPause}><Icon name="pause" size={15} /> Pause</button>
-        <button class="btn" onclick={swLap}><Icon name="flag" size={15} /> Lap</button>
-      {:else}
-        <button class="btn accent" onclick={swStart}><Icon name="play" size={15} /> Start</button>
-        <button class="btn" onclick={swReset} disabled={swElapsed === 0}><Icon name="reset" size={15} /> Reset</button>
-      {/if}
-    </div>
-    {#if sw.laps.length}
-      <ul class="laps scroll">
-        {#each sw.laps as lap, i (sw.laps.length - i)}
-          <li><span class="faint">Lap {sw.laps.length - i}</span><span class="mono">{formatStopwatch(lap)}</span></li>
+<div class="view">
+  <div class="cols">
+    <section class="left">
+      <form class="adder" onsubmit={(e) => { e.preventDefault(); add(true); }}>
+        <input class="input" placeholder="Name (optional)" bind:value={label} aria-label="Timer name" maxlength="40" />
+        <label class="mins">
+          <input class="input" type="number" min="1" max="600" bind:value={minutes} aria-label="Minutes" />
+          <span class="faint">min</span>
+        </label>
+        <button class="btn primary" type="submit"><Icon name="plus" size={15} /> Start</button>
+      </form>
+      <div class="chips" aria-label="Quick timers">
+        {#each [1, 5, 10, 25, 45] as m (m)}
+          <button class="chip" type="button" onclick={() => add(true, m, '')}>{m} min</button>
         {/each}
-      </ul>
-    {/if}
-  </section>
+      </div>
+
+      {#if $timers.length}
+        <ul class="tl scroll" aria-label="Timers">
+          {#each $timers as t (t.id)}
+            {@const done = timerDone(t, $now)}
+            {@const running = t.runningSince != null && !done}
+            <li animate:flip={{ duration: 380 }} in:arrive out:depart>
+              <div class="timer card" class:done use:spotlight>
+                <Ring value={timerProgress(t, $now)} size={54} stroke={4.5} tone={running || done ? 'accent' : 'default'} label={`${t.label} progress`}>
+                  <Icon name={done ? 'check' : t.accumulated > 0 && !running ? 'pause' : 'timers'} size={15} />
+                </Ring>
+                <div class="info">
+                  <div class="nm ellipsis">{t.label}</div>
+                  <div class="st faint">{statusOf(t)} · {Math.round(t.duration / 60000)} min</div>
+                </div>
+                <div class="time" aria-live="off"><RollingText text={clockText(timerRemaining(t, $now))} /></div>
+                <div class="ctl">
+                  <button class="btn icon sm" aria-label={running ? `Pause ${t.label}` : done ? `Restart ${t.label}` : `Start ${t.label}`} onclick={() => timerToggle(t.id)}>
+                    <Icon name={running ? 'pause' : done ? 'reset' : 'play'} size={14} />
+                  </button>
+                  <button class="btn icon sm ghost" aria-label={`Reset ${t.label}`} onclick={() => timerReset(t.id)}><Icon name="reset" size={14} /></button>
+                  <button class="btn icon sm ghost danger" aria-label={`Delete ${t.label}`} onclick={() => timerRemove(t.id)}><Icon name="trash" size={14} /></button>
+                </div>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <div class="grow"><State icon="timers" title="No timers yet" text="Start a quick one above, or name your own. Timers keep running while the panel is closed and show in the pill." /></div>
+      {/if}
+    </section>
+
+    <aside class="sw card" use:spotlight aria-label="Stopwatch">
+      <span class="eyebrow"><Icon name="lap" size={13} /> Stopwatch</span>
+      <div class="swt num">{formatStopwatch(swTime)}</div>
+      <div class="swc">
+        <button class="btn primary" onclick={swToggle}>
+          <Icon name={swRunning ? 'pause' : 'play'} size={14} />{swRunning ? 'Pause' : swTime > 0 ? 'Resume' : 'Start'}
+        </button>
+        {#if swRunning}
+          <button class="btn" onclick={swLap}><Icon name="flag" size={14} /> Lap</button>
+        {:else}
+          <button class="btn" onclick={swReset} disabled={swTime === 0}><Icon name="reset" size={14} /> Reset</button>
+        {/if}
+      </div>
+      {#if $stopwatch.laps.length}
+        <ul class="laps scroll" aria-label="Laps">
+          {#each $stopwatch.laps as lap, i (i)}
+            <li in:arrive><span class="faint">Lap {$stopwatch.laps.length - i}</span><span class="num">{formatStopwatch(lap)}</span></li>
+          {/each}
+        </ul>
+      {/if}
+    </aside>
+  </div>
 </div>
 
 <style>
   .cols {
+    flex: 1;
+    min-height: 0;
     display: grid;
-    grid-template-columns: 1fr 280px;
+    grid-template-columns: 1fr 252px;
     gap: 16px;
+  }
+  .left {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   .adder {
     display: flex;
     gap: 8px;
-    margin-bottom: 14px;
+    flex: none;
   }
   .adder .input {
     flex: 1;
   }
   .mins {
-    width: 78px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 96px;
+    flex: none;
+    font-size: var(--t-xs);
+  }
+  .mins .input {
+    width: 64px;
+    flex: none;
+    padding: 0 8px 0 12px;
+  }
+  .chips {
+    display: flex;
+    gap: 6px;
+    margin: 10px 0 14px;
     flex: none;
   }
-  .timers {
+  .tl {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    margin-right: -6px;
+    padding-right: 6px;
+  }
+  .grow {
+    flex: 1;
+    display: grid;
+    place-items: center;
   }
   .timer {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    padding: 11px 12px 11px 14px;
+    border-radius: var(--r-4);
   }
   .timer.done {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
-  .ring {
-    --p: 0;
-    width: 62px;
-    height: 62px;
-    flex: none;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: conic-gradient(var(--accent) calc(var(--p) * 360deg), var(--surface-3) 0);
-  }
-  .ring::before {
-    content: '';
-    position: absolute;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: var(--surface-2);
-  }
-  .timer.done .ring::before {
-    background: var(--surface);
-  }
-  .time {
-    position: relative;
-    font-size: 13px;
-    font-weight: 600;
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
   }
   .info {
     flex: 1;
     min-width: 0;
   }
-  .label {
+  .nm {
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--t-md);
+    letter-spacing: -0.01em;
   }
-  .state {
-    font-size: 12px;
+  .st {
+    font-size: var(--t-xs);
+  }
+  .time {
+    font-size: 26px;
+    font-weight: 600;
+    min-width: 76px;
+    text-align: right;
   }
   .ctl {
     display: flex;
     gap: 2px;
   }
-  .mini {
-    border: none;
-    background: transparent;
-    color: var(--text-dim);
-    padding: 7px;
-    border-radius: 8px;
-  }
-  .mini:hover {
-    background: var(--surface-3);
-    color: var(--text);
-  }
-  .mini:disabled {
-    opacity: 0.4;
-  }
+
   .sw {
+    align-self: start;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    align-self: start;
+    gap: 14px;
+    min-height: 0;
+    max-height: 100%;
   }
-  .sw-time {
-    font-size: 34px;
-    font-weight: 680;
-    letter-spacing: -0.02em;
+  .swt {
+    font-size: 38px;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1;
   }
-  .sw-ctl {
+  .swc {
     display: flex;
     gap: 8px;
   }
   .laps {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-height: 160px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    max-height: 168px;
+    display: grid;
+    gap: 1px;
+    margin-right: -8px;
+    padding-right: 8px;
   }
   .laps li {
     display: flex;
     justify-content: space-between;
-    padding: 6px 2px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-  }
-  @media (max-width: 680px) {
-    .cols {
-      grid-template-columns: 1fr;
-    }
+    padding: 7px 2px;
+    border-top: 1px solid var(--line);
+    font-size: var(--t-sm);
   }
 </style>

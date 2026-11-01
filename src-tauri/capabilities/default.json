@@ -1,17 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Krovi main window: core APIs (events, window), global shortcut, autostart. Owner: panel-shell.",
+  "description": "Krovi main window. Least privilege: every window mutation (size, position, show/hide, focus, click-through) is done by the Rust shell module, never by the webview. The webview only needs events (shell-mode / shell-request) plus the app's own shell_* commands. Owner: panel-shell.",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "core:window:allow-set-size",
-    "core:window:allow-set-position",
-    "core:window:allow-show",
-    "core:window:allow-hide",
-    "core:window:allow-set-focus",
-    "core:window:allow-start-dragging",
-    "global-shortcut:default",
-    "autostart:default"
+    "core:default"
   ]
 }

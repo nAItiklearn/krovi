@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Krovi QA: a real Windows media session (GSMTC) driven by MediaSession metadata.
+     ?title=..&artist=..&switch=<sec>  — after <sec>, switches to track "<title> B". -->
+<html><head><meta charset="utf-8"><title>Krovi QA player</title>
+<style>body{font:14px system-ui;background:#111;color:#eee;padding:24px}button{font:inherit;padding:8px 14px;margin:4px}</style>
+</head><body>
+<h3>Krovi QA player</h3>
+<p id="s">idle</p>
+<button id="play">Play</button><button id="pause">Pause</button><button id="next">Next track</button>
+<audio id="a" loop></audio>
+<script>
+const q = new URLSearchParams(location.search);
+let n = 0;
+const base = q.get('title') || 'Krovi QA A', artist = q.get('artist') || 'Probe Ensemble';
+function wav(sec = 30, hz = 220) { // quiet sine, 16-bit mono 22050 Hz
+  const sr = 22050, len = sr * sec, b = new ArrayBuffer(44 + len * 2), v = new DataView(b);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + len * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, len * 2, true);
+  for (let i = 0; i < len; i++) v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * hz * i / sr) * 1200, true);
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+const a = document.getElementById('a'); a.src = wav();
+function meta() {
+  const title = n === 0 ? base : base.replace(/ A$/, '') + ' ' + String.fromCharCode(65 + n);
+  navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album: 'QA Sessions' });
+  document.title = title; document.getElementById('s').textContent = (a.paused ? 'paused: ' : 'playing: ') + title;
+}
+function next() { n++; a.currentTime = 0; meta(); }
+document.getElementById('play').onclick = () => a.play().then(meta);
+document.getElementById('pause').onclick = () => { a.pause(); meta(); };
+document.getElementById('next').onclick = next;
+navigator.mediaSession.setActionHandler('play', () => a.play().then(meta));
+navigator.mediaSession.setActionHandler('pause', () => { a.pause(); meta(); });
+navigator.mediaSession.setActionHandler('nexttrack', next);
+a.onplay = a.onpause = meta;
+a.play().then(meta).catch(() => { document.getElementById('s').textContent = 'click Play (autoplay blocked)'; });
+const sw = +q.get('switch'); if (sw) setTimeout(next, sw * 1000);
+</script></body></html>

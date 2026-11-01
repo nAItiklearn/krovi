@@ -1,0 +1,38 @@
+[package]
+name = "krovi-transfer"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi Quick Transfer: LAN-only, token-gated, auto-expiring file shares to/from a phone via QR. No cloud relay."
+publish = false
+
+[features]
+# The native "choose files" dialog (rfd, Win32 IFileOpenDialog on Windows). It is the only
+# reason this crate touches a window handle; everything else is plain std + tiny_http.
+default = ["dialog"]
+dialog = ["dep:rfd", "dep:raw-window-handle"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Small synchronous HTTP/1.1 server (no async runtime, no TLS). One OS thread per request.
+tiny_http = "0.12"
+# SVG QR codes, rendered in pure Rust (no image crate, no network).
+qrcode = { version = "0.14", default-features = false }
+# OS CSPRNG (BCryptGenRandom / ProcessPrng on Windows) for share tokens, ids and PINs.
+getrandom = "0.3"
+raw-window-handle = { version = "0.6", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# Adapter enumeration (GetAdaptersAddresses) to find the active private LAN IPv4 address.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+] }
+rfd = { version = "0.17", default-features = false, optional = true }
+
+[[example]]
+name = "serve"
+path = "examples/serve.rs"

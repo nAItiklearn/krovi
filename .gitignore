@@ -40,3 +40,17 @@ desktop.ini
 # --- Reference material (copyrighted third-party assets must never be committed) ---
 reference/
 *-reference/
+
+# --- QA artifacts (kept locally as evidence; scripts + logs are committed) ---
+qa/**/*.exe
+qa/**/*.png
+qa/**/*.webp
+qa/**/*.jpg
+qa/**/*.mp4
+qa/**/*.webm
+qa/**/*.wav
+qa/**/*.bin
+qa/**/lighthouse*/
+qa/polish/reference/
+qa/polish/clips/raw/
+qa/polish/clips/out/

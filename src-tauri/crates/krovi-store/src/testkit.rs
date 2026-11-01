@@ -6,9 +6,31 @@
 
 use std::collections::BTreeMap;
 
-use krovi_core::{ClipEntry, ClipKind, Note, ShelfItem, Task};
+use krovi_core::{CalendarEvent, ClipEntry, ClipKind, Note, ShelfItem, Task};
 
 use crate::{ScreenTimeRecord, Store, StoredShelf};
+
+pub fn sample_calendar() -> Vec<CalendarEvent> {
+    vec![
+        // all day: no alert
+        CalendarEvent::new(3, "2026-11-01", "All day", None),
+        // armed reminder with every optional stamp empty
+        CalendarEvent::new(1, "2026-11-01", "Standup", Some("09:30".into())),
+        // a reminder that fired late, then was snoozed, with the sound off
+        CalendarEvent {
+            fired_at: Some(1_793_000_000_123),
+            snoozed_until: Some(1_793_000_300_456),
+            missed: true,
+            sound: false,
+            ..CalendarEvent::new(2, "2026-11-01", "Tea", Some("10:00".into()))
+        },
+        // a timed event whose alert is switched off
+        CalendarEvent {
+            remind: false,
+            ..CalendarEvent::new(4, "2026-11-01", "Just a note", Some("11:00".into()))
+        },
+    ]
+}
 
 pub fn sample_clips() -> Vec<ClipEntry> {
     vec![
@@ -128,6 +150,7 @@ pub fn seed<S: Store>(s: &mut S) {
     s.save_tasks(&sample_tasks()).unwrap();
     s.save_shelves(&sample_shelves()).unwrap();
     s.save_screen_time(&sample_screen_time()).unwrap();
+    s.save_calendar(&sample_calendar()).unwrap();
     s.set_setting("theme", "dark").unwrap();
     s.set_setting("data_dir", r"C:\Users\x\AppData\Roaming\Krovi")
         .unwrap();
@@ -140,6 +163,7 @@ pub fn assert_seeded<S: Store>(s: &S) {
     assert_eq!(s.load_tasks().unwrap(), sample_tasks());
     assert_eq!(s.load_shelves().unwrap(), sample_shelves());
     assert_eq!(s.load_screen_time().unwrap(), sample_screen_time());
+    assert_eq!(s.load_calendar().unwrap(), sample_calendar());
 
     let mut expected = BTreeMap::new();
     expected.insert("theme".to_string(), "dark".to_string());
@@ -160,6 +184,7 @@ pub fn exercise<S: Store>(s: &mut S) {
     assert!(s.load_tasks().unwrap().is_empty());
     assert!(s.load_shelves().unwrap().is_empty());
     assert!(s.load_screen_time().unwrap().is_empty());
+    assert!(s.load_calendar().unwrap().is_empty());
     assert!(s.settings().unwrap().is_empty());
     assert_eq!(s.get_setting("missing").unwrap(), None);
 
@@ -179,6 +204,8 @@ pub fn exercise<S: Store>(s: &mut S) {
     assert!(s.load_shelves().unwrap().is_empty());
     s.save_screen_time(&[]).unwrap();
     assert!(s.load_screen_time().unwrap().is_empty());
+    s.save_calendar(&[]).unwrap();
+    assert!(s.load_calendar().unwrap().is_empty());
 
     // Settings: overwrite + delete.
     s.set_setting("theme", "light").unwrap();

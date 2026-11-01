@@ -30,6 +30,13 @@ impl TodoList {
         }
     }
 
+    /// Rebuild from persisted tasks (kept in the given order). New ids continue
+    /// after the largest persisted id.
+    pub fn from_tasks(tasks: Vec<Task>) -> Self {
+        let next_id = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
+        Self { next_id, tasks }
+    }
+
     pub fn len(&self) -> usize {
         self.tasks.len()
     }
@@ -109,6 +116,31 @@ impl TodoList {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn from_tasks_continues_ids_after_restore() {
+        let saved = vec![
+            Task {
+                id: 4,
+                title: "a".into(),
+                done: true,
+                created_at: 1,
+                completed_at: Some(2),
+            },
+            Task {
+                id: 2,
+                title: "b".into(),
+                done: false,
+                created_at: 1,
+                completed_at: None,
+            },
+        ];
+        let mut l = TodoList::from_tasks(saved);
+        assert_eq!(l.tasks()[0].id, 4);
+        assert_eq!(l.add("c", 9), 5);
+        assert_eq!(l.done_count(), 1);
+        assert_eq!(TodoList::from_tasks(Vec::new()).add("x", 1), 1);
+    }
 
     #[test]
     fn add_keeps_creation_order_and_is_open() {

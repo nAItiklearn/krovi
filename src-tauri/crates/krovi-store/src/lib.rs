@@ -26,10 +26,15 @@ use krovi_core::{FileShelf, ScreenTime, Shelf};
 
 // Re-export the core record types the store round-trips, so callers (and the
 // Tauri layer) can depend on `krovi-store` alone for the persistence contract.
-pub use krovi_core::{ClipEntry, ClipKind, Note, ShelfItem, Task};
+pub use krovi_core::{CalendarEvent, ClipEntry, ClipKind, Note, ShelfItem, Task};
 
 mod mem;
 pub use mem::MemStore;
+
+mod restore;
+pub use restore::{restore_all, Restored};
+
+pub mod wire;
 
 #[cfg(feature = "sqlite")]
 mod sqlite;
@@ -180,6 +185,11 @@ pub trait Store {
     fn load_screen_time(&self) -> Result<Vec<ScreenTimeRecord>>;
     /// Replace all screen-time records with `records`.
     fn save_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()>;
+
+    /// Load calendar events in stored (chronological) order.
+    fn load_calendar(&self) -> Result<Vec<CalendarEvent>>;
+    /// Replace all calendar events with `events` (order preserved).
+    fn save_calendar(&mut self, events: &[CalendarEvent]) -> Result<()>;
 
     /// Get a single setting value, or `None` if unset.
     fn get_setting(&self, key: &str) -> Result<Option<String>>;

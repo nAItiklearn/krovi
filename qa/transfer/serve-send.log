@@ -1,0 +1,9 @@
+LAN 192.168.1.35 (Wi-Fi)
+URL http://192.168.1.35:63649/s/WBAhVeP6isdxlqIIqGd2xBP_USo
+PORT 63649
+ID 47d05320acbc
+EXPIRES_AT 1793530022359
+FILE payload-64MB.bin 67108864
+FILE notes (from PC).txt 46
+EVENT transfer-reached {"id":"47d05320acbc"}
+EVENT transfer-done {"direction":"send","file":"payload-64MB.bin","id":"47d05320acbc","savedPath":null,"size":67108864}

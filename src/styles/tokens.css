@@ -1,0 +1,246 @@
+﻿/* Krovi design tokens.
+ *
+ * One neutral ramp (black/white glass), ONE accent ("ember") that is reserved for
+ * live signals: the copy pulse, now-playing bars, progress arcs, focus ring.
+ * One family, one type scale, one radius scale, one motion language.
+ *
+ * ==== TOKEN VOCABULARY (stable names: themes override these, UI code only reads them) ====
+ * No colour literal may appear anywhere outside this file and src/styles/themes/**.
+ *
+ *   surfaces   --panel-bg  glass body of the open panel      --pop-bg   menus, palette, popovers
+ *              --pill-bg   the closed pill                   --pill-fg / --pill-fg-2  text on the pill
+ *              --surface-1/2/3  raised layers (cards, hover, selected)   --page  demo page colour
+ *   lines      --line (hairline)  --line-strong  --rim-a/--rim-b (bevel highlight gradient)
+ *   text       --text  --text-2  --text-3 (>= 4.5:1 on the panel)
+ *   accent     --accent  --accent-ink (text on accent)  --accent-soft (tint)  --accent-glow (halo)  --danger
+ *   inverse    --invert-bg / --invert-fg  (the monochrome 'primary' button, selected chip, toggle on)
+ *   depth      --shadow-pill --shadow-panel --shadow-pop --shadow-sm --shadow-md --shadow-art
+ *              --card-hi (1px top highlight)  --spot (card spotlight)  --scrim (palette dim)  --grain-opacity
+ *   wallpaper  --wall-top --wall-mid --wall-bot --wall-glow --wall-r1 --wall-r2 --wall-line --wall-vig
+ *              (the browser-demo backdrop only)
+ *   scheme     <html data-scheme="dark|light"> picks the base ramp; <html data-theme="<id>"> a theme on top.
+ *              Fallback when no theme module runs: data-theme="light|dark" mirrors data-scheme.
+ *   shape/type --r-1..--r-panel  --t-micro..--t-4xl  --font --font-display --font-mono  --rail-w --head-h
+ *   fixed      --qr-plate (white plate behind QR codes; the same in every theme on purpose)
+ *   motion     --ease-out --ease-in --ease-in-out --spring --spring-bouncy --dur-1..--dur-4
+ */
+
+:root {
+  /* ---- type: one family. Segoe UI Variable on Windows 11, SF on Apple, system-ui elsewhere.
+          No webfont, no CDN: the privacy stance is zero third-party requests. ---- */
+  --font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system,
+    'SF Pro Text', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui,
+    -apple-system, 'SF Pro Display', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Cascadia Mono', 'SF Mono', ui-monospace, Consolas, monospace; /* addresses, codes */
+
+  /* A QR code needs dark modules on a light quiet zone in every theme, so its plate is the one
+     colour that does not follow the theme. */
+  --qr-plate: #ffffff;
+
+  --t-micro: 11px; /* eyebrows, badges */
+  --t-xs: 12px; /* meta, hints */
+  --t-sm: 13px; /* controls, rows */
+  --t-md: 14px; /* body */
+  --t-lg: 16px; /* titles */
+  --t-xl: 20px;
+  --t-2xl: 28px;
+  --t-3xl: 40px;
+  --t-4xl: 56px; /* hero numerals */
+
+  /* ---- radius scale ---- */
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 14px;
+  --r-4: 20px;
+  --r-panel: 30px;
+
+  /* ---- layout ---- */
+  --rail-w: 64px;
+  --head-h: 58px;
+  --island-pad: 10px;
+
+  /* ---- motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* damped springs, sampled from the closed-form solution (zeta .72 / .5) */
+  --spring: linear(0, 0.023, 0.083, 0.167, 0.264, 0.366, 0.468, 0.565, 0.654, 0.733, 0.802, 0.86,
+      0.908, 0.947, 0.977, 1, 1.016, 1.028, 1.034, 1.038, 1.038, 1.037, 1.035, 1.031, 1.028, 1.024,
+      1.02, 1.016, 1);
+  --spring-bouncy: linear(0, 0.037, 0.134, 0.268, 0.421, 0.577, 0.725, 0.855, 0.963, 1.046, 1.106,
+      1.143, 1.16, 1.162, 1.152, 1.133, 1.11, 1.085, 1.059, 1.036, 1.017, 1, 0.988, 0.98, 0.975,
+      0.973, 0.974, 0.976, 0.98, 0.984, 0.988, 0.992, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 520ms;
+
+  /* ================= DARK (default) ================= */
+  color-scheme: dark;
+  --page: #08080a;
+  --panel-bg: rgba(22, 22, 25, 0.8);
+  --pop-bg: rgba(31, 31, 35, 0.95);
+  --pill-bg: rgba(0, 0, 0, 0.92);
+  --pill-fg: #ffffff;
+  --pill-fg-2: rgba(255, 255, 255, 0.62);
+
+  --surface-1: rgba(255, 255, 255, 0.045);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --surface-3: rgba(255, 255, 255, 0.125);
+  --line: rgba(255, 255, 255, 0.085);
+  --line-strong: rgba(255, 255, 255, 0.17);
+  --text: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(255, 255, 255, 0.68);
+  --text-3: rgba(255, 255, 255, 0.52);
+
+  --accent: #ff8a4c;
+  --accent-ink: #1c0d04;
+  --accent-soft: rgba(255, 138, 76, 0.16);
+  --accent-glow: rgba(255, 138, 76, 0.55);
+  --danger: #ff7a7a;
+
+  /* the "primary" button is monochrome: it inverts the theme */
+  --invert-bg: #f4f4f6;
+  --invert-fg: #0b0b0d;
+
+  --rim-a: rgba(255, 255, 255, 0.3);
+  --rim-b: rgba(255, 255, 255, 0.045);
+  --grain-opacity: 0.07;
+  --card-hi: rgba(255, 255, 255, 0.045); /* 1px top highlight on cards */
+  --spot: rgba(255, 255, 255, 0.075); /* cursor spotlight on cards */
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 2px 5px rgba(0, 0, 0, 0.35),
+    0 10px 24px -6px rgba(0, 0, 0, 0.5);
+  --shadow-panel:
+    0 0 0 0.5px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 12px 26px -6px rgba(0, 0, 0, 0.45), 0 26px 48px -16px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 18px 44px -12px rgba(0, 0, 0, 0.65), 0 0 0 0.5px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.3);
+  --shadow-art: 0 10px 24px -8px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-art-lg: 0 24px 50px -16px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-toast: 0 10px 30px -8px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(0, 0, 0, 0.32);
+
+  /* demo wallpaper */
+  --wall-top: #26272c;
+  --wall-mid: #101113;
+  --wall-bot: #050506;
+  --wall-glow: rgba(255, 255, 255, 0.11);
+  --wall-r1: #9a9da8;
+  --wall-r2: #5d606b;
+  --wall-line: rgba(255, 255, 255, 0.1);
+  --wall-vig: rgba(0, 0, 0, 0.55);
+}
+
+/* ================= LIGHT ================= */
+:root[data-scheme='light'],
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: #e9e9ed;
+  --panel-bg: rgba(250, 250, 252, 0.84);
+  --pop-bg: rgba(253, 253, 254, 0.96);
+  --pill-bg: rgba(255, 255, 255, 0.93);
+  --pill-fg: #0b0b0d;
+  --pill-fg-2: rgba(10, 10, 12, 0.62);
+
+  --surface-1: rgba(0, 0, 0, 0.035);
+  --surface-2: rgba(0, 0, 0, 0.06);
+  --surface-3: rgba(0, 0, 0, 0.095);
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.17);
+  --text: rgba(10, 10, 12, 0.92);
+  --text-2: rgba(10, 10, 12, 0.68);
+  --text-3: rgba(10, 10, 12, 0.6);
+
+  --accent: #c8440a;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(200, 68, 10, 0.11);
+  --accent-glow: rgba(214, 84, 24, 0.5);
+  --danger: #c93030;
+
+  --invert-bg: #0e0e10;
+  --invert-fg: #f6f6f8;
+
+  --rim-a: rgba(255, 255, 255, 0.95);
+  --rim-b: rgba(0, 0, 0, 0.09);
+  --grain-opacity: 0.05;
+  --card-hi: rgba(255, 255, 255, 0.7);
+  --spot: rgba(255, 255, 255, 0.85);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(0, 0, 0, 0.14), 0 2px 5px rgba(20, 20, 30, 0.12),
+    0 10px 24px -6px rgba(20, 20, 30, 0.22);
+  --shadow-panel:
+    0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(20, 20, 30, 0.1),
+    0 12px 26px -6px rgba(20, 20, 30, 0.2), 0 26px 48px -16px rgba(20, 20, 30, 0.34);
+  --shadow-pop: 0 18px 44px -12px rgba(20, 20, 30, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 3px rgba(20, 20, 30, 0.22);
+  --shadow-md: 0 6px 18px rgba(20, 20, 30, 0.2);
+  --shadow-art: 0 10px 24px -8px rgba(20, 20, 30, 0.3), 0 2px 6px rgba(20, 20, 30, 0.14);
+  --shadow-art-lg: 0 24px 50px -16px rgba(20, 20, 30, 0.38), 0 2px 6px rgba(20, 20, 30, 0.14);
+  --shadow-toast: 0 10px 30px -8px rgba(20, 20, 30, 0.35);
+  --scrim: rgba(255, 255, 255, 0.4);
+
+  --wall-top: #e9ebf0;
+  --wall-mid: #d3d5dd;
+  --wall-bot: #b9bcc8;
+  --wall-glow: rgba(255, 255, 255, 0.55);
+  --wall-r1: #ffffff;
+  --wall-r2: #b3b7c4;
+  --wall-line: rgba(30, 32, 44, 0.12);
+  --wall-vig: rgba(60, 64, 84, 0.22);
+}
+
+/* No OS-level override stored yet: follow the system until the stores set data-theme. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --page: #e9e9ed;
+    --panel-bg: rgba(250, 250, 252, 0.84);
+    --pill-bg: rgba(255, 255, 255, 0.93);
+    --pill-fg: #0b0b0d;
+    --pill-fg-2: rgba(10, 10, 12, 0.62);
+    --surface-1: rgba(0, 0, 0, 0.035);
+    --surface-2: rgba(0, 0, 0, 0.06);
+    --surface-3: rgba(0, 0, 0, 0.095);
+    --line: rgba(0, 0, 0, 0.08);
+    --line-strong: rgba(0, 0, 0, 0.17);
+    --text: rgba(10, 10, 12, 0.92);
+    --text-2: rgba(10, 10, 12, 0.68);
+    --text-3: rgba(10, 10, 12, 0.6);
+    --accent: #c8440a;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(200, 68, 10, 0.11);
+    --invert-bg: #0e0e10;
+    --invert-fg: #f6f6f8;
+  }
+}
+
+/* The native window is transparent and the OS desktop is not blurrable from inside a webview,
+   so the surface needs more body to stay legible over a busy wallpaper. */
+:root[data-env='tauri'] {
+  --panel-bg: rgba(20, 20, 23, 0.985);
+  --pill-bg: rgba(0, 0, 0, 0.96);
+}
+:root[data-env='tauri'][data-scheme='light'],
+:root[data-env='tauri'][data-theme='light'] {
+  --panel-bg: rgba(250, 250, 252, 0.985);
+  --pill-bg: rgba(255, 255, 255, 0.97);
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: rgba(255, 255, 255, 0.22);
+    --text-2: rgba(255, 255, 255, 0.85);
+    --text-3: rgba(255, 255, 255, 0.7);
+  }
+  :root[data-scheme='light'],
+  :root[data-theme='light'] {
+    --line: rgba(0, 0, 0, 0.3);
+    --text-2: rgba(10, 10, 12, 0.85);
+    --text-3: rgba(10, 10, 12, 0.75);
+  }
+}

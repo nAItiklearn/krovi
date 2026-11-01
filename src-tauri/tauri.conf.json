@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Krovi",
-  "version": "0.1.0",
+  "mainBinaryName": "Krovi",
+  "version": "0.2.0",
   "identifier": "tech.krovi.app",
   "build": {
     "frontendDist": "../dist",
@@ -13,23 +14,27 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Krovi",
         "label": "main",
-        "width": 1080,
-        "height": 700,
-        "minWidth": 720,
-        "minHeight": 520,
-        "resizable": true,
+        "title": "Krovi",
+        "width": 440,
+        "height": 88,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
         "decorations": false,
         "transparent": true,
+        "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "center": true,
-        "visible": true
+        "center": false,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
@@ -44,6 +49,14 @@
     "category": "Productivity",
     "copyright": "Copyright (c) 2026 Krovi contributors. MIT licensed.",
     "shortDescription": "Your everything shelf",
-    "longDescription": "Krovi is a free, open-source, local-first quick-access panel that gathers daily tools into one hotkey-summoned shelf."
+    "longDescription": "Krovi is a free, open-source, local-first quick-access panel that gathers daily tools into one hotkey-summoned shelf.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "displayLanguageSelector": false,
+        "startMenuFolder": "Krovi"
+      }
+    }
   }
 }

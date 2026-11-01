@@ -1,0 +1,49 @@
+Krovi reminders QA - scheduler log lines, verbatim from the QA runs on 2026-11-01 (IST, +330 min).
+Isolated build: identifier tech.krovi.remqa, own data dir, window mode HIDDEN throughout. The installed Krovi (pid 11120) was never touched.
+"late" = the instant just before the toast was handed to Windows minus the scheduled instant.
+
+== Test 1: reminder set ~2 min out (set at 18:11:56.010 for 18:14) ==
+2026-11-01 18:11:56.072 [krovi-reminders] scheduler up: utc offset +330 min, 0 pending of 0 events, persistence=ok
+2026-11-01 18:14:00.029 [krovi-reminders] FIRE id=1 "QA fire test" scheduled=2026-11-01 18:14:00.000 shown=2026-11-01 18:14:00.016 late=16ms marked=2026-11-01 18:14:00.006 missed=false toast=requested sound=Notification.Reminder identity=dev({1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe) toasts=unknown focus=off
+  DB: 1 | 2026-11-01 | 18:14 | remind=1 sound=1 missed=0 | fired_at=18:14:00.006 | QA fire test
+  Windows notification database: toast arrived 18:14:00.027 (handler = PowerShell AUMID), title "QA fire test", body "Reminder . 18:14", buttons Snooze 5 min / Snooze 10 min / Dismiss
+  (this build predated Do Not Disturb detection, so the sound played: PlaySoundW("Notification.Reminder") returned TRUE)
+
+== Test 1b: same, final detection code (set 18:23:29.544 for 18:26) ==
+2026-11-01 18:26:00.015 [krovi-reminders] FIRE id=2 "QA fire test 2" scheduled=2026-11-01 18:26:00.000 shown=2026-11-01 18:26:00.013 late=13ms marked=2026-11-01 18:26:00.006 missed=false toast=requested sound=skipped (do-not-disturb) identity=dev({1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe) toasts=enabled focus=do-not-disturb
+  DB: 2 | 2026-11-01 | 18:26 | fired_at=18:26:00.006 | QA fire test 2
+  (screenshot: action-center-1.png / action-center-2.png - Windows notification centre shows the toast; banner held back because Do Not Disturb is on)
+
+== Test 2: due while Krovi was closed; seeded 12 h overdue + 2 days overdue; restart ==
+2026-11-01 18:30:16.167 [krovi-reminders] scheduler up: utc offset +330 min, 3 pending of 5 events, persistence=ok
+2026-11-01 18:30:16.171 [krovi-reminders] id=5 "QA stale 2 days" was 57 h overdue: marked fired, not announced
+2026-11-01 18:30:16.189 [krovi-reminders] FIRE id=4 "QA overdue 12h (today 06:30)" scheduled=2026-11-01 06:30:00.000 shown=2026-11-01 18:30:16.188 late=43216188ms marked=2026-11-01 18:30:16.169 missed=true toast=requested sound=skipped (do-not-disturb) identity=dev(...) toasts=enabled focus=do-not-disturb
+2026-11-01 18:30:16.193 [krovi-reminders] FIRE id=3 "QA closed at the time" scheduled=2026-11-01 18:29:00.000 shown=2026-11-01 18:30:16.193 late=76193ms marked=2026-11-01 18:30:16.169 missed=true toast=requested sound=skipped (do-not-disturb) identity=dev(...) toasts=enabled focus=do-not-disturb
+  second restart (no double fire): 2026-11-01 18:30:21.149 [krovi-reminders] scheduler up: utc offset +330 min, 0 pending of 5 events, persistence=ok   <- and nothing else
+  Windows notification database: 18:30:16.196 "QA closed at the time" / "Missed reminder . was due 18:29 on 1 Nov";  18:30:16.196 "QA overdue 12h (today 06:30)" / "Missed reminder . was due 06:30 on 1 Nov";  no toast for the stale one
+
+== Test 3: snooze 0.5 min (fractional minutes are the QA path; the UI sends 5 / 10) ==
+2026-11-01 18:30:53.456 [krovi-reminders] snoozed id=2 until 2026-11-01 18:31:23.455 (0.5 min)
+2026-11-01 18:30:53.679 [krovi-reminders] snoozed id=1 until 2026-11-01 18:35:53.678 (5 min)
+2026-11-01 18:30:54.409 [krovi-reminders] dismissed id=1
+2026-11-01 18:31:23.470 [krovi-reminders] FIRE id=2 "QA fire test 2" scheduled=2026-11-01 18:31:23.455 shown=2026-11-01 18:31:23.469 late=14ms marked=2026-11-01 18:31:23.463 missed=false toast=requested sound=skipped (do-not-disturb) identity=dev(...) toasts=enabled focus=do-not-disturb
+  Windows notification database: 18:31:23.477 "QA fire test 2" / "Snoozed reminder . 18:26"; the dismissed 5-minute snooze never rang
+
+== Test 4: voice-created reminder (TTS "remind me in two minutes to stretch your legs" -> SAPI -> add-reminder) ==
+  voice-result: command={kind:add-reminder,date:2026-11-01,time:18:33,title:"Stretch your legs"} executed=true feedback="Reminder set for today, Sun 1 Nov, 6:33 PM: Stretch your legs"
+2026-11-01 18:33:00.017 [krovi-reminders] FIRE id=6 "Stretch your legs" scheduled=2026-11-01 18:33:00.000 shown=2026-11-01 18:33:00.016 late=16ms marked=2026-11-01 18:33:00.010 missed=false toast=requested sound=skipped (do-not-disturb) identity=dev(...) toasts=enabled focus=do-not-disturb
+  in-app banner present in the (hidden) panel DOM at 18:33:01.2: "Reminder: Stretch your legs"
+2026-11-01 18:33:21.231 [krovi-reminders] TEST-FIRE id=6 "Stretch your legs" scheduled=2026-11-01 18:33:21.217 shown=2026-11-01 18:33:21.223 late=6ms marked=2026-11-01 18:33:21.223 missed=false toast=requested sound=Notification.Reminder identity=dev(...) toasts=enabled focus=do-not-disturb   <- ignoreFocus=true: PlaySoundW("Notification.Reminder") succeeded
+
+== Test 6: five reminders missed while closed -> one summary toast ==
+2026-11-01 18:36:49.043 [krovi-reminders] 5 alerts at once -> one summary toast (requested)
+  FIRE id=9..13 "QA group A".."QA group E" all missed=true toast=grouped
+  Windows notification database: 18:36:49.050 "5 reminders" / "Missed while Krovi was closed: QA group A . QA group B . QA group C . +2 more"   (exactly one)
+
+== Test 7: sound-off reminder ==
+2026-11-01 18:50:00.026 [krovi-reminders] FIRE id=7 "Standup (silent)" scheduled=2026-11-01 18:50:00.000 shown=2026-11-01 18:50:00.025 late=25ms marked=2026-11-01 18:50:00.013 missed=false toast=requested sound=off identity=installed(tech.krovi.remqa) toasts=enabled focus=alarms-only
+
+== Test 1c: FINAL build, reminder set 18:53:04.309 for 18:55 ==
+2026-11-01 18:55:00.008 [krovi-reminders] FIRE id=14 "QA final run" scheduled=2026-11-01 18:55:00.000 shown=2026-11-01 18:55:00.008 late=8ms marked=2026-11-01 18:55:00.002 missed=false toast=requested sound=skipped (alarms-only) identity=dev({1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe) toasts=enabled focus=alarms-only
+  DB: 14 | 2026-11-01 | 18:55 | remind=1 sound=1 missed=0 | fired_at=18:55:00.002 | QA final run
+  screenshot: evidence-toast-in-notification-centre.png (6:55 PM "QA final run - Reminder . 18:55" under Windows PowerShell; "Do not disturb is on")

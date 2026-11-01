@@ -85,6 +85,79 @@ export interface MediaTrack {
   durationSec: number;
 }
 
+// --- Live data (docs/CONTRACTS.md §2) ---------------------------------------
+
+/** Payload of the `media-changed` event (null = nothing is playing). */
+export interface MediaState extends MediaTrack {
+  /** epoch ms when positionSec was sampled — the UI interpolates while playing */
+  sampledAt: number;
+  /** e.g. "Spotify.exe", "chrome.exe", "MSEdge" */
+  sourceApp: string;
+  /** data:image/...;base64 thumbnail, or null */
+  artwork: string | null;
+}
+
+/** Payload of the `stats-tick` event. Byte counts; cpu is 0..100. */
+export interface SystemStats {
+  memUsed: number;
+  memTotal: number;
+  diskUsed: number;
+  diskTotal: number;
+  /** system drive, e.g. "C:" */
+  diskLabel: string;
+  cpu: number;
+}
+
+/** Payload of the `clipboard-changed` event. */
+export interface ClipboardChanged {
+  entries: ClipEntry[];
+  /** id of a NEW entry (drives the pill glow), or null for pure mutations */
+  newId: number | null;
+}
+
+/** Return value of the `live_snapshot` command. */
+export interface LiveSnapshot {
+  clipboard: ClipEntry[];
+  media: MediaState | null;
+  stats: SystemStats | null;
+}
+
+/** A city candidate from the keyless geocoder. */
+export interface Place {
+  /** "Pune, Maharashtra, India" */
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+/**
+ * Reply of `weather_status` & friends.
+ * - `ok`: fresh data.
+ * - `offline`: the refresh failed; `weather` may be a stale cache (see `stale`/`error`).
+ * - `needs-city`: no place is known (Windows Location unavailable) — ask the user for a city.
+ */
+export interface WeatherReply {
+  status: 'ok' | 'offline' | 'needs-city';
+  weather: WeatherData | null;
+  stale: boolean;
+  /** epoch ms of the forecast shown */
+  fetchedAt: number | null;
+  place: { city: string; lat: number; lon: number } | null;
+  error: string | null;
+}
+
+/** FX table + provenance (`load_currency_info`). Rates are per 1 USD (USD itself = 1). */
+export interface CurrencyInfo {
+  rates: CurrencyRates;
+  base: string;
+  /** publisher's date, yyyy-mm-dd */
+  date: string | null;
+  /** epoch ms when fetched */
+  updatedAt: number | null;
+  stale: boolean;
+  error: string | null;
+}
+
 export interface WorldClockZone {
   label: string;
   /** IANA time zone, e.g. "Asia/Kolkata". */
@@ -95,6 +168,8 @@ export interface WorldClockZone {
 export type CurrencyRates = Record<string, number>;
 
 export interface CalendarEvent {
+  /** Assigned by the backend (absent on a not-yet-saved draft). Needed to remove. */
+  id?: number;
   /** ISO date yyyy-mm-dd. */
   date: string;
   title: string;
@@ -116,4 +191,6 @@ export type ToolId =
   | 'convert'
   | 'calculator'
   | 'screentime'
+  | 'transfer'
+  | 'explain'
   | 'settings';

@@ -1,0 +1,60 @@
+[package]
+name = "krovi-explain"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi Explain: on-device extractive summary and read-aloud (Windows voices by default, optional ElevenLabs with the user's own key)."
+publish = false
+
+[features]
+# Unlike the older crates this one defaults to the REAL engines: the app depends on it with
+# default features, so nothing in src-tauri/Cargo.toml has to change and a Tauri build can never
+# fall back to fake data (docs/CONTRACTS.md section 0). The pure logic (sentence splitter,
+# summariser, request builders, settings) builds and tests with `--no-default-features` on any host.
+default = ["net", "native"]
+# The ONLY socket code in this crate: the optional ElevenLabs read-aloud (opt-in, the user's own
+# key). ureq + rustls, identical feature set to krovi-net so the lockfile gains nothing new.
+net = ["dep:ureq"]
+# Windows pieces: Credential Manager, on-device SpeechSynthesizer voices, MediaPlayer playback.
+native = ["dep:windows"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# Same windows-rs line as krovi-sys / krovi-voice, so the workspace links ONE copy of the bindings.
+windows = { version = "0.58", optional = true, features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Media_Core",
+    "Media_Playback",
+    "Media_SpeechSynthesis",
+    "Storage_Streams",
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
+    "Win32_System_WinRT",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(windows)'.dev-dependencies]
+# Only the `speak` example uses these: it reads the Windows audio peak meters to prove sound
+# really came out. They never reach the shipped app.
+windows = { version = "0.58", features = [
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+] }
+
+[[example]]
+name = "summarize"
+
+[[example]]
+name = "speak"
+required-features = ["native"]
+
+[[example]]
+name = "eleven_probe"
+required-features = ["net", "native"]

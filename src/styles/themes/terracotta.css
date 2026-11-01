@@ -1,0 +1,65 @@
+﻿/* Terracotta: earth. Warm sand panel, clay pill with cream type, olive accent. "Matte glass":
+ * high opacity, a quiet rim, a visible paper grain and sepia (not grey) shadows. */
+:root[data-theme='terracotta'],
+[data-theme-scope='terracotta'] {
+  color-scheme: light;
+  --page: #e6d9c3;
+  --panel-bg: rgba(241, 230, 212, 0.9);
+  --pop-bg: rgba(247, 239, 225, 0.98);
+  --pill-bg: rgba(138, 70, 46, 0.97);
+  --pill-fg: #fff4e2;
+  --pill-fg-2: rgba(255, 244, 226, 0.88);
+
+  --surface-1: rgba(120, 72, 32, 0.055);
+  --surface-2: rgba(120, 72, 32, 0.09);
+  --surface-3: rgba(120, 72, 32, 0.135);
+  --line: rgba(110, 70, 40, 0.16);
+  --line-strong: rgba(110, 70, 40, 0.3);
+  --text: rgba(48, 32, 22, 0.95);
+  --text-2: rgba(48, 32, 22, 0.78);
+  --text-3: rgba(48, 32, 22, 0.7);
+
+  --accent: #4f5a16;
+  --accent-ink: #fdf6e3;
+  --accent-soft: rgba(79, 90, 22, 0.13);
+  --accent-glow: rgba(120, 135, 40, 0.4);
+  --danger: #ac2f1c;
+
+  --invert-bg: #3a2a1f;
+  --invert-fg: #fbf1df;
+
+  --rim-a: rgba(255, 247, 232, 0.5);
+  --rim-b: rgba(110, 70, 40, 0.1);
+  --grain-opacity: 0.1;
+  --card-hi: rgba(255, 248, 235, 0.5);
+  --spot: rgba(255, 246, 228, 0.7);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(80, 40, 20, 0.3), 0 2px 5px rgba(80, 44, 22, 0.2),
+    0 10px 22px -6px rgba(90, 44, 20, 0.38);
+  --shadow-panel:
+    0 0 0 0.5px rgba(80, 44, 22, 0.22), 0 2px 6px rgba(80, 44, 22, 0.14),
+    0 12px 26px -6px rgba(80, 44, 22, 0.26), 0 26px 48px -16px rgba(80, 44, 22, 0.4);
+  --shadow-pop: 0 18px 44px -12px rgba(80, 44, 22, 0.42), 0 0 0 0.5px rgba(80, 44, 22, 0.18);
+
+  /* demo wallpaper: sun-baked clay */
+  --wall-top: #ecd9bd;
+  --wall-mid: #d9bf9b;
+  --wall-bot: #b8895f;
+  --wall-glow: rgba(255, 244, 220, 0.5);
+  --wall-r1: #f7e8cf;
+  --wall-r2: #b0724e;
+  --wall-line: rgba(100, 60, 30, 0.16);
+  --wall-vig: rgba(90, 50, 25, 0.28);
+  /* idle companion: cream eyes on the clay pill, olive-lime spark, a warm blush */
+  --eye-fill: #fff1d8;
+  --eye-fill-2: rgba(255, 241, 216, 0.3);
+  --eye-accent: #d4de8e;
+  --eye-glow: transparent;
+  --eye-blush: rgba(255, 190, 140, 0.4);
+}
+
+:root[data-env='tauri'][data-theme='terracotta'] {
+  --panel-bg: rgba(241, 230, 212, 0.985);
+  --pill-bg: rgba(138, 70, 46, 0.985);
+}

@@ -16,11 +16,13 @@ use crate::NetError;
 /// Default base currency used when the caller does not specify one.
 pub const DEFAULT_BASE: &str = "USD";
 
-const API: &str = "https://api.frankfurter.app";
+// The current Frankfurter host. The legacy `api.frankfurter.app` 301-redirects here,
+// so we call it directly: one host, no redirect hop.
+const API: &str = "https://api.frankfurter.dev/v1";
 
 /// Build the rates request URL for `base` (uppercased).
 pub fn rates_url(base: &str) -> String {
-    format!("{API}/latest?from={}", base.to_uppercase())
+    format!("{API}/latest?base={}", base.to_uppercase())
 }
 
 /// A table of exchange rates relative to [`Rates::base`]. The base currency
@@ -103,7 +105,7 @@ mod tests {
     fn url_uppercases_base() {
         assert_eq!(
             rates_url("usd"),
-            "https://api.frankfurter.app/latest?from=USD"
+            "https://api.frankfurter.dev/v1/latest?base=USD"
         );
     }
 

@@ -1,0 +1,88 @@
+
+===== PHASE A (blank frontend) 2026-11-01T13:50:51 =====
+precondition: click window has foreground                      PASS  fg=powershell/29268
+1a launch: window visible                                      PASS  after 646ms
+1b launch: PILL_WIN size + top-centre anchor (not 1080x700, not centred) PASS  actual 685,8 550x110 | expected 685,8 550x110 (scale 1.25)
+1c launch: did NOT take focus                                  PASS  fg=powershell/29268
+2a shortcut: expands to PANEL_WIN                              PASS  after 1466ms (blank UI => watchdog path); actual 360,8 1200x863 expected 360,8 1200x863
+2b shortcut: same top-centre anchor (pill never jumps)         PASS  centreX pill=960 panel=960; top pill=8 panel=8
+2c panel has keyboard focus                                    PASS  fg=krovi-app
+2d shortcut again: collapses to PILL_WIN (watchdog)            PASS  after 1556ms
+3a click on pill-window TRANSPARENT MARGIN reaches app underneath FAIL  clicked 690,58; underneath window received: click 552,46
+3b click INSIDE visible pill rect is captured (not passed through) PASS  clicked 960,48; underneath received: 0 clicks
+3c hovering the pill never steals focus (8 sweeps)             PASS  focus stolen 0 times
+3d click INSIDE panel does not collapse it                     PASS  still PANEL_WIN 2.6s after an inside click
+3e click in panel-window margin (outside panel) reaches app beneath FAIL  clicked 368,158; underneath: 
+3f click outside panel collapses it                            PASS  back to PILL_WIN after 1704ms
+4a fullscreen app in foreground hides the pill                 PASS  hidden after 3267ms
+4b pill returns when fullscreen ends                           PASS  visible again after 601ms
+6a after stress: settled in exactly pill or panel (no stuck/odd state) PASS  state=pill 685,8 550x110
+6b after stress: shortcut still toggles                        PASS  pill -> panel
+7a second launch: still exactly 1 Krovi process                PASS  Krovi processes: 1
+7b second launch: expands the existing panel                   PASS  panel after 58ms
+4a tray -> Quit Krovi (real mouse click on the native menu): process exits PASS  exit after 175ms; krovi procs left=0; orphan webview2=0
+4a2 no orphan WebView2 children left                           PASS  msedgewebview2 with tech.krovi.app data dir: 0
+4b tray icon removed on quit (no ghost icon)                   PASS  ghost icon present: False
+4c relaunch after quit works: pill back at PILL_WIN            PASS  pill visible after 744ms
+5 uninstall /S with app RUNNING succeeds and leaves no process PASS  took 4155ms; processes left=0; exe exists=False; files left in install dir=; uninstall reg entries=0
+
+===== PHASE B (UI via shell.ts) 2026-11-01T14:05:01 =====
+B0 install /S (currentUser)                                    PASS  exit=0 -> C:\Users\Lenovo\AppData\Local\Krovi\Krovi.exe
+B1 launch: pill at PILL_WIN top-centre                         PASS  after 1474ms
+B1b launch: did not take focus                                 PASS  fg=powershell
+B1c IPC works under the app CSP (invoke shell_get_mode)        PASS  ok=pill err=
+B2a shortcut -> panel via UI handshake (fast, not the watchdog) PASS  latency 69ms; watchdog fired 0x
+B2b panel focused                                              PASS  fg=Krovi
+B2c UI saw request+mode:                                       PASS  35:16.884 mode=panel | 35:16.843 request expand | 35:13.915 mode=pill
+B2d shortcut again -> pill (UI morph 420ms then commit)        PASS  latency 586ms; watchdog fired 0x
+B3a click on pill expands the panel                            PASS  latency 196ms
+B3b Esc collapses the panel                                    PASS  latency 581ms
+B4a reported hit rect: click outside it passes through         PASS  clicked 960,48
+B5a get_config returns contract shape                          PASS  {"shortcut":"Ctrl+Alt+Space","showPill":true,"collapseOnBlur":true,"launchAtLogin":false,"hideInFullscreen":true}
+B5b set_config accepts Ctrl+Alt+K                              PASS  {"ok":{"shortcut":"Ctrl+Alt+K","showPill":true,"collapseOnBlur":true,"launchAtLogin":false,"hideInFullscreen":true}}
+B5c new shortcut (Ctrl+Alt+K) works                            PASS  latency 46ms
+B5d old shortcut (Ctrl+Alt+Space) no longer fires              PASS  mode=pill
+B5e invalid shortcut -> clear error                            PASS  err='Ctrl+Banana' is not a valid shortcut (Couldn't recognize "Banana" as a valid key for hotkey, if you feel like it should be, please report this to https://github.com/tauri-apps/muda).
+B5f modifier-less shortcut rejected                            PASS  err='A' needs a modifier (Ctrl, Alt, Shift or Win) so it doesn't hijack typing.
+B5g taken shortcut (owned by another app) -> clear error       PASS  owner: registered=True; err=Couldn't use 'Ctrl+Alt+F9': HotKey already registered: HotKey { mods: Modifiers(ALT | CONTROL), key: F9, id: 589992 }. It may already be taken by another app. Your current shortcut (Ctrl+Alt+K) still works.
+B5h after a failed set_config the previous shortcut still works PASS  latency 67ms
+B5i config persisted to shell.json                             PASS  C:\Users\Lenovo\AppData\Roaming\tech.krovi.app\shell.json : { "shortcut": "Ctrl+Alt+K", "showPill": true, "collapseOnBlur": true, "launchAtLogin": false, "hideInFullscreen": true }
+B6a launchAtLogin=true writes HKCU Run entry                   PASS  Run\Krovi = C:\Users\Lenovo\AppData\Local\Krovi\Krovi.exe --autostart
+B6b launchAtLogin=false removes it                             PASS  Run\Krovi = []
+B7a shell_hold(true): click outside does NOT collapse          PASS  mode=panel
+B7b shell_hold(false): click outside collapses (UI morph path) PASS  latency 560ms
+B7c collapseOnBlur=false: click outside keeps panel            PASS  mode=panel
+B7d ...but the shortcut still collapses it                     PASS  latency 392ms
+B8 Alt+F4 on the panel collapses it, app keeps running         PASS  mode=pill procs=1
+B9a showPill=false hides the pill                              PASS  mode=hidden
+B9b ...shortcut still summons the panel                        PASS  latency 90ms
+B9c ...and collapsing returns to hidden (not pill)             PASS  mode=hidden
+B9d showPill=true brings the pill back                         PASS  mode=pill
+B10a fullscreen app hides pill                                 PASS  mode=hidden
+B10b ...but the shortcut still opens the panel over a fullscreen app PASS  latency 41ms
+B10c pill restored after fullscreen ends                       PASS  mode=pill
+B11a shell_quit (the command) ends the process                 PASS  gone after 28ms
+B11b relaunch restores the saved shortcut (Ctrl+Alt+K)         PASS  latency 28ms
+B12 Ctrl+Q in the focused panel quits                          PASS  gone after 21ms
+B13 watchdog never fired during UI-driven tests                PASS  WATCHDOG lines total=0 (baseline 0)
+
+===== PHASE C (production frontend) 2026-11-01T14:13:09 =====
+C0 install /S                                                  PASS  exit=0
+C1 launch: pill at PILL_WIN with the production UI             PASS  after 1051ms
+C1b launch: no focus theft                                     PASS  fg=powershell
+C2 shortcut expands the production Island (UI handshake, no watchdog) PASS  latency 42ms; watchdog=0
+C3 Esc collapses (production UI morph then commit)             PASS  latency 939ms
+C4 clicking the production pill expands it                     PASS  latency 175ms
+C5 click outside the production panel collapses it             PASS  latency 985ms
+C6 Alt+Tab away from the panel collapses it (focus loss)       PASS  latency 850ms; fg=powershell
+C7a tray menu opens (native popup)                             PASS  right-click on the real tray icon
+C7b tray -> Settings... expands the panel                      PASS  latency 52ms
+C8a tray -> Show pill (uncheck) hides the pill                 PASS  mode=hidden
+C8b ...shortcut still summons the panel with the pill off      PASS  latency 54ms
+C8c tray -> Show pill (re-check) brings it back                PASS  mode=pill
+C9 tray -> Open Krovi expands                                  PASS  latency 39ms
+C10 tray -> Quit Krovi (mouse) with the production UI: process gone PASS  gone after 96ms
+C10b no orphan WebView2 processes after quit                   PASS  left=0
+C11 reopen after quit works                                    PASS  pill after 851ms
+C12 second launch while running: still 1 process, panel opens  PASS  procs=1 mode=panel
+C13 watchdog count across production-UI session                PASS  WATCHDOG lines=0 (baseline 0)

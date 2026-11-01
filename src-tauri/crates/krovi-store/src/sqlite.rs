@@ -22,12 +22,25 @@ use std::path::Path;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{
-    ClipEntry, ClipKind, Note, Result, ScreenTimeRecord, ShelfItem, Store, StoreError, StoredShelf,
-    Task,
+    CalendarEvent, ClipEntry, ClipKind, Note, Result, ScreenTimeRecord, ShelfItem, Store,
+    StoreError, StoredShelf, Task,
 };
 
-/// The current on-disk schema version.
-pub const SCHEMA_VERSION: i64 = 1;
+/// The current on-disk schema version. v2 added the `calendar_events` table
+/// (migrations are additive `CREATE TABLE IF NOT EXISTS`, so v1 files upgrade in place).
+/// v3 added the reminder columns to `calendar_events` (`remind`, `sound`, `fired_at`,
+/// `snoozed_until`, `missed`), added in place by `SqliteStore::upgrade_calendar_columns`:
+/// existing rows are kept, timed ones become reminders, all-day ones do not.
+pub const SCHEMA_VERSION: i64 = 3;
+
+/// Reminder columns added to `calendar_events` in v3, as `(name, definition)`.
+const CALENDAR_REMINDER_COLUMNS: [(&str, &str); 5] = [
+    ("remind", "INTEGER NOT NULL DEFAULT 1"),
+    ("sound", "INTEGER NOT NULL DEFAULT 1"),
+    ("fired_at", "INTEGER"),
+    ("snoozed_until", "INTEGER"),
+    ("missed", "INTEGER NOT NULL DEFAULT 0"),
+];
 
 /// A SQLite-backed store opened at a caller-provided path.
 pub struct SqliteStore {
@@ -38,6 +51,10 @@ impl SqliteStore {
     /// Open (creating if needed) a database file at `path` and run migrations.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let conn = Connection::open(path)?;
+        // WAL keeps writes cheap and crash-safe; NORMAL sync is the documented
+        // pairing for WAL (a power cut can lose the last commit, never corrupt).
+        // Failures here (e.g. a network drive) are non-fatal: fall back to defaults.
+        let _ = conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
         Self::from_conn(conn)
     }
 
@@ -109,12 +126,25 @@ impl SqliteStore {
                  ms INTEGER NOT NULL,
                  PRIMARY KEY (day, app)
              );
+             CREATE TABLE IF NOT EXISTS calendar_events (
+                 id INTEGER PRIMARY KEY,
+                 date TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 time TEXT,
+                 ord INTEGER NOT NULL,
+                 remind INTEGER NOT NULL DEFAULT 1,
+                 sound INTEGER NOT NULL DEFAULT 1,
+                 fired_at INTEGER,
+                 snoozed_until INTEGER,
+                 missed INTEGER NOT NULL DEFAULT 0
+             );
              CREATE TABLE IF NOT EXISTS settings (
                  key TEXT PRIMARY KEY,
                  value TEXT NOT NULL
              );
              COMMIT;",
         )?;
+        self.upgrade_calendar_columns()?;
 
         let count: i64 = self
             .conn
@@ -124,7 +154,49 @@ impl SqliteStore {
                 "INSERT INTO schema_version (version) VALUES (?1)",
                 params![SCHEMA_VERSION],
             )?;
+        } else {
+            // Upgrade an older file in place (tables above are additive).
+            self.conn.execute(
+                "UPDATE schema_version SET version = ?1 WHERE version < ?1",
+                params![SCHEMA_VERSION],
+            )?;
         }
+        Ok(())
+    }
+
+    /// Add the v3 reminder columns to a `calendar_events` table that predates them.
+    ///
+    /// `ALTER TABLE .. ADD COLUMN` is not idempotent, so the existing columns are read
+    /// first and only the missing ones are added, all inside one transaction (a crash
+    /// halfway leaves the old table and the next open simply retries). Rows that already
+    /// exist are kept: the ones with a time become reminders (`remind = 1`) so the alerts
+    /// the old version silently never rang now work, all-day rows get no alert.
+    fn upgrade_calendar_columns(&mut self) -> Result<()> {
+        let have: Vec<String> = {
+            let mut stmt = self.conn.prepare("PRAGMA table_info(calendar_events)")?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(1))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let missing: Vec<_> = CALENDAR_REMINDER_COLUMNS
+            .iter()
+            .filter(|(name, _)| !have.iter().any(|h| h == name))
+            .collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        for (name, def) in &missing {
+            tx.execute_batch(&format!(
+                "ALTER TABLE calendar_events ADD COLUMN {name} {def};"
+            ))?;
+        }
+        if missing.iter().any(|(name, _)| *name == "remind") {
+            tx.execute_batch(
+                "UPDATE calendar_events
+                 SET remind = CASE WHEN time IS NULL OR time = '' THEN 0 ELSE 1 END;",
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 }
@@ -360,6 +432,55 @@ impl Store for SqliteStore {
         Ok(())
     }
 
+    fn load_calendar(&self) -> Result<Vec<CalendarEvent>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, date, title, time, remind, sound, fired_at, snoozed_until, missed
+             FROM calendar_events ORDER BY ord",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(CalendarEvent {
+                id: r.get::<_, i64>(0)? as u64,
+                date: r.get::<_, String>(1)?,
+                title: r.get::<_, String>(2)?,
+                time: r.get::<_, Option<String>>(3)?,
+                remind: r.get::<_, i64>(4)? != 0,
+                sound: r.get::<_, i64>(5)? != 0,
+                fired_at: r.get::<_, Option<i64>>(6)?.map(|v| v as u64),
+                snoozed_until: r.get::<_, Option<i64>>(7)?.map(|v| v as u64),
+                missed: r.get::<_, i64>(8)? != 0,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    fn save_calendar(&mut self, events: &[CalendarEvent]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM calendar_events", [])?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO calendar_events
+                     (id, date, title, time, ord, remind, sound, fired_at, snoozed_until, missed)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            )?;
+            for (i, e) in events.iter().enumerate() {
+                stmt.execute(params![
+                    e.id as i64,
+                    e.date,
+                    e.title,
+                    e.time,
+                    i as i64,
+                    e.remind as i64,
+                    e.sound as i64,
+                    e.fired_at.map(|v| v as i64),
+                    e.snoozed_until.map(|v| v as i64),
+                    e.missed as i64
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     fn get_setting(&self, key: &str) -> Result<Option<String>> {
         let v = self
             .conn
@@ -443,6 +564,131 @@ mod tests {
             testkit::assert_seeded(&s);
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn v1_file_upgrades_in_place_to_current_schema() {
+        let path = temp_db_path();
+        {
+            // Simulate a v1 file: schema_version = 1 and no calendar table.
+            let c = Connection::open(&path).unwrap();
+            c.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (1);
+                 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO settings VALUES ('keep', 'me');",
+            )
+            .unwrap();
+        }
+        {
+            let mut s = SqliteStore::open(&path).unwrap();
+            assert_eq!(s.schema_version().unwrap(), SCHEMA_VERSION);
+            assert_eq!(s.get_setting("keep").unwrap(), Some("me".to_string()));
+            s.save_calendar(&testkit::sample_calendar()).unwrap();
+        }
+        {
+            let s = SqliteStore::open(&path).unwrap();
+            assert_eq!(s.load_calendar().unwrap(), testkit::sample_calendar());
+        }
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(path.with_extension("db-shm"));
+    }
+
+    fn remove_db_files(path: &std::path::Path) {
+        for ext in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
+        }
+    }
+
+    #[test]
+    fn v2_calendar_rows_gain_reminder_columns_in_place_and_keep_their_data() {
+        let path = temp_db_path();
+        {
+            // A real v2 file: the calendar table as shipped before reminders existed.
+            let c = Connection::open(&path).unwrap();
+            c.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (2);
+                 CREATE TABLE calendar_events (
+                     id INTEGER PRIMARY KEY,
+                     date TEXT NOT NULL,
+                     title TEXT NOT NULL,
+                     time TEXT,
+                     ord INTEGER NOT NULL
+                 );
+                 INSERT INTO calendar_events VALUES (1, '2026-11-01', 'Dentist', '09:30', 0);
+                 INSERT INTO calendar_events VALUES (2, '2026-11-02', 'Holiday', NULL, 1);
+                 INSERT INTO calendar_events VALUES (3, '2026-11-03', 'Blank time', '', 2);",
+            )
+            .unwrap();
+        }
+        {
+            let s = SqliteStore::open(&path).unwrap();
+            assert_eq!(s.schema_version().unwrap(), SCHEMA_VERSION);
+            let events = s.load_calendar().unwrap();
+            assert_eq!(events.len(), 3);
+            // data kept
+            assert_eq!(events[0].title, "Dentist");
+            assert_eq!(events[0].time.as_deref(), Some("09:30"));
+            // timed rows become reminders (sound on, not yet fired); all-day rows do not
+            assert!(events[0].remind && events[0].sound);
+            assert_eq!(
+                (
+                    events[0].fired_at,
+                    events[0].snoozed_until,
+                    events[0].missed
+                ),
+                (None, None, false)
+            );
+            assert!(!events[1].remind, "all-day has no alert");
+            assert!(!events[2].remind, "an empty time is all-day");
+        }
+        {
+            // opening again must be a no-op (no duplicate-column error, nothing reset)
+            let mut s = SqliteStore::open(&path).unwrap();
+            let mut events = s.load_calendar().unwrap();
+            events[0].fired_at = Some(1_700_000_000_000);
+            events[0].missed = true;
+            events[0].sound = false;
+            events[1].snoozed_until = Some(42);
+            s.save_calendar(&events).unwrap();
+        }
+        {
+            let s = SqliteStore::open(&path).unwrap();
+            let events = s.load_calendar().unwrap();
+            assert_eq!(events[0].fired_at, Some(1_700_000_000_000));
+            assert!(events[0].missed && !events[0].sound);
+            assert_eq!(events[1].snoozed_until, Some(42));
+            assert_eq!(s.schema_version().unwrap(), SCHEMA_VERSION);
+        }
+        remove_db_files(&path);
+    }
+
+    #[test]
+    fn a_half_upgraded_calendar_table_is_completed() {
+        // e.g. an interrupted earlier attempt left only some of the columns behind
+        let path = temp_db_path();
+        {
+            let c = Connection::open(&path).unwrap();
+            c.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (2);
+                 CREATE TABLE calendar_events (
+                     id INTEGER PRIMARY KEY, date TEXT NOT NULL, title TEXT NOT NULL,
+                     time TEXT, ord INTEGER NOT NULL, sound INTEGER NOT NULL DEFAULT 1
+                 );
+                 INSERT INTO calendar_events VALUES (1, '2026-11-01', 'A', '10:00', 0, 0);",
+            )
+            .unwrap();
+        }
+        let s = SqliteStore::open(&path).unwrap();
+        let events = s.load_calendar().unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(!events[0].sound, "an existing column keeps its value");
+        assert!(events[0].remind);
+        drop(s);
+        remove_db_files(&path);
     }
 
     #[test]

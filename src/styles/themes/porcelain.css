@@ -1,0 +1,56 @@
+﻿/* Porcelain: the default light theme. Near-white glass, ink text, ONE restrained accent: the same
+ * ember as Graphite, one notch deeper (#bc3f09; the brand #c8440a is 4.2:1 on the panel and 3.6-4.0 on its own
+ * tint, short of AA for tag text) so it holds 4.5:1 on any wallpaper. Neutral greys throughout (no colour cast). */
+:root[data-theme='porcelain'],
+[data-theme-scope='porcelain'] {
+  color-scheme: light;
+  --page: #e9e9ed;
+  --panel-bg: rgba(250, 250, 252, 0.86);
+  --pop-bg: rgba(253, 253, 254, 0.97);
+  --pill-bg: rgba(255, 255, 255, 0.94);
+  --pill-fg: #0b0b0d;
+  --pill-fg-2: rgba(10, 10, 12, 0.68);
+
+  --surface-1: rgba(0, 0, 0, 0.035);
+  --surface-2: rgba(0, 0, 0, 0.06);
+  --surface-3: rgba(0, 0, 0, 0.095);
+  --line: rgba(0, 0, 0, 0.09);
+  --line-strong: rgba(0, 0, 0, 0.18);
+  --text: rgba(10, 10, 12, 0.94);
+  --text-2: rgba(10, 10, 12, 0.72);
+  --text-3: rgba(10, 10, 12, 0.64);
+
+  --accent: #bc3f09;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(188, 63, 9, 0.07);
+  --accent-glow: rgba(200, 70, 14, 0.45);
+  --danger: #c62f3a;
+
+  --invert-bg: #0e0e10;
+  --invert-fg: #f6f6f8;
+
+  --rim-a: rgba(255, 255, 255, 0.95);
+  --rim-b: rgba(0, 0, 0, 0.09);
+  --grain-opacity: 0.05;
+  --card-hi: rgba(255, 255, 255, 0.75);
+  --spot: rgba(255, 255, 255, 0.85);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(0, 0, 0, 0.14), 0 2px 5px rgba(20, 20, 30, 0.12),
+    0 10px 24px -6px rgba(20, 20, 30, 0.22);
+  --shadow-panel:
+    0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(20, 20, 30, 0.1),
+    0 12px 26px -6px rgba(20, 20, 30, 0.2), 0 26px 48px -16px rgba(20, 20, 30, 0.34);
+  --shadow-pop: 0 18px 44px -12px rgba(20, 20, 30, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+
+  /* idle companion: ink eyes on the white pill, an ember glint */
+  --eye-fill: #141416;
+  --eye-fill-2: rgba(20, 20, 22, 0.28);
+  --eye-accent: #bc3f09;
+  --eye-glow: transparent;
+}
+
+:root[data-env='tauri'][data-theme='porcelain'] {
+  --panel-bg: rgba(250, 250, 252, 0.985);
+  --pill-bg: rgba(255, 255, 255, 0.97);
+}

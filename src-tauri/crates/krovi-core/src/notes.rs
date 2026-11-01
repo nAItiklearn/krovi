@@ -29,6 +29,13 @@ impl Notes {
         }
     }
 
+    /// Rebuild from persisted notes (kept in the given order). New ids continue
+    /// after the largest persisted id.
+    pub fn from_notes(notes: Vec<Note>) -> Self {
+        let next_id = notes.iter().map(|n| n.id).max().unwrap_or(0) + 1;
+        Self { next_id, notes }
+    }
+
     pub fn len(&self) -> usize {
         self.notes.len()
     }
@@ -89,6 +96,29 @@ impl Notes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn from_notes_continues_ids_after_restore() {
+        let saved = vec![
+            Note {
+                id: 7,
+                body: "x".into(),
+                created_at: 1,
+                updated_at: 5,
+            },
+            Note {
+                id: 3,
+                body: "y".into(),
+                created_at: 1,
+                updated_at: 2,
+            },
+        ];
+        let mut n = Notes::from_notes(saved);
+        assert_eq!(n.list()[0].id, 7);
+        assert_eq!(n.create("z", 9), 8);
+        assert_eq!(n.len(), 3);
+        assert_eq!(Notes::from_notes(Vec::new()).create("a", 1), 1);
+    }
 
     #[test]
     fn create_lists_newest_first() {

@@ -1,0 +1,57 @@
+﻿/* Graphite: the default dark theme. Near-black glass, white text, ONE restrained accent (the warm
+ * "ember" the app and site share). Neutral surfaces with no colour cast, so photos and wallpapers
+ * keep their own colour. */
+:root[data-theme='graphite'],
+[data-theme-scope='graphite'] {
+  color-scheme: dark;
+  --page: #08080a;
+  --panel-bg: rgba(22, 22, 25, 0.8);
+  --pop-bg: rgba(31, 31, 35, 0.95);
+  --pill-bg: rgba(0, 0, 0, 0.92);
+  --pill-fg: #ffffff;
+  --pill-fg-2: rgba(255, 255, 255, 0.66);
+
+  --surface-1: rgba(255, 255, 255, 0.045);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --surface-3: rgba(255, 255, 255, 0.125);
+  --line: rgba(255, 255, 255, 0.085);
+  --line-strong: rgba(255, 255, 255, 0.17);
+  --text: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(255, 255, 255, 0.72);
+  --text-3: rgba(255, 255, 255, 0.6);
+
+  --accent: #ff8a4c;
+  --accent-ink: #1c0d04;
+  --accent-soft: rgba(255, 138, 76, 0.16);
+  --accent-glow: rgba(255, 138, 76, 0.55);
+  --danger: #ff7b7b;
+
+  --invert-bg: #f4f4f6;
+  --invert-fg: #0b0b0d;
+
+  --rim-a: rgba(255, 255, 255, 0.3);
+  --rim-b: rgba(255, 255, 255, 0.045);
+  --grain-opacity: 0.07;
+  --card-hi: rgba(255, 255, 255, 0.045);
+  --spot: rgba(255, 255, 255, 0.075);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 2px 5px rgba(0, 0, 0, 0.35),
+    0 10px 24px -6px rgba(0, 0, 0, 0.5);
+  --shadow-panel:
+    0 0 0 0.5px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 12px 26px -6px rgba(0, 0, 0, 0.45), 0 26px 48px -16px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 18px 44px -12px rgba(0, 0, 0, 0.65), 0 0 0 0.5px rgba(0, 0, 0, 0.6);
+
+  /* idle companion: crisp white eyes, an ember glint */
+  --eye-fill: #f4f4f6;
+  --eye-fill-2: rgba(244, 244, 246, 0.28);
+  --eye-accent: #ff8a4c;
+  --eye-glow: transparent;
+}
+
+/* native window: more body, because the desktop behind it cannot be blurred from a webview */
+:root[data-env='tauri'][data-theme='graphite'] {
+  --panel-bg: rgba(22, 22, 25, 0.985);
+  --pill-bg: rgba(0, 0, 0, 0.96);
+}

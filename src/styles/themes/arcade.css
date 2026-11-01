@@ -1,0 +1,64 @@
+﻿/* Arcade: neon. Deep indigo-black glass, violet-tinted hairlines, ONE electric accent (hot magenta)
+ * and a faint glow that the shadows and the eyes carry. Text stays near-white with a lavender cast. */
+:root[data-theme='arcade'],
+[data-theme-scope='arcade'] {
+  color-scheme: dark;
+  --page: #07061a;
+  --panel-bg: rgba(14, 12, 38, 0.82);
+  --pop-bg: rgba(22, 19, 54, 0.96);
+  --pill-bg: rgba(5, 4, 20, 0.94);
+  --pill-fg: #f6f3ff;
+  --pill-fg-2: rgba(246, 243, 255, 0.7);
+
+  --surface-1: rgba(170, 150, 255, 0.06);
+  --surface-2: rgba(170, 150, 255, 0.1);
+  --surface-3: rgba(170, 150, 255, 0.15);
+  --line: rgba(160, 140, 255, 0.17);
+  --line-strong: rgba(160, 140, 255, 0.36);
+  --text: rgba(246, 243, 255, 0.96);
+  --text-2: rgba(246, 243, 255, 0.76);
+  --text-3: rgba(246, 243, 255, 0.64);
+
+  --accent: #ff4fd8;
+  --accent-ink: #1a0414;
+  --accent-soft: rgba(255, 79, 216, 0.16);
+  --accent-glow: rgba(255, 79, 216, 0.6);
+  --danger: #ff7566;
+
+  --invert-bg: #f6f3ff;
+  --invert-fg: #0d0a26;
+
+  --rim-a: rgba(255, 140, 235, 0.5);
+  --rim-b: rgba(120, 100, 255, 0.09);
+  --grain-opacity: 0.05;
+  --card-hi: rgba(190, 170, 255, 0.07);
+  --spot: rgba(255, 100, 225, 0.11);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(255, 79, 216, 0.4), 0 2px 6px rgba(0, 0, 0, 0.5),
+    0 10px 26px -6px rgba(110, 60, 255, 0.55);
+  --shadow-panel:
+    0 0 0 0.5px rgba(255, 79, 216, 0.3), 0 2px 6px rgba(0, 0, 0, 0.45),
+    0 12px 28px -6px rgba(90, 50, 230, 0.5), 0 28px 56px -16px rgba(110, 60, 255, 0.5);
+  --shadow-pop: 0 18px 46px -12px rgba(90, 50, 230, 0.7), 0 0 0 0.5px rgba(255, 79, 216, 0.3);
+
+  /* demo wallpaper: night grid with a magenta bloom */
+  --wall-top: #1b1450;
+  --wall-mid: #0d0a2c;
+  --wall-bot: #04030f;
+  --wall-glow: rgba(255, 79, 216, 0.16);
+  --wall-r1: #ff6fe0;
+  --wall-r2: #5b3bff;
+  --wall-line: rgba(160, 140, 255, 0.16);
+  --wall-vig: rgba(0, 0, 0, 0.6);
+  /* idle companion: glowing magenta tubes, a pale-pink pupil */
+  --eye-fill: #ff63de;
+  --eye-fill-2: rgba(255, 79, 216, 0.26);
+  --eye-accent: #ffc2f2;
+  --eye-glow: rgba(255, 79, 216, 0.55);
+}
+
+:root[data-env='tauri'][data-theme='arcade'] {
+  --panel-bg: rgba(14, 12, 38, 0.985);
+  --pill-bg: rgba(5, 4, 20, 0.97);
+}

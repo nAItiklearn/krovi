@@ -3,12 +3,52 @@ name = "krovi-voice"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Krovi local speech: on-device dictation (notes) and voice commands. No cloud."
+description = "Krovi local speech: on-device dictation (notes) and voice commands via the Windows SAPI 5 recognizer. Nothing leaves the device; no cloud speech API."
 publish = false
 
 [features]
 default = []
-native = []
+# Real recognizer (Windows SAPI 5 through windows-rs). Without it the crate still builds
+# everywhere: the pure command parser works, `available()` is false and starting the
+# microphone returns `VoiceError::Unavailable`.
+native = ["dep:windows"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+
+# Context capture and the OS actions only exist on Windows with the real engine.
+[[example]]
+name = "context"
+required-features = ["native"]
+
+[[example]]
+name = "osactions"
+required-features = ["native"]
+
+[target.'cfg(windows)'.dependencies]
+# Same windows-rs line as krovi-sys, so the workspace links ONE copy of the bindings.
+windows = { version = "0.58", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Speech",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_Search",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_System_Time",
+    "Win32_System_Variant",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }

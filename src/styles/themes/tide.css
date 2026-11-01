@@ -1,0 +1,64 @@
+﻿/* Tide: ocean. Slate-blue glass with a cool hairline cast, navy-tinted shadows and a seafoam
+ * accent. The eyes are seafoam with a faint teal glow, like bioluminescence. */
+:root[data-theme='tide'],
+[data-theme-scope='tide'] {
+  color-scheme: dark;
+  --page: #08111c;
+  --panel-bg: rgba(21, 35, 54, 0.82);
+  --pop-bg: rgba(28, 45, 68, 0.96);
+  --pill-bg: rgba(8, 17, 30, 0.93);
+  --pill-fg: #ecf7ff;
+  --pill-fg-2: rgba(236, 247, 255, 0.7);
+
+  --surface-1: rgba(170, 210, 255, 0.055);
+  --surface-2: rgba(170, 210, 255, 0.09);
+  --surface-3: rgba(170, 210, 255, 0.135);
+  --line: rgba(160, 200, 255, 0.13);
+  --line-strong: rgba(160, 200, 255, 0.26);
+  --text: rgba(236, 246, 255, 0.95);
+  --text-2: rgba(236, 246, 255, 0.74);
+  --text-3: rgba(236, 246, 255, 0.62);
+
+  --accent: #5fe3c4;
+  --accent-ink: #04201a;
+  --accent-soft: rgba(95, 227, 196, 0.15);
+  --accent-glow: rgba(95, 227, 196, 0.5);
+  --danger: #ff8a80;
+
+  --invert-bg: #e8f4fb;
+  --invert-fg: #08202e;
+
+  --rim-a: rgba(190, 230, 255, 0.34);
+  --rim-b: rgba(190, 230, 255, 0.05);
+  --grain-opacity: 0.06;
+  --card-hi: rgba(190, 225, 255, 0.055);
+  --spot: rgba(120, 230, 210, 0.085);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(2, 10, 24, 0.75), 0 2px 5px rgba(2, 10, 24, 0.4),
+    0 10px 24px -6px rgba(2, 14, 34, 0.6);
+  --shadow-panel:
+    0 0 0 0.5px rgba(2, 10, 24, 0.8), 0 2px 6px rgba(2, 10, 24, 0.4),
+    0 12px 26px -6px rgba(2, 14, 34, 0.5), 0 26px 48px -16px rgba(2, 14, 34, 0.68);
+  --shadow-pop: 0 18px 44px -12px rgba(2, 14, 34, 0.72), 0 0 0 0.5px rgba(2, 10, 24, 0.65);
+
+  /* demo wallpaper: deep water with a seafoam shimmer */
+  --wall-top: #16324a;
+  --wall-mid: #0b1d2e;
+  --wall-bot: #04101a;
+  --wall-glow: rgba(95, 227, 196, 0.14);
+  --wall-r1: #7fb7d6;
+  --wall-r2: #2f6a8a;
+  --wall-line: rgba(160, 210, 255, 0.14);
+  --wall-vig: rgba(0, 10, 25, 0.55);
+  /* idle companion: seafoam eyes, a faint teal glow */
+  --eye-fill: #7ff0d6;
+  --eye-fill-2: rgba(127, 240, 214, 0.28);
+  --eye-accent: #d2fdf4;
+  --eye-glow: rgba(95, 227, 196, 0.26);
+}
+
+:root[data-env='tauri'][data-theme='tide'] {
+  --panel-bg: rgba(21, 35, 54, 0.985);
+  --pill-bg: rgba(8, 17, 30, 0.97);
+}

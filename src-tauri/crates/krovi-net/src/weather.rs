@@ -33,6 +33,9 @@ struct Raw {
 
 #[derive(Deserialize)]
 struct RawCurrent {
+    /// Local observation time (`2026-11-01T13:15`, in the place's own timezone).
+    #[serde(default)]
+    time: Option<String>,
     #[serde(rename = "temperature_2m")]
     temp: f64,
     #[serde(rename = "weather_code")]
@@ -70,7 +73,7 @@ struct RawDaily {
 // --- Normalized output (camelCase to match the existing frontend DTO) --------
 
 /// Normalized weather for one place: current conditions + short forecast.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeatherData {
     /// Place label. Open-Meteo returns no name, so this is left empty for the
@@ -89,14 +92,14 @@ pub struct WeatherData {
     pub forecast: Vec<DayPoint>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HourPoint {
     pub time: String,
     pub temp: i32,
     pub icon: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DayPoint {
     pub label: String,
     pub icon: String,
@@ -112,15 +115,31 @@ fn round(v: f64) -> i32 {
 pub fn parse_forecast(json: &str) -> crate::Result<WeatherData> {
     let raw: Raw = serde_json::from_str(json)?;
 
+    // Open-Meteo's hourly series starts at 00:00 today. Start at the current hour
+    // (the first slot whose "YYYY-MM-DDTHH" is >= the observation's) and label
+    // that slot "Now". Without a `current.time` we fall back to the series start.
+    let now_slot = raw.current.time.as_deref().and_then(|now| {
+        let now_hour = now.get(..13)?;
+        raw.hourly
+            .time
+            .iter()
+            .position(|t| t.get(..13).is_some_and(|h| h >= now_hour))
+    });
     let hourly: Vec<HourPoint> = raw
         .hourly
         .time
         .iter()
         .zip(raw.hourly.temp.iter())
         .zip(raw.hourly.code.iter())
+        .skip(now_slot.unwrap_or(0))
         .take(6)
-        .map(|((t, temp), code)| HourPoint {
-            time: hour_label(t),
+        .enumerate()
+        .map(|(i, ((t, temp), code))| HourPoint {
+            time: if i == 0 && now_slot.is_some() {
+                "Now".to_string()
+            } else {
+                hour_label(t)
+            },
             temp: round(*temp),
             icon: wmo_icon(*code).to_string(),
         })
@@ -316,6 +335,33 @@ mod tests {
         assert_eq!(w.hourly[0].time, "12:00");
         assert_eq!(w.hourly[1].temp, 29); // 28.6 rounds to 29
         assert_eq!(w.hourly[1].icon, "sun"); // code 0
+    }
+
+    #[test]
+    fn hourly_starts_at_the_current_hour_and_labels_now() {
+        // current.time 13:15 -> the 13:00 slot is "Now", then 14:00.. (not midnight).
+        let body = SAMPLE.replace(
+            "\"current\": {",
+            "\"current\": { \"time\": \"2026-11-01T13:15\",",
+        );
+        let w = parse_forecast(&body).unwrap();
+        assert_eq!(w.hourly[0].time, "Now");
+        assert_eq!(w.hourly[0].temp, 29); // 28.6 -> the 13:00 slot
+        assert_eq!(w.hourly[1].time, "14:00");
+        assert_eq!(w.hourly.len(), 6); // 13:00..18:00 inclusive in the sample
+        assert_eq!(w.hourly[5].time, "18:00");
+    }
+
+    #[test]
+    fn hourly_past_the_series_end_is_empty_not_a_panic() {
+        let body = SAMPLE.replace(
+            "\"current\": {",
+            "\"current\": { \"time\": \"2026-11-09T09:00\",",
+        );
+        let w = parse_forecast(&body).unwrap();
+        // no slot at/after that hour: fall back to the series start, unlabelled.
+        assert_eq!(w.hourly[0].time, "12:00");
+        assert_eq!(w.hourly.len(), 6);
     }
 
     #[test]

@@ -1,0 +1,6 @@
+{
+  "build": {
+    "frontendDist": "../qa/shell/dist-ui",
+    "beforeBuildCommand": ""
+  }
+}

@@ -6,13 +6,15 @@ members = [
     "crates/krovi-net",
     "crates/krovi-sys",
     "crates/krovi-voice",
+    "crates/krovi-transfer",
+    "crates/krovi-explain",
 ]
 
 # The Tauri app crate is the workspace *root* package below.
 
 [package]
 name = "krovi-app"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Krovi desktop shell (Tauri 2). Thin #[tauri::command] bridges over krovi-core + krovi-store; no business logic lives here."
@@ -39,6 +41,7 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 krovi-core = { path = "crates/krovi-core" }
@@ -46,13 +49,29 @@ krovi-store = { path = "crates/krovi-store" }
 krovi-net = { path = "crates/krovi-net" }
 krovi-sys = { path = "crates/krovi-sys" }
 krovi-voice = { path = "crates/krovi-voice" }
+krovi-transfer = { path = "crates/krovi-transfer" }
+krovi-explain = { path = "crates/krovi-explain" }
+
+# Reminders (src/reminders.rs): the local-time-zone offset (SystemTimeToTzSpecificLocalTime),
+# the alert sound (PlaySoundW) and the toast/Focus-Assist probes. Same windows-rs line as
+# krovi-sys / krovi-voice, so the workspace still links ONE copy of the bindings.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Foundation",
+    "UI_Notifications",
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_System_Registry",
+    "Win32_System_Time",
+    "Win32_UI_Shell",
+] }
 
 [features]
 # v0.2 (D-011): the REAL integrations are on by default. The v0.1 release shipped
 # fake data partly because these were opt-in; a Tauri build must never fall back
 # to fixtures. The 64-bit WinLibs MinGW toolchain builds all of them locally
-# (docs/CONTRACTS.md §0). Fixtures remain only for the browser demo.
-default = ["net", "native"]
+# (docs/CONTRACTS.md Â§0). Fixtures remain only for the browser demo.
+default = ["net", "native", "sqlite"]
 sqlite = ["krovi-store/sqlite"]
 net = ["krovi-net/net"]
 native = ["krovi-sys/native", "krovi-voice/native"]

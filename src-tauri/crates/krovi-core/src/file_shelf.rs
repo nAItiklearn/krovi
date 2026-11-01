@@ -63,6 +63,34 @@ impl FileShelf {
         }
     }
 
+    /// Rebuild from persisted shelves (name + items in display order). Duplicate
+    /// shelf names are dropped, a [`DEFAULT_SHELF`] is guaranteed to exist, and new
+    /// item ids continue after the largest persisted id.
+    pub fn from_parts(shelves: Vec<(String, Vec<ShelfItem>)>) -> Self {
+        let mut out: Vec<Shelf> = Vec::new();
+        for (name, items) in shelves {
+            if out.iter().all(|s| s.name != name) {
+                out.push(Shelf { name, items });
+            }
+        }
+        let next_id = out
+            .iter()
+            .flat_map(|s| s.items.iter().map(|i| i.id))
+            .max()
+            .unwrap_or(0)
+            + 1;
+        if out.is_empty() {
+            out.push(Shelf {
+                name: DEFAULT_SHELF.to_string(),
+                items: Vec::new(),
+            });
+        }
+        Self {
+            next_id,
+            shelves: out,
+        }
+    }
+
     pub fn shelf_names(&self) -> Vec<&str> {
         self.shelves.iter().map(|s| s.name.as_str()).collect()
     }
@@ -171,6 +199,28 @@ impl FileShelf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn from_parts_restores_and_continues_ids() {
+        let item = |id: u64| ShelfItem {
+            id,
+            name: format!("f{id}"),
+            stored_path: format!("blobs/{id}"),
+            size_bytes: 1,
+            added_at: id,
+        };
+        let mut fs = FileShelf::from_parts(vec![
+            ("Work".into(), vec![item(8), item(3)]),
+            ("Work".into(), vec![item(99)]), // duplicate name dropped
+        ]);
+        assert_eq!(fs.shelf_names(), vec!["Work"]);
+        assert_eq!(fs.total_items(), 2);
+        let id = fs.add_item("Work", "new", "blobs/new", 1, 10).unwrap();
+        assert_eq!(id, 9);
+
+        let empty = FileShelf::from_parts(Vec::new());
+        assert_eq!(empty.shelf_names(), vec![DEFAULT_SHELF]);
+    }
 
     #[test]
     fn new_has_single_empty_default_shelf() {

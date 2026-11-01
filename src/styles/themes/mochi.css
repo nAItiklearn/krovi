@@ -1,0 +1,66 @@
+﻿/* Mochi: pastel. Soft lilac glass, peach-tinted cards, plum ink. Warmth comes from the rounded
+ * feel (big blur-free soft shadows, no hard hairlines) and a dusty-rose accent that stays gentle
+ * but still clears AA. The pill is a lilac mochi; the eyes are plum with a peach blush. */
+:root[data-theme='mochi'],
+[data-theme-scope='mochi'] {
+  color-scheme: light;
+  --page: #f3e9f3;
+  --panel-bg: rgba(250, 242, 251, 0.86);
+  --pop-bg: rgba(253, 248, 253, 0.97);
+  --pill-bg: rgba(236, 224, 250, 0.95);
+  --pill-fg: #3a2650;
+  --pill-fg-2: rgba(58, 38, 80, 0.72);
+
+  --surface-1: rgba(255, 190, 170, 0.16);
+  --surface-2: rgba(244, 170, 170, 0.24);
+  --surface-3: rgba(226, 150, 176, 0.3);
+  --line: rgba(140, 92, 172, 0.15);
+  --line-strong: rgba(140, 92, 172, 0.3);
+  --text: rgba(52, 33, 72, 0.95);
+  --text-2: rgba(52, 33, 72, 0.78);
+  --text-3: rgba(52, 33, 72, 0.7);
+
+  --accent: #9c3a62;
+  --accent-ink: #fff7fb;
+  --accent-soft: rgba(156, 58, 98, 0.11);
+  --accent-glow: rgba(214, 110, 150, 0.42);
+  --danger: #b8323f;
+
+  --invert-bg: #3a2650;
+  --invert-fg: #fdf6ff;
+
+  --rim-a: rgba(255, 255, 255, 0.9);
+  --rim-b: rgba(140, 92, 172, 0.1);
+  --grain-opacity: 0.035;
+  --card-hi: rgba(255, 255, 255, 0.6);
+  --spot: rgba(255, 226, 214, 0.8);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(120, 76, 160, 0.16), 0 2px 6px rgba(120, 76, 160, 0.14),
+    0 12px 26px -8px rgba(130, 80, 170, 0.3);
+  --shadow-panel:
+    0 0 0 0.5px rgba(120, 76, 160, 0.16), 0 3px 8px rgba(120, 76, 160, 0.1),
+    0 16px 30px -8px rgba(130, 80, 170, 0.22), 0 30px 54px -18px rgba(130, 80, 170, 0.34);
+  --shadow-pop: 0 20px 46px -12px rgba(130, 80, 170, 0.36), 0 0 0 0.5px rgba(120, 76, 160, 0.14);
+
+  /* demo wallpaper: lilac dusk */
+  --wall-top: #f6e6f2;
+  --wall-mid: #e9d7f2;
+  --wall-bot: #d9c4ea;
+  --wall-glow: rgba(255, 255, 255, 0.6);
+  --wall-r1: #ffffff;
+  --wall-r2: #cdb6e3;
+  --wall-line: rgba(120, 80, 160, 0.14);
+  --wall-vig: rgba(110, 70, 150, 0.2);
+  /* idle companion */
+  --eye-fill: #4a2f68;
+  --eye-fill-2: rgba(74, 47, 104, 0.26);
+  --eye-accent: #c4476f;
+  --eye-glow: transparent;
+  --eye-blush: rgba(255, 150, 140, 0.55);
+}
+
+:root[data-env='tauri'][data-theme='mochi'] {
+  --panel-bg: rgba(250, 242, 251, 0.985);
+  --pill-bg: rgba(236, 224, 250, 0.98);
+}

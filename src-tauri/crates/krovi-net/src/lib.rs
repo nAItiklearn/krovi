@@ -2,11 +2,14 @@
 //!
 //! Per SPEC §7, the **only** calls Krovi ever makes off the device are:
 //!   1. a keyless weather forecast (Open-Meteo-class; coarse lat/long in, no key,
-//!      no account — see [`weather`]), and
+//!      no account — see [`weather`]),
 //!   2. keyless FX rates (public ECB-backed endpoint; nothing sent but the base
-//!      currency — see [`currency`]).
+//!      currency — see [`currency`]), and
+//!   3. keyless city-name geocoding, used only for the "set your city" fallback
+//!      (Open-Meteo geocoding; sends only the text the user typed — see
+//!      [`geocode`]).
 //!
-//! There is **no** telemetry, analytics, or account traffic anywhere. The two
+//! There is **no** telemetry, analytics, or account traffic anywhere. The
 //! endpoints are listed for the Phase-4 security audit in the crate docs below
 //! and in `docs/SECURITY-network-audit.md`.
 //!
@@ -21,10 +24,14 @@
 //!
 //! ## Outbound endpoints (for the security audit)
 //! * Weather:  `https://api.open-meteo.com/v1/forecast`  (keyless, GET, coarse lat/long)
-//! * FX rates: `https://api.frankfurter.app/latest`      (keyless, GET, base currency only)
+//! * FX rates: `https://api.frankfurter.dev/v1/latest`   (keyless, GET, base currency only)
+//! * Geocode:  `https://geocoding-api.open-meteo.com/v1/search` (keyless, GET, typed city name only)
 
 mod cache;
 pub mod currency;
+pub mod geocode;
+pub mod reply;
+pub mod resolve;
 pub mod weather;
 
 #[cfg(feature = "net")]
@@ -32,6 +39,9 @@ mod http;
 
 pub use cache::TtlCache;
 pub use currency::{convert, fetch_rates, parse_rates, rates_url, Rates, DEFAULT_BASE};
+pub use geocode::{clean_query, geocode_url, parse_places, search_places, Place};
+pub use reply::{fx_reply, needs_city, weather_reply, FxReply, PlaceDto, WeatherReply};
+pub use resolve::{resolve, Cached, Resolved};
 pub use weather::{
     fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
     DayPoint, HourPoint, WeatherData,

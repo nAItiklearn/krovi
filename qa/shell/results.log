@@ -1,0 +1,100 @@
+
+===== PHASE A (blank frontend) 2026-11-01T14:19:30 =====
+install /S (currentUser, no UAC)                               PASS  exit=0 6561ms -> C:\Users\Lenovo\AppData\Local\Krovi\Krovi.exe
+precondition: click window has foreground                      FAIL  fg=WindowsTerminal/15376
+1a launch: window visible                                      PASS  after 732ms
+1b launch: PILL_WIN size + top-centre anchor (not 1080x700, not centred) PASS  actual 685,8 550x110 | expected 685,8 550x110 (scale 1.25)
+1c launch: did NOT take focus                                  PASS  fg=powershell/32692
+2a shortcut: expands to PANEL_WIN                              PASS  after 1536ms (blank UI => watchdog path); actual 360,8 1200x863 expected 360,8 1200x863
+2b shortcut: same top-centre anchor (pill never jumps)         PASS  centreX pill=960 panel=960; top pill=8 panel=8
+2c panel has keyboard focus                                    PASS  fg=Krovi
+2d shortcut again: collapses to PILL_WIN (watchdog)            PASS  after 1510ms
+3a click on pill-window TRANSPARENT MARGIN reaches app underneath PASS  clicked 690,58; underneath window received: click 690,58
+3b click INSIDE visible pill rect is captured (not passed through) PASS  clicked 960,48; underneath received: 0 clicks
+3c hovering the pill never steals focus (8 sweeps)             PASS  focus stolen 0 times
+3d click INSIDE panel does not collapse it                     PASS  still PANEL_WIN 2.6s after an inside click
+3e click in panel-window margin (outside panel) reaches app beneath PASS  clicked 368,158; underneath: click 368,158
+3f click outside panel collapses it                            PASS  back to PILL_WIN after 1656ms
+4a fullscreen app in foreground hides the pill                 PASS  hidden after 1612ms
+4b pill returns when fullscreen ends                           PASS  visible again after 330ms
+6a after stress: settled in exactly pill or panel (no stuck/odd state) PASS  state=pill 685,8 550x110
+6b after stress: shortcut still toggles                        PASS  pill -> panel
+7a second launch: still exactly 1 Krovi process                PASS  Krovi processes: 1
+7b second launch: expands the existing panel                   PASS  panel after 44ms
+
+===== PHASE A2 (blank frontend: tray / quit / uninstall) 2026-11-01T14:20:40 =====
+4a tray icon present with tooltip                              PASS  name='Krovi (Ctrl+Alt+Space)'
+4b real tray LEFT-click toggles the panel open                 PASS  after 1621ms (blank UI: watchdog path)
+4c tray menu -> "Quit Krovi" (real mouse): process gone, no orphans PASS  was [Krovi/29916]; gone after 199ms; krovi procs=0; orphan webview2=0
+4d tray icon removed on quit (no ghost icon)                   PASS  ghost present: False
+4e relaunch after quit works                                   PASS  pill after 598ms
+4f `Krovi.exe --quit` closes the running instance entirely     PASS  gone after 70ms; procs=0
+4g idle CPU of the app (30 Hz sampler + blank page)            PASS  0 % of one core over 10s (Krovi.exe only, excludes WebView2 children)
+5 uninstall.exe /S WHILE RUNNING: kills app, removes files + registry PASS  app gone after 1512ms; total 4167ms; files left=0; uninstall reg entries=0
+
+===== PHASE C (production frontend) 2026-11-01T14:30:34 =====
+C0 install /S                                                  PASS  exit=0
+C1 launch: pill at PILL_WIN with the production UI             PASS  after 746ms
+C1b launch: no focus theft                                     PASS  fg=brave
+C2 shortcut expands the production Island (UI handshake, no watchdog) PASS  latency 46ms; watchdog=0
+C3 Esc collapses (production UI morph then commit)             PASS  latency 863ms
+C4 clicking the production pill expands it                     PASS  latency 157ms
+C5 click outside the production panel collapses it             PASS  latency 909ms
+C6 Alt+Tab away from the panel collapses it (focus loss)       PASS  latency 790ms; fg=brave
+C7a tray menu opens (native popup)                             FAIL  right-click on the real tray icon
+C7b tray -> Settings... expands the panel                      FAIL  latency -1ms
+C8a tray -> Show pill (uncheck) hides the pill                 PASS  mode=hidden
+C8b ...shortcut still summons the panel with the pill off      PASS  latency 41ms
+C8c tray -> Show pill (re-check) brings it back                PASS  mode=pill
+C9 tray -> Open Krovi expands                                  PASS  latency 58ms
+C10 tray -> Quit Krovi (mouse) with the production UI: process gone PASS  gone after 91ms
+C10b no orphan WebView2 processes after quit                   PASS  left=0
+C11 reopen after quit works                                    PASS  pill after 552ms
+C12 second launch while running: still 1 process, panel opens  PASS  procs=1 mode=panel
+C13 watchdog count across production-UI session                PASS  WATCHDOG lines=0 (baseline 0)
+C7 (retry) tray -> Settings... expands the panel to Settings   FAIL  menu=False latency -1ms
+C7 (retry, scoped UIA lookup) tray -> Settings... expands the panel PASS  menu=True latency 42ms
+
+===== PHASE D (shell-cursor) 2026-11-01T15:11:37 =====
+D0 install /S                                                  PASS  exit=0
+D1 cursor far away: zero shell-cursor events                   PASS  events in 1.5s: 0
+D2 in range: dx~100 dy~0 dist~100 (logical px from pill centre) FAIL  last=; n=0
+D3 still / 1px jitter (<2 px): no emits                        PASS  still=0 jitter=0
+D4 continuous motion: <=10 Hz, all dist<=400                   FAIL  in-range events=0 in 3s = 0 Hz; min gap=0ms; max dist=
+D5 leaving range: one final {dx:0,dy:0,dist:9999}, then silence FAIL  events=[{"t":12087.099999999627,"dist":377,"dx":-26,"dy":376},{"t":12190.5,"dist":345,"dx":-92,"dy":332},{"t":12303.099999999627,"dist":346,"dx":-120,"dy":324},{"t":12404.099999999627,"dist":352,"dx":-134,"dy":325},{"t":12580.900000000373,"dist":358,"dx":-135,"dy":332},{"t":12679.900000000373,"dist":364,"dx":-131,"dy":339}]
+D6 panel open: recentre once, no emits in panel mode           FAIL  events=
+D7 idle CPU unchanged (parked cursor out of range vs in range) PASS  out-of-range=0.16 %  in-range(parked)=0.16 %  of one core, 10 s each
+D8 cleanup: --quit + uninstall                                 PASS  quit in 231ms; exe removed=True
+
+===== PHASE D (shell-cursor) 2026-11-01T15:13:41 =====
+D0 install /S                                                  PASS  exit=0
+D1 cursor far away: zero shell-cursor events                   PASS  events in 1.5s: 0
+D2 in range: dx~100 dy~0 dist~100 (logical px from pill centre) PASS  last={"t":5855.5,"dist":100,"dx":100,"dy":0}; n=1
+D3 still / 1px jitter (<2 px): no emits                        PASS  still=0 jitter=0
+D4 continuous motion: <=10 Hz, all dist<=400                   FAIL  in-range events=24 in 3s = 8 Hz; min gap=77ms; max dist=159
+D5 leaving range: one final {dx:0,dy:0,dist:9999}, then silence PASS  events={"t":12532,"dist":9999,"dx":0,"dy":0}
+D6 panel open: recentre once, no emits in panel mode           PASS  events={"t":14721.89999999851,"dist":9999,"dx":0,"dy":0}
+D7 idle CPU unchanged (parked cursor out of range vs in range) PASS  out-of-range=0.16 %  in-range(parked)=0.47 %  of one core, 10 s each
+D8 cleanup: --quit + uninstall                                 PASS  quit in 285ms; exe removed=True
+
+===== PHASE D (shell-cursor) 2026-11-01T15:17:04 =====
+D0 install /S                                                  PASS  exit=0
+D1 cursor far away: zero shell-cursor events                   PASS  events in 1.5s: 0
+D2 in range: dx~100 dy~0 dist~100 (logical px from pill centre) PASS  last={"t":5373.9000000003725,"dist":100,"dx":100,"dy":0}; n=1
+D3 still / 1px jitter (<2 px): no emits                        PASS  still=0 jitter=0
+D4 continuous motion: <=10 Hz, all dist<=400                   FAIL  in-range events=30 in 3s = 10 Hz; emitter min gap=ms (webview-side min 92ms = IPC jitter); max dist=159
+D5 leaving range: one final {dx:0,dy:0,dist:9999}, then silence PASS  events={"t":11451.699999999255,"dist":9999,"dx":0,"dy":0}
+D6 panel open: recentre once, no emits in panel mode           PASS  events={"t":13527.099999999627,"dist":9999,"dx":0,"dy":0}
+D7 idle CPU unchanged (parked cursor out of range vs in range) PASS  out-of-range=0.16 %  in-range(parked)=0.16 %  of one core, 10 s each
+D8 cleanup: --quit + uninstall                                 PASS  quit in 167ms; exe removed=True
+
+===== PHASE D (shell-cursor) 2026-11-01T15:36:35 =====
+D0 install /S                                                  PASS  exit=0
+D1 cursor far away: zero shell-cursor events                   PASS  events in 1.5s: 0
+D2 in range: dx~100 dy~0 dist~100 (logical px from pill centre) PASS  last={"t":5610.4000000003725,"dist":100,"dx":100,"dy":0}; n=1
+D3 still / 1px jitter (<2 px): no emits                        PASS  still=0 jitter=0
+D4 continuous motion: <=10 Hz, all dist<=400                   PASS  in-range events=31 in 3s = 10.3 Hz; emitter min gap=100ms (webview-side min 99ms = IPC jitter); max dist=160
+D5 leaving range: one final {dx:0,dy:0,dist:9999}, then silence PASS  events={"t":11783.5,"dist":9999,"dx":0,"dy":0}
+D6 panel open: recentre once, no emits in panel mode           PASS  events={"t":13816.799999998882,"dist":9999,"dx":0,"dy":0}
+D7 idle CPU unchanged (parked cursor out of range vs in range) PASS  out-of-range=0.47 %  in-range(parked)=0.78 %  of one core, 10 s each
+D8 cleanup: --quit + uninstall                                 PASS  quit in 181ms; exe removed=True

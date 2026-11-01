@@ -1,0 +1,5 @@
+How a hash map works
+
+A hash map stores key and value pairs so that a value can be found quickly from its key. Instead of searching through every entry, the map runs the key through a hash function that turns it into a number. That number decides which bucket of the underlying array the entry belongs in, so a lookup usually touches only one bucket. Two different keys can produce the same number, which is called a collision. A common way to handle collisions is to keep a short list of entries inside each bucket and compare keys one by one.
+
+When the map becomes too full, lookups slow down because the buckets hold longer lists. To prevent this, the map grows its array when the load factor passes a limit, and every entry is moved to its new bucket in a step called rehashing. Rehashing is expensive, but it happens rarely enough that inserting stays fast on average. Hash maps do not keep keys in any particular order, so a program that needs sorted keys should use a different structure.

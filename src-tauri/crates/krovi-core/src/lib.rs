@@ -5,6 +5,7 @@
 //! environmental inputs are supplied by callers). Persistence lives in
 //! `krovi-store`; OS/network access lives in `krovi-sys` / `krovi-net`.
 
+pub mod calendar;
 pub mod clipboard;
 pub mod file_shelf;
 pub mod notes;
@@ -14,6 +15,7 @@ pub mod screen_time;
 pub mod timer;
 pub mod todo;
 
+pub use calendar::{Calendar, CalendarError, CalendarEvent};
 pub use clipboard::{ClipEntry, ClipKind, ClipboardHistory, DEFAULT_CAP};
 pub use file_shelf::{FileShelf, Shelf, ShelfItem, DEFAULT_SHELF};
 pub use notes::{Note, Notes};

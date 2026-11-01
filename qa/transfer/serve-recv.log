@@ -1,0 +1,8 @@
+LAN 192.168.1.35 (Wi-Fi)
+URL http://192.168.1.35:63951/r/lSLOZom2_Oq4qM7tmnvjg29tg4M
+PORT 63951
+ID 6dfb1044d6c6
+EXPIRES_AT 1793530233248
+EVENT transfer-reached {"id":"6dfb1044d6c6"}
+EVENT transfer-done {"direction":"receive","file":"from-phone-u.txt","id":"6dfb1044d6c6","savedPath":"D:\\krovi\\qa\\transfer\\inbox\\from-phone-u.txt","size":41}
+EVENT transfer-done {"direction":"receive","file":"phone-upload-12MB.bin","id":"6dfb1044d6c6","savedPath":"D:\\krovi\\qa\\transfer\\inbox\\phone-upload-12MB.bin","size":12582912}

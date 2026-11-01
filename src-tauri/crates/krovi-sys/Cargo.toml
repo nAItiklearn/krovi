@@ -3,35 +3,49 @@ name = "krovi-sys"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Krovi's Windows OS integration: read-only system media (GSMTC) + transport, foreground-process sampling for screen-time (no titles/URLs), and coarse location for weather. Pure helpers build and test on any host; the windows-rs calls are behind the off-by-default `native` feature and #[cfg(windows)] (CI-only, DECISIONS.md D-009)."
+description = "Krovi's Windows OS integration: OS clipboard watcher (change token + read + sensitive-skip), system stats, read-only system media (GSMTC) on a dedicated MTA thread + transport, foreground-process sampling for screen-time (no titles/URLs), and coarse location for weather. Pure logic builds and tests on any host; the windows-rs/arboard calls are behind the `native` feature and #[cfg(windows)]."
 repository = "https://github.com/nAItiklearn/krovi"
 publish = false
 
 [features]
-# Default build has NO OS bindings and NO third-party deps (except serde for the
-# wire DTO), so `cargo test -p krovi-sys` is green on any host (including this
-# 32-bit-gcc one — DECISIONS.md D-009). Enable `native` to compile the windows-rs
-# calls; that path needs a full MSVC toolchain and is only built in CI.
+# Default build has NO OS bindings: every piece of pure logic (change-token gate,
+# text classification, thumbnailing, media change tracking, CPU math, ...) is
+# unit-tested without a desktop session. `native` compiles the windows-rs +
+# arboard calls; the Tauri app enables it by default (docs/CONTRACTS.md §0).
 default = []
-native = ["dep:windows"]
+native = ["dep:windows", "dep:arboard"]
 
 [dependencies]
-# Only used to serialize the MediaTrack wire DTO; pure Rust, builds everywhere.
 serde = { version = "1", features = ["derive"] }
+# Pure Rust, build everywhere: PNG encode/decode for clipboard-image thumbnails and
+# the base64 data URLs the UI renders (thumbnails + media artwork).
+png = "0.17"
+base64 = "0.22"
 
 [dev-dependencies]
-# Test-only: asserts the MediaTrack DTO serializes to the expected wire shape.
+# Test-only: asserts the wire DTOs serialize to the expected shape.
 serde_json = "1"
 
 # Native Windows bindings. Optional and only pulled in by the `native` feature;
-# gated to Windows targets. Authored against windows-rs 0.58; see the per-module
-# "CI-only" notes — these bindings are not compiled on the local gcc host.
+# gated to Windows targets.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", optional = true, features = [
     "Foundation",
     "Media_Control",
+    "Storage_Streams",
     "Devices_Geolocation",
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Threading",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_SystemInformation",
+    "Win32_System_WinRT",
+    "Win32_Storage_FileSystem",
 ] }
+# Cross-checked, battle-tested clipboard access (text, images, file lists).
+arboard = { version = "3", optional = true, default-features = false, features = ["image-data"] }
+
+[[example]]
+name = "live_probe"
+required-features = ["native"]

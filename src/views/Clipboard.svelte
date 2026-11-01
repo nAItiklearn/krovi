@@ -1,275 +1,401 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { now } from '../lib/stores';
-  import { bridge } from '../lib/bridge';
-  import { query, counts } from '../lib/clip';
-  import { relativeTime } from '../lib/time';
+  import { flip } from 'svelte/animate';
   import Icon from '../components/Icon.svelte';
+  import Segmented from '../components/Segmented.svelte';
+  import State from '../components/State.svelte';
+  import { clearClips, clips, copyClip, removeClip, togglePin } from '../lib/live';
+  import { counts, query } from '../lib/clip';
+  import { relativeTime } from '../lib/time';
+  import { now, pushToast } from '../lib/stores';
+  import { arrive, depart, spotlight } from '../lib/motion';
   import type { ClipEntry, ClipKind } from '../lib/types';
+  import type { IconName } from '../lib/icons';
 
-  let entries = $state<ClipEntry[]>([]);
-  let kind = $state<ClipKind | null>(null);
+  type Filter = 'all' | ClipKind;
+  let filter = $state<Filter>('all');
   let needle = $state('');
   let selectedId = $state<number | null>(null);
   let copiedId = $state<number | null>(null);
+  let confirmClear = $state(false);
 
-  const shown = $derived(query(entries, kind, needle));
-  const c = $derived(counts(entries));
-  const selected = $derived(entries.find((e) => e.id === selectedId) ?? shown[0] ?? null);
+  const shown = $derived(query($clips, filter === 'all' ? null : filter, needle));
+  const c = $derived(counts($clips));
+  const selected = $derived($clips.find((e) => e.id === selectedId) ?? shown[0] ?? null);
 
-  const tabs: { id: ClipKind | null; label: string; n: () => number }[] = [
-    { id: null, label: 'All', n: () => c.all },
-    { id: 'Text', label: 'Text', n: () => c.Text },
-    { id: 'Link', label: 'Links', n: () => c.Link },
-    { id: 'Image', label: 'Images', n: () => c.Image },
-  ];
+  const options = $derived([
+    { id: 'all' as Filter, label: 'All', badge: c.all },
+    { id: 'Text' as Filter, label: 'Text', badge: c.Text },
+    { id: 'Link' as Filter, label: 'Links', badge: c.Link },
+    { id: 'Image' as Filter, label: 'Images', badge: c.Image },
+  ]);
 
-  function togglePin(e: ClipEntry) {
-    e.pinned = !e.pinned;
-    entries = [...entries];
-  }
+  const kindIcon = (k: ClipKind): IconName => (k === 'Link' ? 'link' : k === 'Image' ? 'image' : 'text');
+  const isDataImage = (e: ClipEntry) => e.kind === 'Image' && e.content.startsWith('data:image/');
 
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
   async function copy(e: ClipEntry) {
-    try {
-      await navigator.clipboard?.writeText(e.content);
-    } catch {
-      /* demo: clipboard API may be blocked; the visual feedback still fires */
-    }
+    selectedId = e.id;
+    await copyClip(e.id);
     copiedId = e.id;
-    setTimeout(() => (copiedId === e.id ? (copiedId = null) : null), 1200);
+    pushToast('Copied to clipboard');
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => (copiedId = null), 1400);
   }
 
-  onMount(async () => {
-    entries = await bridge.loadClipboard();
-  });
+  function nextSelection(id: number) {
+    const i = shown.findIndex((e) => e.id === id);
+    return (shown[i + 1] ?? shown[i - 1])?.id ?? null;
+  }
+  async function remove(e: ClipEntry) {
+    const next = nextSelection(e.id);
+    await removeClip(e.id);
+    if (selectedId === e.id) selectedId = next;
+  }
+
+  function onListKey(ev: KeyboardEvent) {
+    const rows = Array.from((ev.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('.rowbtn'));
+    const i = rows.findIndex((r) => r === document.activeElement);
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const n = ev.key === 'ArrowDown' ? Math.min(rows.length - 1, i + 1) : Math.max(0, i - 1);
+      rows[n]?.focus();
+    } else if ((ev.key === 'Delete' || ev.key === 'Backspace') && i >= 0) {
+      ev.preventDefault();
+      const e = shown[i];
+      if (e) void remove(e);
+    } else if (ev.key.toLowerCase() === 'p' && i >= 0 && !ev.ctrlKey && !ev.metaKey) {
+      const e = shown[i];
+      if (e) void togglePin(e.id);
+    }
+  }
+
+  async function doClear() {
+    if (!confirmClear) {
+      confirmClear = true;
+      setTimeout(() => (confirmClear = false), 2600);
+      return;
+    }
+    confirmClear = false;
+    await clearClips();
+    pushToast('Cleared (pinned clips kept)');
+  }
+
+  const words = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0);
+  const lines = (s: string) => s.split('\n').length;
 </script>
 
-<div class="toolbar">
-  <div class="seg" aria-label="Filter by kind">
-    {#each tabs as t (t.label)}
-      <button aria-pressed={kind === t.id} onclick={() => (kind = t.id)}>
-        {t.label} <span class="faint">{t.n()}</span>
-      </button>
-    {/each}
-  </div>
-  <label class="search">
-    <Icon name="search" size={16} />
-    <input class="bare" placeholder="Search copies…" bind:value={needle} aria-label="Search clipboard" />
-  </label>
-</div>
-
-<div class="split">
-  <ul class="list scroll" aria-label="Clipboard entries">
-    {#each shown as e (e.id)}
-      <li class:active={selected?.id === e.id}>
-        <button class="row" onclick={() => (selectedId = e.id)}>
-          <span class="kind kind-{e.kind.toLowerCase()}">{e.kind[0]}</span>
-          <span class="content">{e.content}</span>
-          <span class="meta faint">{relativeTime(e.created_at, $now)}</span>
-        </button>
-        <button
-          class="pinbtn"
-          class:on={e.pinned}
-          title={e.pinned ? 'Unpin' : 'Pin'}
-          aria-pressed={e.pinned}
-          onclick={() => togglePin(e)}>
-          <Icon name="pin" size={15} />
-        </button>
-      </li>
-    {:else}
-      <li class="empty faint">Nothing matches that filter.</li>
-    {/each}
-  </ul>
-
-  <div class="detail">
-    {#if selected}
-      <div class="detail-head">
-        <span class="tag">{selected.kind} · {relativeTime(selected.created_at, $now)}</span>
-        <button class="btn sm" onclick={() => copy(selected)}>
-          <Icon name={copiedId === selected.id ? 'check' : 'copy'} size={15} />
-          {copiedId === selected.id ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      {#if selected.kind === 'Image'}
-        <div class="imgbox">
-          <Icon name="weather" size={34} />
-          <span class="faint mono">{selected.content}</span>
-        </div>
-      {:else}
-        <p class="body" class:link={selected.kind === 'Link'}>{selected.content}</p>
+<div class="view">
+  <div class="bar">
+    <Segmented label="Filter by type" {options} bind:value={filter} />
+    <label class="search">
+      <Icon name="search" size={15} />
+      <input placeholder="Search copies" bind:value={needle} aria-label="Search clipboard history" spellcheck="false" />
+      {#if needle}
+        <button class="x" aria-label="Clear search" onclick={() => (needle = '')}><Icon name="close" size={13} /></button>
       {/if}
-      <div class="detail-foot faint">
-        {selected.content.length} chars · {selected.content.trim().split(/\s+/).length} words
-      </div>
-    {:else}
-      <p class="faint center">Select an entry.</p>
-    {/if}
+    </label>
+    <button class="btn danger" class:armed={confirmClear} onclick={doClear} disabled={!$clips.length} aria-live="polite">
+      <Icon name="trash" size={14} />{confirmClear ? 'Sure? Click again' : 'Clear'}
+    </button>
   </div>
+
+  {#if !$clips.length}
+    <div class="fill">
+      <State
+        icon="clipboard"
+        title="Nothing copied yet"
+        text="Copy something anywhere on your PC and it shows up here instantly. History stays on this device, and password-manager copies are never stored." />
+    </div>
+  {:else}
+    <div class="split">
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <ul class="list scroll" aria-label="Clipboard history" onkeydown={onListKey}>
+        {#each shown as e (e.id)}
+          <li animate:flip={{ duration: 380 }} in:arrive out:depart>
+            <div class="row" class:sel={selected?.id === e.id}>
+              <button
+                class="rowbtn"
+                onfocus={() => (selectedId = e.id)}
+                onclick={() => copy(e)}
+                aria-label={`Copy ${e.kind.toLowerCase()}: ${e.content.slice(0, 60)}`}>
+                <span class="ki" class:ok={copiedId === e.id}>
+                  <Icon name={copiedId === e.id ? 'check' : kindIcon(e.kind)} size={14} />
+                </span>
+                <span class="ct ellipsis">{e.kind === 'Image' ? 'Image' : e.content}</span>
+                <span class="cw faint">{relativeTime(e.created_at, $now)}</span>
+              </button>
+              <button
+                class="mini"
+                class:on={e.pinned}
+                aria-pressed={e.pinned}
+                aria-label={e.pinned ? 'Unpin' : 'Pin'}
+                onclick={() => togglePin(e.id)}>
+                <Icon name="pin" size={14} />
+              </button>
+            </div>
+          </li>
+        {:else}
+          <li class="none"><State compact icon="search" title="No matches" text="Try a different search or filter." /></li>
+        {/each}
+      </ul>
+
+      <aside class="detail card" use:spotlight aria-label="Preview">
+        {#if selected}
+          {#key selected.id}
+            <div class="dh">
+              <span class="tag">{selected.kind === 'Link' ? 'Link' : selected.kind} · {relativeTime(selected.created_at, $now)}</span>
+              <span class="grow"></span>
+              <button class="btn sm icon ghost" aria-label={selected.pinned ? 'Unpin' : 'Pin'} aria-pressed={selected.pinned} onclick={() => togglePin(selected.id)}>
+                <Icon name="pin" size={14} />
+              </button>
+              <button class="btn sm icon ghost danger" aria-label="Delete" onclick={() => remove(selected)}>
+                <Icon name="trash" size={14} />
+              </button>
+              <button class="btn sm primary" onclick={() => copy(selected)}>
+                <Icon name={copiedId === selected.id ? 'check' : 'copy'} size={14} />
+                {copiedId === selected.id ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <div class="db scroll">
+              {#if isDataImage(selected)}
+                <img class="img" src={selected.content} alt="Copied" />
+              {:else if selected.kind === 'Image'}
+                <div class="imgph"><Icon name="image" size={30} /><span class="faint small">Image on the clipboard</span></div>
+              {:else}
+                <p class="txt" class:link={selected.kind === 'Link'}>{selected.content}</p>
+              {/if}
+            </div>
+            {#if selected.kind !== 'Image'}
+              <div class="df faint">
+                {selected.content.length} characters · {words(selected.content)} {words(selected.content) === 1 ? 'word' : 'words'}{lines(selected.content) > 1 ? ` · ${lines(selected.content)} lines` : ''}
+              </div>
+            {/if}
+          {/key}
+        {/if}
+      </aside>
+    </div>
+  {/if}
 </div>
 
 <style>
-  .toolbar {
+  .bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 14px;
-    flex-wrap: wrap;
+    flex: none;
   }
   .search {
+    flex: 1;
     display: flex;
     align-items: center;
-    gap: 7px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    padding: 7px 11px;
-    color: var(--text-dim);
-    flex: 1;
-    min-width: 170px;
+    gap: 8px;
+    height: 34px;
+    padding: 0 10px 0 12px;
+    border-radius: var(--r-2);
+    border: 1px solid var(--line);
+    background: var(--surface-1);
+    color: var(--text-3);
+    transition:
+      border-color var(--dur-1),
+      background var(--dur-1);
   }
-  .bare {
-    border: none;
-    background: transparent;
+  .search:hover {
+    border-color: var(--line-strong);
+  }
+  .search:focus-within {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: none;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--t-sm);
+    font-weight: 500;
     outline: none;
-    width: 100%;
-    font-family: inherit;
+  }
+  .search input::placeholder {
+    color: var(--text-3);
+  }
+  .x {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    color: var(--text-2);
+  }
+  .armed {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+  }
+  .fill {
+    flex: 1;
+    display: grid;
+    place-items: center;
   }
   .split {
+    flex: 1;
+    min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
     gap: 14px;
-    height: calc(min(700px, 88vh) - 230px);
-    min-height: 240px;
   }
   .list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+    min-height: 0;
+    margin: 0 -6px 0 -6px;
+    padding: 0 6px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-  }
-  .list li {
-    display: flex;
-    align-items: stretch;
-    border-radius: 9px;
-    border: 1px solid transparent;
-  }
-  .list li.active {
-    background: var(--accent-soft);
-    border-color: var(--accent);
+    gap: 2px;
   }
   .row {
-    flex: 1;
     display: flex;
     align-items: center;
-    gap: 10px;
-    background: transparent;
-    border: none;
-    padding: 9px 10px;
-    text-align: left;
-    color: var(--text);
-    min-width: 0;
+    border-radius: var(--r-3);
+    border: 1px solid transparent;
+    transition:
+      background var(--dur-1) var(--ease-out),
+      border-color var(--dur-1);
   }
-  .kind {
-    width: 22px;
-    height: 22px;
-    flex: none;
+  .row:hover {
+    background: var(--surface-1);
+  }
+  .row.sel {
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
+  .rowbtn {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    height: 44px;
+    padding: 0 6px 0 10px;
+    text-align: left;
+    border-radius: var(--r-3);
+  }
+  .ki {
     display: grid;
     place-items: center;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    background: var(--surface-3);
-    color: var(--text-dim);
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    flex: none;
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    color: var(--text-2);
+    transition:
+      background var(--dur-2),
+      color var(--dur-2),
+      transform 0.5s var(--spring-bouncy);
   }
-  .kind-link {
-    color: var(--accent);
-    background: var(--accent-soft);
+  .ki.ok {
+    background: var(--invert-bg);
+    color: var(--invert-fg);
+    transform: scale(1.1);
   }
-  .kind-image {
-    color: var(--warn);
-  }
-  .content {
+  .ct {
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 13px;
+    font-size: var(--t-sm);
+    font-weight: 500;
   }
-  .meta {
-    font-size: 11px;
+  .cw {
+    font-size: var(--t-xs);
     white-space: nowrap;
   }
-  .pinbtn {
-    border: none;
-    background: transparent;
-    color: var(--text-faint);
-    padding: 0 10px;
+  .mini {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    margin-right: 6px;
     border-radius: 9px;
+    color: var(--text-3);
+    opacity: 0;
+    transition:
+      opacity var(--dur-1),
+      background var(--dur-1),
+      color var(--dur-1);
   }
-  .pinbtn.on {
-    color: var(--accent);
+  .row:hover .mini,
+  .row:focus-within .mini,
+  .mini.on {
+    opacity: 1;
   }
-  .pinbtn:hover {
+  .mini:hover {
+    background: var(--surface-3);
     color: var(--text);
   }
+  .mini.on {
+    color: var(--accent);
+  }
+  .none {
+    margin-top: 20px;
+  }
+
   .detail {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    min-height: 0;
+    padding: 12px 14px 12px 16px;
+    gap: 10px;
   }
-  .detail-head {
+  .dh {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 4px;
+    flex: none;
   }
-  .body {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.5;
+  .grow {
+    flex: 1;
+  }
+  .db {
+    flex: 1;
+    min-height: 0;
+  }
+  .txt {
+    font-size: var(--t-md);
+    line-height: 1.55;
     white-space: pre-wrap;
     word-break: break-word;
-    flex: 1;
-    overflow: auto;
+    user-select: text;
+    padding-right: 6px;
   }
-  .body.link {
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 13px;
+  .txt.link {
+    color: var(--text);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+    word-break: break-all;
   }
-  .imgbox {
-    flex: 1;
+  .img {
+    max-width: 100%;
+    border-radius: var(--r-2);
+    border: 1px solid var(--line);
+  }
+  .imgph {
     display: grid;
     place-items: center;
-    gap: 10px;
-    border: 1px dashed var(--border);
-    border-radius: 9px;
-    color: var(--text-faint);
+    gap: 8px;
+    height: 100%;
+    color: var(--text-3);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--r-3);
   }
-  .detail-foot {
-    font-size: 11.5px;
-    border-top: 1px solid var(--border);
+  .small {
+    font-size: var(--t-xs);
+  }
+  .df {
+    flex: none;
     padding-top: 9px;
-  }
-  .center {
-    margin: auto;
-  }
-  .empty {
-    padding: 20px;
-    text-align: center;
-  }
-  @media (max-width: 680px) {
-    .split {
-      grid-template-columns: 1fr;
-      height: auto;
-    }
+    border-top: 1px solid var(--line);
+    font-size: var(--t-xs);
   }
 </style>

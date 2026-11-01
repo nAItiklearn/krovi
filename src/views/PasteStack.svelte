@@ -1,161 +1,165 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { bridge } from '../lib/bridge';
   import Icon from '../components/Icon.svelte';
+  import State from '../components/State.svelte';
+  import { bridge } from '../lib/bridge';
+  import { copyText, native, pushToast } from '../lib/stores';
+  import { spotlight } from '../lib/motion';
 
   const MAX = 9;
-  let items = $state<string[]>([]); // index 0 = slot 1 (top)
+  let items = $state<string[]>([]); // index 0 = slot 1 (top of the stack)
   let draft = $state('');
+  let status = $state<'loading' | 'ready' | 'error'>('loading');
   let copiedSlot = $state<number | null>(null);
 
-  function push() {
+  async function load() {
+    status = 'loading';
+    try {
+      items = await bridge.loadPasteStack();
+      status = 'ready';
+    } catch {
+      status = 'error';
+    }
+  }
+
+  async function push() {
     const v = draft.trim();
     if (!v) return;
-    items = [v, ...items].slice(0, MAX);
     draft = '';
+    const res = await native<string[]>('push_paste', { value: v });
+    items = res ?? [v, ...items].slice(0, MAX);
   }
 
-  function pop() {
-    items = items.slice(1);
+  async function pop() {
+    const top = items[0];
+    if (top === undefined) return;
+    await copyText(top);
+    const res = await native<string[]>('pop_paste');
+    items = res ?? items.slice(1);
+    pushToast('Popped to clipboard');
   }
 
-  function removeAt(i: number) {
-    items = items.filter((_, idx) => idx !== i);
-  }
-
+  let flash: ReturnType<typeof setTimeout> | null = null;
   async function copyAt(i: number) {
-    try {
-      await navigator.clipboard?.writeText(items[i]);
-    } catch {
-      /* clipboard may be blocked in the demo */
-    }
-    copiedSlot = i + 1;
-    setTimeout(() => (copiedSlot = null), 1100);
+    await copyText(items[i]);
+    copiedSlot = i;
+    pushToast(`Slot ${i + 1} copied`);
+    if (flash) clearTimeout(flash);
+    flash = setTimeout(() => (copiedSlot = null), 1200);
   }
 
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'Enter') push();
-  }
-
-  onMount(async () => {
-    items = await bridge.loadPasteStack();
-  });
+  onMount(load);
 </script>
 
-<div class="head">
-  <div>
-    <p class="eyebrow"><Icon name="paste" size={13} /> Paste stack</p>
-    <p class="muted sub">Actively push copies onto numbered slots (1–9) and pop them in order — distinct from the passive clipboard history.</p>
+<div class="view">
+  <div class="toolbar">
+    <p class="faint">Queue up to nine snippets, then paste them back in order. Pop copies the top slot and removes it.</p>
+    <button class="btn" onclick={pop} disabled={items.length === 0}><Icon name="copy" size={14} /> Pop top</button>
   </div>
-  <button class="btn sm" onclick={pop} disabled={items.length === 0}>
-    <Icon name="chevronRight" size={15} /> Pop top
-  </button>
-</div>
 
-<div class="pusher">
-  <input class="input" placeholder="Type something to push onto slot 1…" bind:value={draft} onkeydown={onKey} />
-  <button class="btn accent" onclick={push} disabled={!draft.trim()}>
-    <Icon name="plus" size={16} /> Push
-  </button>
-</div>
+  <form class="pusher" onsubmit={(e) => { e.preventDefault(); void push(); }}>
+    <input class="input" placeholder="Type or paste something to push onto slot 1" bind:value={draft} aria-label="New snippet" />
+    <button class="btn primary" type="submit" disabled={!draft.trim()}><Icon name="plus" size={15} /> Push</button>
+  </form>
 
-<div class="slots">
-  {#each Array(MAX) as _, i (i)}
-    {@const val = items[i]}
-    <div class="slot" class:filled={!!val}>
-      <span class="num">{i + 1}</span>
-      {#if val}
-        <span class="val">{val}</span>
-        <div class="actions">
-          <button class="mini" title="Copy" onclick={() => copyAt(i)}>
-            <Icon name={copiedSlot === i + 1 ? 'check' : 'copy'} size={14} />
-          </button>
-          <button class="mini" title="Remove" onclick={() => removeAt(i)}>
-            <Icon name="trash" size={14} />
-          </button>
-        </div>
-      {:else}
-        <span class="val faint">empty</span>
-      {/if}
+  {#if status === 'loading'}
+    <div class="slots">
+      {#each Array(6) as _, i (i)}<div class="skel" style="height:58px;border-radius:14px"></div>{/each}
     </div>
-  {/each}
+  {:else if status === 'error'}
+    <State tone="error" title={'Couldn’t load the stack'} text="Something went wrong reading your saved snippets." action={{ label: 'Try again', run: load }} />
+  {:else if items.length === 0}
+    <State icon="paste" title="The stack is empty" text="Push a snippet above. Slot 1 is the next thing you will paste." />
+  {:else}
+    <ul class="slots" aria-label="Paste slots">
+      {#each Array(MAX) as _, i (i)}
+        {@const val = items[i]}
+        <li>
+          {#if val !== undefined}
+            <button class="slot card filled" onclick={() => copyAt(i)} use:spotlight aria-label={`Copy slot ${i + 1}: ${val.slice(0, 50)}`}>
+              <span class="num-badge">{i + 1}</span>
+              <span class="val ellipsis">{val}</span>
+              <span class="cp"><Icon name={copiedSlot === i ? 'check' : 'copy'} size={14} /></span>
+            </button>
+          {:else}
+            <div class="slot empty-slot">
+              <span class="num-badge dim">{i + 1}</span>
+              <span class="val faint">Empty</span>
+            </div>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
 </div>
 
 <style>
-  .head {
+  .toolbar {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: 14px;
+    gap: 16px;
     margin-bottom: 14px;
+    font-size: var(--t-sm);
+    flex: none;
   }
-  .sub {
-    font-size: 12.5px;
-    max-width: 60ch;
-    margin: 0;
+  .toolbar p {
+    max-width: 52ch;
+    line-height: 1.45;
   }
   .pusher {
     display: flex;
-    gap: 9px;
+    gap: 8px;
     margin-bottom: 16px;
-  }
-  .pusher .input {
-    flex: 1;
+    flex: none;
   }
   .slots {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+    align-content: start;
   }
   .slot {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 11px 13px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--surface-2);
+    gap: 12px;
+    height: 58px;
+    padding: 0 12px;
+    border-radius: var(--r-3);
   }
-  .slot.filled {
-    border-color: var(--border);
+  .empty-slot {
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--r-3);
+    opacity: 0.7;
   }
-  .num {
-    width: 26px;
-    height: 26px;
-    flex: none;
+  .num-badge {
     display: grid;
     place-items: center;
-    border-radius: 7px;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 9px;
     font-weight: 700;
-    font-size: 13px;
-    background: var(--surface-3);
-    color: var(--text-faint);
-    font-family: var(--mono);
+    font-size: var(--t-sm);
+    font-variant-numeric: tabular-nums;
+    background: var(--invert-bg);
+    color: var(--invert-fg);
   }
-  .slot.filled .num {
-    background: var(--accent);
-    color: var(--accent-contrast);
+  .num-badge.dim {
+    background: var(--surface-2);
+    color: var(--text-3);
   }
   .val {
     flex: 1;
-    font-size: 13px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: var(--t-sm);
+    font-weight: 500;
   }
-  .actions {
-    display: flex;
-    gap: 2px;
+  .cp {
+    color: var(--text-3);
+    opacity: 0;
+    transition: opacity var(--dur-1);
   }
-  .mini {
-    border: none;
-    background: transparent;
-    color: var(--text-faint);
-    padding: 5px;
-    border-radius: 7px;
-  }
-  .mini:hover {
-    color: var(--text);
-    background: var(--surface-3);
+  .slot:hover .cp {
+    opacity: 1;
   }
 </style>

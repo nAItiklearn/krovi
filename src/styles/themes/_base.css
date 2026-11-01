@@ -1,0 +1,76 @@
+/* Shared theme plumbing. Nothing here is theme specific, so adding a theme never touches it.
+ *
+ * 1. Registered colour tokens (@property). A registered custom property can be interpolated, so a
+ *    theme switch is ONE transition on :root and every var(--token) in the app follows it. There
+ *    are no per-element transition rules to fight with the components' own transitions.
+ * 2. The cross-fade itself, armed by startTheme() only after first paint (`data-theme-ready`),
+ *    so the app never fades in from the default palette on launch. Colour only, so no layout.
+ * 3. High-contrast preference for every theme, keyed off data-scheme (not a theme id).
+ */
+
+@property --page { syntax: '<color>'; inherits: true; initial-value: #08090b; }
+@property --panel-bg { syntax: '<color>'; inherits: true; initial-value: rgba(20, 21, 25, 0.8); }
+@property --pop-bg { syntax: '<color>'; inherits: true; initial-value: rgba(30, 31, 36, 0.95); }
+@property --pill-bg { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.92); }
+@property --pill-fg { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --pill-fg-2 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.66); }
+@property --surface-1 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.045); }
+@property --surface-2 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.08); }
+@property --surface-3 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.125); }
+@property --line { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.085); }
+@property --line-strong { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.17); }
+@property --text { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.95); }
+@property --text-2 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.72); }
+@property --text-3 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.6); }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #6ea8ff; }
+@property --accent-ink { syntax: '<color>'; inherits: true; initial-value: #061225; }
+@property --accent-soft { syntax: '<color>'; inherits: true; initial-value: rgba(110, 168, 255, 0.16); }
+@property --accent-glow { syntax: '<color>'; inherits: true; initial-value: rgba(110, 168, 255, 0.5); }
+@property --danger { syntax: '<color>'; inherits: true; initial-value: #ff7b7b; }
+@property --invert-bg { syntax: '<color>'; inherits: true; initial-value: #f4f5f7; }
+@property --invert-fg { syntax: '<color>'; inherits: true; initial-value: #0b0c0e; }
+@property --rim-a { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.3); }
+@property --rim-b { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.045); }
+@property --card-hi { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.045); }
+@property --spot { syntax: '<color>'; inherits: true; initial-value: rgba(196, 218, 255, 0.075); }
+@property --grain-opacity { syntax: '<number>'; inherits: true; initial-value: 0.07; }
+@property --eye-fill { syntax: '<color>'; inherits: true; initial-value: #f2f5ff; }
+@property --eye-fill-2 { syntax: '<color>'; inherits: true; initial-value: rgba(242, 245, 255, 0.28); }
+@property --eye-accent { syntax: '<color>'; inherits: true; initial-value: #6ea8ff; }
+@property --eye-glow { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --eye-blush { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --wall-top { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-mid { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-bot { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-glow { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-r1 { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-r2 { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-line { syntax: '<color>'; inherits: true; initial-value: #000000; }
+@property --wall-vig { syntax: '<color>'; inherits: true; initial-value: #000000; }
+
+:root[data-theme-ready] {
+  transition:
+    --page 280ms ease, --panel-bg 280ms ease, --pop-bg 280ms ease, --pill-bg 280ms ease,
+    --pill-fg 280ms ease, --pill-fg-2 280ms ease, --surface-1 280ms ease, --surface-2 280ms ease,
+    --surface-3 280ms ease, --line 280ms ease, --line-strong 280ms ease, --text 280ms ease,
+    --text-2 280ms ease, --text-3 280ms ease, --accent 280ms ease, --accent-ink 280ms ease,
+    --accent-soft 280ms ease, --accent-glow 280ms ease, --danger 280ms ease, --invert-bg 280ms ease,
+    --invert-fg 280ms ease, --rim-a 280ms ease, --rim-b 280ms ease, --card-hi 280ms ease,
+    --spot 280ms ease, --grain-opacity 280ms ease, --eye-fill 280ms ease, --eye-fill-2 280ms ease,
+    --eye-accent 280ms ease, --eye-glow 280ms ease, --eye-blush 280ms ease,
+    --wall-top 280ms ease, --wall-mid 280ms ease, --wall-bot 280ms ease, --wall-glow 280ms ease, --wall-r1 280ms ease, --wall-r2 280ms ease, --wall-line 280ms ease, --wall-vig 280ms ease;
+}
+
+/* "More contrast" OS setting: stronger hairlines and secondary text, for any theme of a scheme. */
+@media (prefers-contrast: more) {
+  :root[data-theme][data-scheme='dark'] {
+    --line: rgba(255, 255, 255, 0.24);
+    --text-2: rgba(255, 255, 255, 0.88);
+    --text-3: rgba(255, 255, 255, 0.74);
+  }
+  :root[data-theme][data-scheme='light'] {
+    --line: rgba(0, 0, 0, 0.32);
+    --text-2: rgba(0, 0, 0, 0.86);
+    --text-3: rgba(0, 0, 0, 0.76);
+  }
+}

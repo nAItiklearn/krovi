@@ -1,1 +1,4 @@
 .vercel
+# Build output of the app demo (scripts/build-web.ps1). Regenerated on every build.
+# Note: the Vercel CLI uploads it anyway; it only honours .vercelignore, not .gitignore.
+demo/

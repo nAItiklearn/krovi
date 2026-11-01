@@ -7,10 +7,12 @@ import type {
   CalendarEvent,
   ClipEntry,
   CurrencyRates,
+  MediaState,
   MediaTrack,
   Note,
   ScreenTimeRecord,
   StoredShelf,
+  SystemStats,
   Task,
   WeatherData,
   WorldClockZone,
@@ -126,6 +128,39 @@ export const mediaFixture: MediaTrack = {
   durationSec: 214,
 };
 
+// --- Live feed (demo mode only; the Tauri build never reads these) -----------
+
+const GB = 1024 ** 3;
+
+/** Starting point for the simulated stats feed. */
+export const statsFixture: SystemStats = {
+  memUsed: 9.4 * GB,
+  memTotal: 16 * GB,
+  diskUsed: 301 * GB,
+  diskTotal: 476 * GB,
+  diskLabel: 'C:',
+  cpu: 14,
+};
+
+/** Tracks the demo media feed cycles through (artwork-less on purpose). */
+export const demoMediaQueue: Omit<MediaState, 'sampledAt' | 'positionSec' | 'playing'>[] = [
+  { title: 'Midnight Drive', artist: 'Neon Harbor', album: 'After Hours', durationSec: 214, sourceApp: 'Spotify.exe', artwork: null },
+  { title: 'Paper Planes', artist: 'Lantern', album: 'Field Notes', durationSec: 198, sourceApp: 'Spotify.exe', artwork: null },
+  { title: 'Slow Tide', artist: 'Marigold', album: 'Coastlines', durationSec: 243, sourceApp: 'Spotify.exe', artwork: null },
+];
+
+/** What the demo "copies" every ~12 s so the pill and clipboard view feel alive. */
+export const demoCopySnippets: string[] = [
+  'https://krovi.tech/features',
+  'Ship the demo before lunch',
+  'rgb(14, 158, 143)',
+  'cargo build --release',
+  'https://github.com/nAItiklearn/krovi/issues',
+  'Meeting notes — Friday 10:30, room 4B',
+  'INV-2026-0043',
+  'hello@krovi.tech',
+];
+
 export const worldClocksFixture: WorldClockZone[] = [
   { label: 'Local', tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
   { label: 'San Francisco', tz: 'America/Los_Angeles' },
@@ -154,10 +189,10 @@ function iso(d: Date): string {
 
 const base = new Date(NOW);
 export const calendarFixture: CalendarEvent[] = [
-  { date: iso(base), title: 'Design review', time: '15:00' },
-  { date: iso(base), title: 'Framer callback', time: '17:30' },
-  { date: iso(new Date(NOW + 1 * DAY)), title: 'Ship v0.1 demo', time: '11:00' },
-  { date: iso(new Date(NOW + 3 * DAY)), title: 'Studio open day' },
-  { date: iso(new Date(NOW + 6 * DAY)), title: 'Invoice due', time: '09:00' },
-  { date: iso(new Date(NOW - 2 * DAY)), title: 'Website deployed' },
+  { id: 1, date: iso(base), title: 'Design review', time: '15:00' },
+  { id: 2, date: iso(base), title: 'Framer callback', time: '17:30' },
+  { id: 3, date: iso(new Date(NOW + 1 * DAY)), title: 'Ship v0.1 demo', time: '11:00' },
+  { id: 4, date: iso(new Date(NOW + 3 * DAY)), title: 'Studio open day' },
+  { id: 5, date: iso(new Date(NOW + 6 * DAY)), title: 'Invoice due', time: '09:00' },
+  { id: 6, date: iso(new Date(NOW - 2 * DAY)), title: 'Website deployed' },
 ];
