@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/github/license/nAItiklearn/krovi?label=license&color=blue&style=flat-square" alt="license">
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue?style=flat-square" alt="platform">
   <img src="https://img.shields.io/badge/tests-483%20Rust%20%C2%B7%20533%20UI-blueviolet?style=flat-square" alt="tests">
-  <a href="https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/"><img src="https://img.shields.io/badge/website-web--flame--kappa--83.vercel.app-blue?style=flat-square" alt="website"></a>
+  <a href="https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/"><img src="https://img.shields.io/badge/website-web--k7ipwn7fd--naitiklearns--projects.vercel.app-blue?style=flat-square" alt="website"></a>
 </p>
 
 <p align="center">
