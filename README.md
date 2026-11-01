@@ -17,14 +17,14 @@
   <img src="https://img.shields.io/github/license/nAItiklearn/krovi?label=license&color=blue&style=flat-square" alt="license">
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue?style=flat-square" alt="platform">
   <img src="https://img.shields.io/badge/tests-483%20Rust%20%C2%B7%20533%20UI-blueviolet?style=flat-square" alt="tests">
-  <a href="https://web-flame-kappa-83.vercel.app/"><img src="https://img.shields.io/badge/website-web--flame--kappa--83.vercel.app-blue?style=flat-square" alt="website"></a>
+  <a href="https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/"><img src="https://img.shields.io/badge/website-web--flame--kappa--83.vercel.app-blue?style=flat-square" alt="website"></a>
 </p>
 
 <p align="center">
-  <a href="https://web-flame-kappa-83.vercel.app">Website</a> &middot;
-  <a href="https://web-flame-kappa-83.vercel.app/demo/">Try it in your browser</a> &middot;
+  <a href="https://web-k7ipwn7fd-naitiklearns-projects.vercel.app">Website</a> &middot;
+  <a href="https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/demo/">Try it in your browser</a> &middot;
   <a href="https://github.com/nAItiklearn/krovi/releases">Download</a> &middot;
-  <a href="https://web-flame-kappa-83.vercel.app/changelog">Changelog</a>
+  <a href="https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/changelog">Changelog</a>
 </p>
 
 ---
@@ -44,7 +44,7 @@
 live clipboard and media, real reminders, 100% on-device voice commands, Explain, Quick
 Transfer, offline holidays, checklists, six themes — and a completely redesigned website
 with a full changelog entry for
-[v0.2](https://web-flame-kappa-83.vercel.app/changelog).
+[v0.2](https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/changelog).
 
 | Addition | Detail |
 |---|---|
@@ -110,7 +110,7 @@ Quick Transfer runs a server on your own LAN only while a share is open. No tele
 
 ## Website
 
-🌐 **https://web-flame-kappa-83.vercel.app/** — features, the live browser demo, full voice
+🌐 **https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/** — features, the live browser demo, full voice
 documentation, an honest comparison vs. alternatives, and the changelog.
 
 ## Download
@@ -130,7 +130,7 @@ npm install
 npm run dev        # → http://localhost:5173
 ```
 
-or just open **[the hosted demo](https://web-flame-kappa-83.vercel.app/demo/)**. Every tool view
+or just open **[the hosted demo](https://web-k7ipwn7fd-naitiklearns-projects.vercel.app/demo/)**. Every tool view
 is interactive (the calculator computes, timers tick, voice help lists every phrase,
 Ctrl/Cmd+K opens the command palette).
 
