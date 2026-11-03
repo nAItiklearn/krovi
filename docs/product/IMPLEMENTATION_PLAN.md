@@ -53,7 +53,19 @@ Whole-screen gaze (remove 400 px gate, eased transitions, clamp; pill itself nev
 ## Phase 6 — Clean My OS
 Scanner (Recycle Bin via `SHQueryRecycleBin`, `%TEMP%` files older than N days, known app caches, crash dumps) → review list with paths/sizes/reasons → confirm → delete to Recycle Bin (`IFileOperation` with `FOFX_RECYCLEONDELETE`), locked files skipped and reported.
 
-## Phase 7 — Extensions · Phase 8 — Website & release
+## Phase 7 — BYOK AI providers (replaces accounts/sync — owner decision 2026-11-03, D-022)
+No Krovi account, sign-up, password, auth server, subscription, proxy, vault or multi-device sync in v1.
+Positioning unchanged: "Use Krovi without an account. Bring your own AI key when you want AI-powered features."
+Settings → AI: pick provider → enter key → **Test connection** → choose model (where the provider lists models) →
+change/remove key. Keys live only in Windows Credential Manager (`Krovi/ai/<provider>`), never in SQLite, localStorage,
+logs or backups. Requests go straight from the PC to the provider. Errors are classified separately: invalid key
+(auth), billing/no credit, quota/rate limit, eligibility/region/age/policy (e.g. a Gemini key whose project has no
+free-tier access), model not found, network. Modular provider trait so more providers can be added. A provider is
+listed as supported only after its integration works end to end **and** its current terms (consumer-app use, age,
+regions, data use) were checked and recorded in `docs/product/AI_PROVIDERS.md`. Local tools never need a key.
+`ACCOUNTS_RESEARCH.md` stays as a future idea only; not a release dependency.
+
+## Phase 8 — Extensions · Phase 9 — Website & release
 As in the brief; website redesign last so it shows real screenshots of shipped features.
 
 ## Performance budget

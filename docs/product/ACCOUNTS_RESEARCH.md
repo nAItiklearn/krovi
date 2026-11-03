@@ -1,5 +1,8 @@
 # Accounts and sync: backend research and recommendation
 
+> **Deferred — future idea only (D-022, 2026-11-03).** The owner decided v1 has no accounts and no sync; AI uses
+> bring-your-own-key providers. Nothing in this document is planned for v1 or is a release dependency.
+
 _Status: research, no code. Written 2026-11-03. Owner instruction: "Accounts and sync: optional and kept separate from
 your own API keys; research the backend first."_
 

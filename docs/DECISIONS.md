@@ -4,6 +4,15 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-022 · 2026-11-03 · No accounts or sync in v1 — BYOK AI providers only
+Owner decision: no Krovi account, sign-up, password, auth server, subscription, AI proxy, vault, recovery key,
+cloud storage backend or multi-device sync in v1. Positioning stays "Desktop productivity apps should be free. :)" /
+"Use Krovi without an account. Bring your own AI key when you want AI-powered features." AI features use a provider
+the user configures in Settings → AI (key in Windows Credential Manager only, test connection, model choice, separate
+auth / billing / quota / eligibility errors); requests go directly to the provider. A provider is called supported only
+after a working, terms-checked integration. Local tools never need a key or a connection. `ACCOUNTS_RESEARCH.md` is kept
+as a future idea and is not a release dependency.
+
 ## D-021 · 2026-11-03 · Temporary, visible screen awareness (amends the AGENTS.md screen-capture ban)
 The owner's v0.3 directive keeps the ban on **passive/background** screen capture and allows exactly one
 exception: a screen-awareness session the user explicitly starts, with an always-visible indicator, a
