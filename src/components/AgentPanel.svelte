@@ -9,6 +9,7 @@
   import {
     EXAMPLES,
     agent,
+    clearVoicePlan,
     describeTransport,
     draftToInput,
     hasRunnable,
@@ -17,18 +18,22 @@
     statusLabel,
     stepIcon,
     taskFor,
+    voicePlan,
     type AgentPlan,
     type AgentStep,
     type AgentTask,
     type Integration,
     type McpDraft,
     type McpServer,
+    type VoicePlan,
   } from '../lib/agent';
 
   // Agent Mode: "Tell Krovi what to do". The sentence is understood on this PC (no AI service);
   // each step of the plan is Safe (runs now), needs your OK (a card), or is blocked (never runs).
   // Krovi never sends or reads email: it opens a draft in your mail app. MCP servers are a
   // registry only: nothing starts or contacts them.
+  // You can also say it: the Agent voice shortcut (Settings > Dictation) plans what you said and
+  // opens this panel on the plan. Its Safe steps have already run; the rest wait here as cards.
 
   const demo = mode() === 'demo';
 
@@ -37,6 +42,8 @@
   let busyStep = $state<string | null>(null);
   let error = $state('');
   let plan = $state<AgentPlan | null>(null);
+  /** What Krovi heard, when the plan came from the voice shortcut. Empty for a typed sentence. */
+  let heard = $state('');
   let tasks = $state<AgentTask[]>([]);
   let inputEl: HTMLInputElement | undefined = $state();
 
@@ -60,6 +67,8 @@
     if (!asked || busy) return;
     busy = true;
     error = '';
+    heard = '';
+    clearVoicePlan(); // a typed sentence replaces the spoken one
     try {
       const p = await agent.plan(asked);
       plan = p;
@@ -146,14 +155,33 @@
   const statusTag = (s: Integration['status']) => (s === 'builtin' ? 'Built in' : s === 'not-connected' ? 'Not connected' : 'Not available yet');
   const timeOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+  /**
+   * Show a plan made from a spoken command. Rust has already run its Safe steps (and any
+   * `agent-task` events may have come before this panel existed), so take the task list again.
+   * The typed field is left alone: it may hold something the user is still writing.
+   */
+  function showVoicePlan(v: VoicePlan) {
+    plan = v.plan;
+    heard = v.text;
+    error = v.error;
+    void agent.tasks().then((t) => (tasks = t)).catch(() => {});
+  }
+
   onMount(() => {
-    void startAgent(); // so a "set a timer" step starts a real timer
+    void startAgent(); // so a "set a timer" step starts a real timer, and a spoken command reaches us
     agent.warm(); // read the Start-menu app list now, so "open spotify" is quick
     void agent.tasks().then((t) => (tasks = t)).catch(() => {});
     let off: (() => void) | undefined;
     void agent.onTask((t) => (tasks = mergeTask(tasks, t))).then((u) => (off = u));
+    // Called at once with the latest spoken plan (if any), and again for each new one.
+    const offVoice = voicePlan.subscribe((v) => {
+      if (v) showVoicePlan(v);
+    });
     inputEl?.focus();
-    return () => off?.();
+    return () => {
+      off?.();
+      offVoice();
+    };
   });
 </script>
 
@@ -192,6 +220,9 @@
     {#if plan}
       <section aria-label="Plan">
         <h3 class="eyebrow"><Icon name="listChecks" size={13} /> Plan</h3>
+        {#if heard}
+          <p class="heard"><Icon name="mic" size={13} /><span>Heard: “{heard}”</span></p>
+        {/if}
         <ul class="steps">
           {#each plan.steps as step (step.id)}
             {@const task = taskFor(tasks, plan.id, step.id)}
@@ -383,6 +414,19 @@
   .error :global(svg) {
     flex: none;
     margin-top: 2px;
+  }
+  .heard {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    font-size: var(--t-sm);
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+  .heard :global(svg) {
+    flex: none;
+    margin-top: 3px;
   }
   .small {
     font-size: var(--t-xs);

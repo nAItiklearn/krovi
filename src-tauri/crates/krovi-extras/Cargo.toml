@@ -1,0 +1,27 @@
+[package]
+name = "krovi-extras"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi extras: snippets, file-organizer rules (preview, confirm, move, undo), workflows and file-name search. Local only: no network, no index, no file contents read."
+publish = false
+
+[features]
+default = ["native"]
+# Windows pieces: the known-folder lookup (Downloads, Documents, Pictures, Desktop, Videos, Music).
+native = ["dep:windows"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The link / path safety primitives (reparse points, canonical paths, component-wise containment)
+# are Clean My OS's, reused so both features share one tested definition of "do not follow".
+krovi-clean = { path = "../krovi-clean", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+# Same windows-rs line as the other crates, so the workspace links ONE copy of the bindings.
+windows = { version = "0.58", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_System_Com",
+] }

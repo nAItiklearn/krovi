@@ -11,7 +11,7 @@ use std::sync::{Mutex, PoisonError};
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::Foundation::{BOOL, ERROR_SUCCESS, HANDLE, HWND};
 use windows::Win32::Storage::FileSystem::{
-    GetDriveTypeW, GetVolumeNameForVolumeMountPointW, GetVolumePathNameW,
+    GetDiskFreeSpaceExW, GetDriveTypeW, GetVolumeNameForVolumeMountPointW, GetVolumePathNameW,
 };
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::Registry::{
@@ -119,6 +119,15 @@ fn bin_facts_for_root(root: &str) -> BinFacts {
                 reg_dword(HKEY_CURRENT_USER, &key, "NukeOnDelete").is_some_and(|v| v != 0);
             f.max_capacity_mib = reg_dword(HKEY_CURRENT_USER, &key, "MaxCapacity").map(u64::from);
         }
+    }
+    if f.max_capacity_mib.is_none() {
+        // No explicit limit: Windows' default is about 5% of the volume. Assume that, so an item
+        // the bin cannot hold is left alone instead of being deleted for good. Unknown size: 0,
+        // which refuses everything rather than guessing.
+        let mut total: u64 = 0;
+        // SAFETY: `root_w` is a valid NUL-terminated wide string; `total` outlives the call.
+        let ok = unsafe { GetDiskFreeSpaceExW(&root_w, None, Some(&mut total), None) }.is_ok();
+        f.max_capacity_mib = Some(if ok { total / 20 / (1024 * 1024) } else { 0 });
     }
     f
 }

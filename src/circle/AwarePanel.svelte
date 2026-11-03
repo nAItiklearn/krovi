@@ -129,7 +129,7 @@
   {#if !st.active}
     <p class="lede">
       Krovi doesn’t look at your screen. Start a session and you can ask a question about what is on it. It is read only when you press
-      <b>Ask</b>, for at most {st.maxMinutes} minutes, and nothing is saved.
+      <b>Ask</b>, for at most {st.maxMinutes} minutes. Screenshots are never saved; text you choose to Copy goes to your clipboard history like any copy.
     </p>
 
     <div class="field">

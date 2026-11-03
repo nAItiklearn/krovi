@@ -10,7 +10,13 @@
 //
 // Honest by construction: Krovi never sends or reads email (it opens a draft in YOUR mail app and
 // you press Send), and MCP servers are a registry only: nothing starts or contacts them.
+//
+// Talking to it: the Agent voice shortcut (src-tauri/src/dictation.rs) records on this PC, the words go
+// through the same planner as a typed sentence, Safe steps run, and Rust emits `agent-voice-plan`.
+// `startAgent()` (called once by the app shell) turns that event into the `voicePlan` store, so the
+// Agent panel can show the plan whether it was already open or opens a moment later.
 
+import { writable } from 'svelte/store';
 import { bridge, invoke, isTauri, listen } from './bridge';
 import { addNote, calendarTick, pushToast, timerAdd } from './stores';
 import type { IconName } from './icons';
@@ -99,6 +105,28 @@ export interface TimerEvent {
   seconds: number;
   label?: string;
 }
+
+/** Payload of the `agent-voice-plan` event: a sentence spoken to the Agent shortcut, already planned. */
+export interface VoicePlanEvent {
+  planId: string;
+  /** What was heard, after the speech was recognised on this PC. */
+  text: string;
+  plan: AgentPlan;
+  /** Set when running the Safe steps failed; the plan is still shown. */
+  error?: string | null;
+}
+
+/** What the Agent panel shows for a spoken command. */
+export interface VoicePlan {
+  plan: AgentPlan;
+  /** What Krovi heard. */
+  text: string;
+  /** Empty when nothing went wrong. */
+  error: string;
+}
+
+/** Longest "heard" text kept for display. */
+export const MAX_HEARD_CHARS = 500;
 
 export const MAX_TASKS = 50;
 export const MAX_TIMER_SECONDS = 24 * 3600;
@@ -202,6 +230,47 @@ export function timerFromEvent(p: unknown): { label: string; minutes: number } |
   return { label: named || formatSeconds(seconds), minutes: seconds / 60 };
 }
 
+function stepFromEvent(raw: unknown): AgentStep | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const s = raw as Record<string, unknown>;
+  const action = s.action as { type?: unknown } | null | undefined;
+  const risk = s.risk as { level?: unknown; reason?: unknown } | null | undefined;
+  if (typeof s.id !== 'string' || !s.id || typeof s.summary !== 'string') return null;
+  if (!action || typeof action !== 'object' || typeof action.type !== 'string') return null;
+  const base = { id: s.id, action: action as AgentAction, summary: s.summary };
+  const reason = risk?.reason;
+  switch (risk?.level) {
+    case 'safe':
+      return { ...base, risk: { level: 'safe' } };
+    case 'confirm':
+      return { ...base, risk: { level: 'confirm' } };
+    case 'blocked':
+      return { ...base, risk: { level: 'blocked', reason: typeof reason === 'string' ? reason : '' } };
+    default:
+      // an unknown level must never be shown as something that could run
+      return null;
+  }
+}
+
+/**
+ * The plan an `agent-voice-plan` event carries, checked and cleaned, or `null` if the payload is not a
+ * usable plan. A step with a risk level we do not know is dropped rather than guessed at, and the heard
+ * text is trimmed and capped for display.
+ */
+export function voicePlanFromEvent(p: unknown): VoicePlan | null {
+  if (!p || typeof p !== 'object') return null;
+  const e = p as Record<string, unknown>;
+  const plan = e.plan as Record<string, unknown> | null | undefined;
+  if (!plan || typeof plan !== 'object' || typeof plan.id !== 'string' || !plan.id || !Array.isArray(plan.steps)) return null;
+  const steps = plan.steps.map(stepFromEvent).filter((s): s is AgentStep => s !== null);
+  const suggestions = Array.isArray(plan.suggestions) ? plan.suggestions.filter((s): s is string => typeof s === 'string') : [];
+  return {
+    plan: { id: plan.id, steps, suggestions },
+    text: (typeof e.text === 'string' ? e.text : '').replace(/\s+/g, ' ').trim().slice(0, MAX_HEARD_CHARS),
+    error: typeof e.error === 'string' ? e.error : '',
+  };
+}
+
 /** One argument per line; blank lines are dropped, nothing else is changed. */
 export function parseArgs(text: string): string[] {
   return text
@@ -277,19 +346,40 @@ function handleTimerEvent(p: unknown): void {
   pushToast(`Timer started: ${t.label}`, 2200);
 }
 
+/**
+ * The latest sentence spoken to the Agent shortcut, with its plan. It stays until a newer one arrives
+ * or {@link clearVoicePlan} is called, so the Agent panel can pick it up when it mounts after the
+ * event (the panel may still be opening when the plan is ready) and keep showing its confirm cards if
+ * the panel is closed and reopened.
+ */
+export const voicePlan = writable<VoicePlan | null>(null);
+
+export function clearVoicePlan(): void {
+  voicePlan.set(null);
+}
+
+function handleVoicePlanEvent(p: unknown): void {
+  const v = voicePlanFromEvent(p);
+  if (v) voicePlan.set(v);
+}
+
 let starting: Promise<() => void> | null = null;
 
 /**
- * Listen for `agent-timer` so a "set a timer" step starts a real timer. Idempotent: call it from
- * the app shell once, and from the Agent panel; only the first call subscribes. Resolves to an
- * unsubscribe function.
+ * Listen for `agent-timer` (so a "set a timer" step starts a real timer) and `agent-voice-plan` (so a
+ * spoken command reaches the `voicePlan` store). Idempotent: call it from the app shell once, and from
+ * the Agent panel; only the first call subscribes. Resolves to an unsubscribe function.
  */
 export function startAgent(): Promise<() => void> {
   if (!starting) {
     starting = (async () => {
-      const off = await listen<TimerEvent>('agent-timer', handleTimerEvent);
+      const [offTimer, offVoice] = await Promise.all([
+        listen<TimerEvent>('agent-timer', handleTimerEvent),
+        listen<unknown>('agent-voice-plan', handleVoicePlanEvent),
+      ]);
       return () => {
-        off();
+        offTimer();
+        offVoice();
         starting = null;
       };
     })();

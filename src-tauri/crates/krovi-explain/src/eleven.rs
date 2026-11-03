@@ -103,12 +103,25 @@ fn pct_encode(s: &str) -> String {
 
 /// A fully built request, so what leaves the machine can be inspected (and unit-tested)
 /// before any socket exists.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Request {
     pub method: &'static str,
     pub url: String,
     pub headers: Vec<(&'static str, String)>,
     pub body: Option<Value>,
+}
+
+/// Header values are redacted: `xi-api-key` holds the user's key and must never reach a log.
+impl std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names: Vec<&str> = self.headers.iter().map(|h| h.0).collect();
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("url", &self.url)
+            .field("headers", &names)
+            .field("body", &self.body)
+            .finish()
+    }
 }
 
 pub fn tts_request(

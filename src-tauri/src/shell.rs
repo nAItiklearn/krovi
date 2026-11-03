@@ -1028,7 +1028,8 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) -> b
                 st.last_apply.elapsed() > Duration::from_millis(400),
             )
         };
-        let fs = hide_fs && sys::foreground_is_fullscreen(own);
+        // A running screen-awareness session must stay visible (D-021): never hide for fullscreen then.
+        let fs = hide_fs && !crate::circle::aware_active(app) && sys::foreground_is_fullscreen(own);
         if fs != fs_now {
             sh.lk().fs_hidden = fs;
             log(format!("fullscreen={fs}"));

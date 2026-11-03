@@ -148,11 +148,12 @@ describe('tauri: events', () => {
     expect(mocks.pushToast).not.toHaveBeenCalled();
   });
 
-  it('startAgent subscribes once however many times it is called', async () => {
+  it('startAgent subscribes once (timer + voice plan) however many times it is called', async () => {
     const { startAgent } = await fresh();
     const [a, b, c] = [startAgent(), startAgent(), startAgent()];
     await Promise.all([a, b, c]);
-    expect(subscriptions).toBe(1);
+    expect(subscriptions).toBe(2);
+    expect([...handlers.keys()].sort()).toEqual(['agent-timer', 'agent-voice-plan']);
     emit('agent-timer', { seconds: 60 });
     expect(mocks.timerAdd).toHaveBeenCalledTimes(1);
   });
@@ -163,6 +164,56 @@ describe('tauri: events', () => {
     off();
     expect(subscriptions).toBe(0);
     await startAgent();
-    expect(subscriptions).toBe(1);
+    expect(subscriptions).toBe(2);
+  });
+});
+
+describe('tauri: a spoken command', () => {
+  const voiceEvent = (over: Record<string, unknown> = {}) => ({
+    planId: 'p9-1',
+    text: 'open youtube and email sam@example.com',
+    plan: {
+      id: 'p9-1',
+      steps: [
+        { id: 's1', action: { type: 'open-url', url: 'https://www.youtube.com/', site: 'YouTube', known: true }, summary: 'Open youtube.com in your browser', risk: { level: 'safe' } },
+        { id: 's2', action: { type: 'compose-email', provider: 'default', to: ['sam@example.com'], subject: '', body: '' }, summary: 'Open an email draft', risk: { level: 'confirm' } },
+      ],
+      suggestions: [],
+    },
+    error: null,
+    ...over,
+  });
+
+  it('agent-voice-plan lands in the voicePlan store, so a panel that mounts later still shows it', async () => {
+    const { startAgent, voicePlan } = await fresh();
+    const { get } = await import('svelte/store');
+    await startAgent();
+    expect(get(voicePlan)).toBeNull();
+    emit('agent-voice-plan', voiceEvent());
+    const v = get(voicePlan);
+    expect(v?.text).toBe('open youtube and email sam@example.com');
+    expect(v?.plan.id).toBe('p9-1');
+    expect(v?.plan.steps.map((s) => s.risk.level)).toEqual(['safe', 'confirm']);
+    expect(v?.error).toBe('');
+  });
+
+  it('a newer spoken command replaces the older one, and a junk event changes nothing', async () => {
+    const { startAgent, voicePlan, clearVoicePlan } = await fresh();
+    const { get } = await import('svelte/store');
+    await startAgent();
+    emit('agent-voice-plan', voiceEvent());
+    emit('agent-voice-plan', { nonsense: true });
+    expect(get(voicePlan)?.plan.id).toBe('p9-1');
+    emit('agent-voice-plan', voiceEvent({ text: 'set a timer for 5 minutes', plan: { id: 'p9-2', steps: [], suggestions: [] } }));
+    expect(get(voicePlan)).toMatchObject({ text: 'set a timer for 5 minutes', plan: { id: 'p9-2' } });
+    clearVoicePlan();
+    expect(get(voicePlan)).toBeNull();
+  });
+
+  it('receiving a spoken plan runs nothing from the webview: Rust already ran the safe steps', async () => {
+    const { startAgent } = await fresh();
+    await startAgent();
+    emit('agent-voice-plan', voiceEvent());
+    expect(calls).toEqual([]);
   });
 });

@@ -203,4 +203,5 @@ export type ToolId =
   | 'agent'
   | 'clean'
   | 'circle'
+  | 'extras'
   | 'settings';

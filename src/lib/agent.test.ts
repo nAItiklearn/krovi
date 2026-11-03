@@ -2,6 +2,7 @@
 // blocked rules, the task engine, the integration catalog and the MCP registry. Stores are mocked
 // so the effects (timer, note, reminder) can be observed.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 const mocks = vi.hoisted(() => ({
   timerAdd: vi.fn(),
@@ -13,9 +14,11 @@ vi.mock('./stores', () => mocks);
 
 import {
   EXAMPLES,
+  MAX_HEARD_CHARS,
   MAX_TASKS,
   __resetDemo,
   agent,
+  clearVoicePlan,
   describeTransport,
   draftToInput,
   formatSeconds,
@@ -30,6 +33,8 @@ import {
   stepIcon,
   taskFor,
   timerFromEvent,
+  voicePlan,
+  voicePlanFromEvent,
   type AgentPlan,
   type AgentStep,
   type AgentTask,
@@ -467,5 +472,90 @@ describe('pure helpers', () => {
     expect(typeof off).toBe('function');
     off();
     expect(startAgent()).not.toBe(a);
+  });
+});
+
+describe('a spoken command (agent-voice-plan)', () => {
+  const step = (over: Record<string, unknown> = {}) => ({
+    id: 's1',
+    action: { type: 'open-url', url: 'https://www.youtube.com/', site: 'YouTube', known: true },
+    summary: 'Open youtube.com in your browser',
+    risk: { level: 'safe' },
+    ...over,
+  });
+  const event = (over: Record<string, unknown> = {}) => ({
+    planId: 'p1-1',
+    text: 'open youtube',
+    plan: { id: 'p1-1', steps: [step()], suggestions: [] },
+    error: null,
+    ...over,
+  });
+
+  it('turns the event into the plan to show, with what was heard', () => {
+    const v = voicePlanFromEvent(event());
+    expect(v).toEqual({
+      plan: { id: 'p1-1', steps: [step()], suggestions: [] },
+      text: 'open youtube',
+      error: '',
+    });
+  });
+
+  it('keeps safe, confirm and blocked steps (and the reason for a blocked one) as they came', () => {
+    const v = voicePlanFromEvent(
+      event({
+        plan: {
+          id: 'p2',
+          steps: [
+            step(),
+            step({ id: 's2', risk: { level: 'confirm' } }),
+            step({ id: 's3', action: { type: 'unsupported', text: 'x' }, risk: { level: 'blocked', reason: "I didn't understand that." } }),
+          ],
+          suggestions: ['open youtube', 7],
+        },
+      }),
+    );
+    expect(v?.plan.steps.map((s) => s.risk.level)).toEqual(['safe', 'confirm', 'blocked']);
+    expect(v?.plan.steps[2].risk).toEqual({ level: 'blocked', reason: "I didn't understand that." });
+    expect(v?.plan.suggestions).toEqual(['open youtube']);
+  });
+
+  it('never shows a step with an unknown risk level, or a broken one, as something that could run', () => {
+    const v = voicePlanFromEvent(
+      event({
+        plan: {
+          id: 'p3',
+          steps: [step({ risk: { level: 'whatever' } }), step({ id: 's2', risk: undefined }), step({ id: '' }), step({ id: 's4', summary: 5 }), step({ id: 's5', action: {} }), null, step({ id: 's6' })],
+          suggestions: [],
+        },
+      }),
+    );
+    expect(v?.plan.steps.map((s) => s.id)).toEqual(['s6']);
+  });
+
+  it('tidies the heard text and carries a run error', () => {
+    const v = voicePlanFromEvent(event({ text: '  open \n  youtube  ', error: 'Windows could not open it.' }));
+    expect(v).toMatchObject({ text: 'open youtube', error: 'Windows could not open it.' });
+    expect(voicePlanFromEvent(event({ text: 'x'.repeat(2000) }))?.text).toHaveLength(MAX_HEARD_CHARS);
+    expect(voicePlanFromEvent(event({ text: 42, error: 7 }))).toMatchObject({ text: '', error: '' });
+  });
+
+  it('ignores a payload that is not a usable plan', () => {
+    for (const bad of [null, undefined, 'x', 3, {}, { plan: null }, { plan: { id: 'p' } }, { plan: { id: '', steps: [] } }, { plan: { id: 5, steps: [] } }, { plan: { steps: [] } }]) {
+      expect(voicePlanFromEvent(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it('a plan with nothing left to show is still a plan (the panel then shows what was heard)', () => {
+    const v = voicePlanFromEvent(event({ plan: { id: 'p4', steps: [], suggestions: [] } }));
+    expect(v?.plan.steps).toEqual([]);
+    expect(v && hasRunnable(v.plan)).toBe(false);
+  });
+
+  it('the store holds the latest plan until it is cleared', () => {
+    expect(get(voicePlan)).toBeNull();
+    voicePlan.set(voicePlanFromEvent(event()));
+    expect(get(voicePlan)?.text).toBe('open youtube');
+    clearVoicePlan();
+    expect(get(voicePlan)).toBeNull();
   });
 });

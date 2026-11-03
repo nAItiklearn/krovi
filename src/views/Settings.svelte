@@ -7,7 +7,8 @@
   import { getConfig, setConfig, type ShellConfig } from '../lib/shell';
   import { REGIONS } from '../lib/holidays';
   import { clearClips, clips } from '../lib/live';
-  import { pushToast, region, voiceHelpOpen } from '../lib/stores';
+  import { get } from 'svelte/store';
+  import { openTool, pushToast, region, voiceHelpOpen } from '../lib/stores';
   import { mode } from '../lib/bridge';
   import pkg from '../../package.json';
   import IdleCompanion from '../components/idle/IdleCompanion.svelte';
@@ -55,6 +56,20 @@
     type Replacement,
     type TalkMode,
   } from '../lib/dictation';
+  import {
+    DEFAULT_SETTINGS as DEFAULT_READ_ALOUD,
+    RATE_MAX,
+    RATE_MIN,
+    loadEngines,
+    saveSettings as saveReadAloud,
+    speakText,
+    speaking,
+    startExplain,
+    stopSpeaking,
+    type Engines,
+    type ExplainSettings,
+  } from '../lib/explain';
+  import { PREVIEW_SENTENCE, clampRate, elevenStatus, rateLabel, ratePercent, selectedVoiceId, voiceOptions } from '../components/readAloudModel';
 
   let cfg = $state<ShellConfig | null>(null);
   let status = $state<'loading' | 'ready' | 'error'>('loading');
@@ -170,12 +185,14 @@
   const ds = $derived(di.settings);
   /** Browser demo: every control is shown but off, and says why. Nothing is recorded or recognised. */
   const dOff = $derived(!di.available);
-  type DictArea = 'top' | 'model' | 'mic' | 'text';
+  type DictArea = 'top' | 'agent' | 'model' | 'mic' | 'text';
   let dStatus = $state<'loading' | 'ready' | 'error'>('loading');
   let dError = $state('');
   let dErrArea = $state<DictArea>('top');
   let dRecording = $state(false);
   let dDraft = $state<string[]>([]);
+  let aRecording = $state(false);
+  let aDraft = $state<string[]>([]);
   let devices = $state<InputDevice[]>([]);
   let devicesLoaded = $state(false);
   let testing = $state(false);
@@ -267,6 +284,31 @@
     await saveDict({ ...ds, shortcut: c.chord });
   }
 
+  // The Agent shortcut: same recorder, its own key. The words go to Agent, never into an app.
+  function startAgentRecording() {
+    aRecording = true;
+    aDraft = [];
+    dError = '';
+  }
+  async function onAgentKey(e: KeyboardEvent) {
+    if (!aRecording) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      aRecording = false;
+      return;
+    }
+    const c = chordFrom(e);
+    aDraft = c.mods;
+    if (c.error) {
+      dError = c.error;
+      dErrArea = 'agent';
+    }
+    if (!c.chord) return;
+    aRecording = false;
+    await saveDict({ ...ds, agentShortcut: c.chord }, 'agent');
+  }
+
   // models
   const installedModels = $derived(di.models.filter((m) => m.status.state === 'installed'));
   const pickable = $derived(installedModels.some((m) => m.id === ds.model) ? ds.model : (installedModels[0]?.id ?? ''));
@@ -353,6 +395,81 @@
   function dropRow(i: number) {
     rows = removeAt(rows, i);
     commitRows();
+  }
+
+  // ---------------------------------------------------------------- read aloud
+  // The same voice, speed and ElevenLabs settings the Explain tool reads with (its explain_* commands);
+  // this is just a second place to change them. A Windows voice runs on this PC. ElevenLabs is optional,
+  // is set up in Explain, and is only mentioned here.
+  let raStatus = $state<'loading' | 'ready' | 'error'>('loading');
+  let raEngines = $state<Engines | null>(null);
+  /** What the controls show (the speed follows the slider while it is dragged). */
+  let raSettings = $state<ExplainSettings>({ ...DEFAULT_READ_ALOUD });
+  /** The last settings the backend confirmed, to go back to if a save is refused. */
+  let raSaved = $state<ExplainSettings>({ ...DEFAULT_READ_ALOUD });
+  let raError = $state('');
+  let raBusy = $state(false);
+  let raPreviewing = $state(false);
+
+  const raOptions = $derived(voiceOptions(raEngines?.windows.voices ?? []));
+  const raVoice = $derived(selectedVoiceId(raSettings.windowsVoice, raEngines?.windows));
+  const raHasVoices = $derived(raEngines?.windows.available === true);
+  const raEleven = $derived(elevenStatus(raEngines?.elevenlabs, raSaved));
+  const raSpeaking = $derived($speaking.status === 'speaking');
+
+  async function loadReadAloud() {
+    raStatus = 'loading';
+    try {
+      void startExplain(); // so Stop and the speaking state follow what is really playing
+      const e = await loadEngines();
+      raEngines = e;
+      raSettings = e.settings;
+      raSaved = e.settings;
+      raStatus = 'ready';
+    } catch {
+      raStatus = 'error';
+    }
+  }
+  onMount(() => {
+    void loadReadAloud();
+    return () => {
+      // a preview must not keep talking after you leave Settings
+      if (get(speaking).target === 'sample') void stopSpeaking().catch(() => {});
+    };
+  });
+
+  /** Save one change; go back to the last saved settings and show the reason if it is refused. */
+  async function patchReadAloud(change: Partial<ExplainSettings>) {
+    const next = { ...raSettings, ...change };
+    raSettings = next;
+    raError = '';
+    raBusy = true;
+    try {
+      raSaved = raSettings = await saveReadAloud(next);
+    } catch (e) {
+      raSettings = raSaved;
+      raError = errText(e);
+    } finally {
+      raBusy = false;
+    }
+  }
+  async function previewVoice() {
+    raError = '';
+    raPreviewing = true;
+    try {
+      await speakText(PREVIEW_SENTENCE, 'windows', { target: 'sample', rate: raSaved.rate, voiceId: raSaved.windowsVoice });
+    } catch (e) {
+      raError = errText(e);
+    } finally {
+      raPreviewing = false;
+    }
+  }
+  async function stopPreview() {
+    try {
+      await stopSpeaking();
+    } catch (e) {
+      raError = errText(e);
+    }
   }
 
   // ---------------------------------------------------------------- theme picker
@@ -695,11 +812,26 @@
             </div>
             <div class="field">
               <div class="lab">
+                <strong>Talk to Agent</strong>
+                <span class="faint">Hold the Agent shortcut and say what you want, like “open YouTube” or “set a timer for ten minutes”. It isn’t typed anywhere: it becomes a plan in Agent, where safe steps run and anything else waits for your OK.</span>
+              </div>
+              <Toggle label="Talk to Agent" checked={ds.agentEnabled} onchange={(v) => saveDict({ ...ds, agentEnabled: v }, 'agent')} />
+            </div>
+            {#if ds.agentEnabled && !modelReady}
+              <p class="hint"><Icon name="download" size={13} /> Download a speech model below to talk to Agent.</p>
+            {/if}
+            <div class="field">
+              <div class="lab"><strong>Agent shortcut</strong><span class="faint">Works from any app. Dictation keeps its own shortcut, so what you dictate is never taken as a command.</span></div>
+              {@render recorder({ value: ds.agentShortcut, on: aRecording, draft: aDraft, start: startAgentRecording, key: onAgentKey, stop: () => (aRecording = false), name: 'Agent shortcut' })}
+            </div>
+            {@render derr('agent')}
+            <div class="field">
+              <div class="lab">
                 <strong>How it works</strong>
-                <span class="faint">{ds.mode === 'hold' ? 'Hold the shortcut while you speak. Let go and it types.' : 'Press once to start talking, again to stop and type.'}</span>
+                <span class="faint">{ds.mode === 'hold' ? 'Hold a shortcut while you speak, then let go.' : 'Press a shortcut once to start talking, and again to finish.'} Both shortcuts work the same way.</span>
               </div>
               <Segmented
-                label="How the dictation shortcut works"
+                label="How the dictation and Agent shortcuts work"
                 size="sm"
                 value={ds.mode}
                 options={[
@@ -847,6 +979,83 @@
               {/each}
               <div><button class="btn sm" type="button" onclick={() => (rows = [...rows, { spoken: '', written: '' }])}><Icon name="plus" size={13} /> Add replacement</button></div>
               {@render derr('text')}
+            </div>
+          </div>
+        </div>
+      {/if}
+    </section>
+
+    <section>
+      <h2>Read aloud</h2>
+      {#if raStatus === 'loading'}
+        {#each Array(3) as _, i (i)}<div class="skel" style="height:52px;margin-bottom:10px;border-radius:14px"></div>{/each}
+      {:else if raStatus === 'error'}
+        <State tone="error" title={'Couldn’t read the voice settings'} text="The read-aloud module did not answer. Try again in a moment." action={{ label: 'Try again', run: loadReadAloud }} />
+      {:else}
+        <div class="group card ra">
+          <div class="field">
+            <div class="lab">
+              <strong>Voice</strong>
+              <span class="faint">
+                {#if raHasVoices}
+                  The Windows voice that reads summaries out loud in Explain. It runs on this PC, with no internet.
+                {:else}
+                  Windows didn’t report any installed voices. Add one in Windows Settings › Time &amp; language › Speech.
+                {/if}
+              </span>
+            </div>
+            <select
+              class="input sel mic"
+              aria-label="Read-aloud voice"
+              disabled={!raHasVoices || raBusy}
+              value={raVoice}
+              onchange={(e) => void patchReadAloud({ windowsVoice: e.currentTarget.value || null })}>
+              {#each raOptions as o (o.id)}<option value={o.id}>{o.label}</option>{:else}<option value="">System default</option>{/each}
+            </select>
+          </div>
+          <div class="field">
+            <div class="lab"><strong>Speed</strong><span class="faint">How fast it talks. 1.0× is normal speech.</span></div>
+            <div class="slider">
+              <input
+                class="range"
+                type="range"
+                min={RATE_MIN}
+                max={RATE_MAX}
+                step="0.1"
+                aria-label="Read-aloud speed"
+                aria-valuetext={rateLabel(raSettings.rate)}
+                style:--p="{ratePercent(raSettings.rate)}%"
+                value={raSettings.rate}
+                oninput={(e) => (raSettings = { ...raSettings, rate: clampRate(Number(e.currentTarget.value)) })}
+                onchange={(e) => void patchReadAloud({ rate: clampRate(Number(e.currentTarget.value)) })} />
+              <output class="num">{rateLabel(raSettings.rate)}</output>
+            </div>
+          </div>
+          <div class="field">
+            <div class="lab"><strong>Hear it</strong><span class="faint">Plays one short sentence in the voice and speed you chose.</span></div>
+            <div class="racts">
+              <button class="btn sm" type="button" disabled={!raHasVoices || raBusy || raPreviewing || raSpeaking} onclick={() => void previewVoice()}>
+                <Icon name="volume" size={13} /> Preview
+              </button>
+              <button class="btn sm" type="button" disabled={!raSpeaking} onclick={() => void stopPreview()}>
+                <Icon name="square" size={13} /> Stop
+              </button>
+            </div>
+          </div>
+          {#if raError}<p class="err" role="alert"><Icon name="alert" size={13} /> {raError}</p>{/if}
+          {#if raEngines?.windows.error}<p class="err" role="alert"><Icon name="alert" size={13} /> {raEngines.windows.error}</p>{/if}
+          <div class="field">
+            <div class="lab">
+              <strong>ElevenLabs voice (optional)</strong>
+              <span class="faint">{raEleven.detail}</span>
+            </div>
+            <div class="racts">
+              <span class="tag" class:accent={raEleven.tone === 'on'} title={raEleven.sendsText ? 'Text is sent to ElevenLabs while it reads' : 'Nothing is sent'}>
+                {#if raEleven.sendsText}<Icon name="upload" size={11} />{/if}{raEleven.label}
+              </span>
+              <button class="btn sm" type="button" onclick={() => openTool('explain')}>
+                <Icon name="externalLink" size={13} /> {raEleven.tone === 'off' ? 'Set up in Explain' : 'Manage in Explain'}
+              </button>
             </div>
           </div>
         </div>
@@ -1499,6 +1708,17 @@
   }
   .tst {
     font-size: var(--t-xs);
+  }
+
+  /* read aloud: the buttons / status beside a field, and a divider after an error line */
+  .racts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .ra .err + .field {
+    border-top: 1px solid var(--line);
   }
 
   /* vocabulary chips and replacement rows */

@@ -129,6 +129,25 @@ describe('tauri: status and settings', () => {
     expect(get(d.dictationInfo).settings.mode).toBe('toggle');
   });
 
+  it('the Agent shortcut settings go to the backend inside the same dictation settings object', async () => {
+    const d = await fresh();
+    await d.loadDictation();
+    const next = { ...d.DEFAULT_DICTATION_SETTINGS, agentEnabled: true, agentShortcut: 'Ctrl+Alt+J' };
+    const saved = await d.saveDictationSettings(next);
+    const sent = calls.find((c) => c.cmd === 'dictation_set_settings')?.args?.settings as { agentEnabled: boolean; agentShortcut: string };
+    expect(sent).toMatchObject({ agentEnabled: true, agentShortcut: 'Ctrl+Alt+J' });
+    expect(saved).toMatchObject({ agentEnabled: true, agentShortcut: 'Ctrl+Alt+J' });
+    expect(get(d.dictationInfo).settings.agentShortcut).toBe('Ctrl+Alt+J');
+  });
+
+  it('an Agent shortcut the backend refuses rejects with its text and keeps the stored one', async () => {
+    const d = await fresh();
+    await d.loadDictation();
+    errors.set('dictation_set_settings', 'Dictation and the Agent shortcut need different keys.');
+    await expect(d.saveDictationSettings({ ...d.DEFAULT_DICTATION_SETTINGS, enabled: true, agentEnabled: true, agentShortcut: 'Ctrl+Alt+D' })).rejects.toThrow('different keys');
+    expect(get(d.dictationInfo).settings.agentEnabled).toBe(false);
+  });
+
   it('a refused save rejects with the backend text and leaves the stored settings alone', async () => {
     const d = await fresh();
     await d.loadDictation();
@@ -168,6 +187,30 @@ describe('tauri: events drive the live store', () => {
     emit('dictation-state', { state: 'transcribing' });
     emit('dictation-state', { state: 'idle' });
     expect(get(d.dictationLive)).toEqual({ phase: 'idle', level: 0, notice: null });
+  });
+
+  it('an Agent-shortcut session says it is a command on the pill, and failures are labelled as one', async () => {
+    const d = await fresh();
+    await d.wireDictation();
+    emit('dictation-state', { state: 'listening', level: 0.3, mode: 'agent' });
+    expect(d.pillFace(get(d.dictationLive))).toMatchObject({ kind: 'listening', label: 'Listening for a command' });
+    emit('dictation-state', { state: 'transcribing', mode: 'agent' });
+    expect(get(d.dictationLive)).toMatchObject({ phase: 'transcribing', agent: true });
+    emit('dictation-state', { state: 'idle', mode: 'agent' });
+    emit('dictation-result', { ok: false, error: 'Download a speech model first (Settings › Voice).', mode: 'agent' });
+    expect(d.pillFace(get(d.dictationLive))).toMatchObject({ tone: 'error', label: 'Voice command failed' });
+    // the next dictation is a plain dictation again
+    emit('dictation-state', { state: 'listening', mode: 'dictate' });
+    expect(d.pillFace(get(d.dictationLive))).toMatchObject({ label: 'Listening' });
+  });
+
+  it('a recognised voice command is never announced and its words are not kept in the pill store', async () => {
+    const d = await fresh();
+    await d.wireDictation();
+    emit('dictation-state', { state: 'idle', mode: 'agent' });
+    emit('dictation-result', { ok: true, text: 'a private command', chars: 16, mode: 'agent' });
+    expect(get(d.dictationLive).notice).toBeNull();
+    expect(JSON.stringify(get(d.dictationLive))).not.toContain('private');
   });
 
   it('an error result becomes a pill notice AND a toast, then expires on its own', async () => {

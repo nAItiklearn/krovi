@@ -11,6 +11,13 @@
 //! Events:    `agent-task`  a `Task` whose status changed (camelCase, see krovi_agent::Task)
 //!            `agent-timer` `{ seconds, label }`: the webview starts the timer (timers live in the
 //!            frontend; the step counts as done once the event is emitted)
+//!            `agent-voice-plan` `{ planId, text, plan, error }`: a sentence spoken to the Agent
+//!            shortcut (see `handle_voice`); `plan` is the same `Plan` `agent_plan` returns
+//!
+//! Talking to the Agent: `dictation.rs` records and transcribes (its Agent shortcut) and calls
+//! [`handle_voice`] with the words. They take the same road as a typed sentence: planned by
+//! `make_plan`, Safe steps run by `run_plan`, steps that need an OK wait as cards. The panel is
+//! then opened on the Agent tool and shown the plan. The words are never typed anywhere.
 //!
 //! What it touches: nothing leaves the PC from here. Links are handed to the user's own browser or
 //! mail app. Krovi never sends or reads email. MCP servers are stored (setting `agent.mcp.v1`) and
@@ -165,6 +172,19 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+impl AgentState {
+    /// The Start-menu app names, for the palette's Quick Launcher (`extras.rs`). It is the SAME list
+    /// Agent Mode plans against, from the same cache with the same refresh rules, so the palette
+    /// never starts a second scan of its own. Names only; launch targets stay in this module.
+    pub(crate) async fn app_names(&self) -> Vec<String> {
+        apps_for_plan(&self.apps)
+            .await
+            .iter()
+            .map(|a| a.name.clone())
+            .collect()
+    }
+}
+
 fn local_offset_minutes(now: u64) -> i32 {
     (OsZone.offset_ms_at(now as i64) / 60_000) as i32
 }
@@ -276,10 +296,9 @@ pub fn agent_warm(state: State<'_, AgentState>) {
     }
 }
 
-/// Understand a sentence and return the plan: steps, a plain summary of each, and whether each is
-/// safe, needs confirmation, or is blocked. Nothing is executed. The text is not logged.
-#[tauri::command]
-pub async fn agent_plan(state: State<'_, AgentState>, text: String) -> CmdResult<Plan> {
+/// Understand a sentence and remember the plan (so it can be run or confirmed later). Shared by
+/// the typed command and the voice path, so a spoken sentence is planned exactly like a typed one.
+async fn make_plan(state: &AgentState, text: &str) -> CmdResult<Plan> {
     let apps = apps_for_plan(&state.apps).await;
     let now = now_ms();
     let seq = state.plan_seq.fetch_add(1, Ordering::Relaxed) + 1;
@@ -289,13 +308,20 @@ pub async fn agent_plan(state: State<'_, AgentState>, text: String) -> CmdResult
         utc_offset_minutes: local_offset_minutes(now),
         apps: apps.as_slice(),
     };
-    let plan = plan_text(&id, &text, &ctx);
+    let plan = plan_text(&id, text, &ctx);
     state
         .session
         .lock()
         .map_err(lock_err)?
         .add_plan(plan.clone());
     Ok(plan)
+}
+
+/// Understand a sentence and return the plan: steps, a plain summary of each, and whether each is
+/// safe, needs confirmation, or is blocked. Nothing is executed. The text is not logged.
+#[tauri::command]
+pub async fn agent_plan(state: State<'_, AgentState>, text: String) -> CmdResult<Plan> {
+    make_plan(&state, &text).await
 }
 
 /// Run a plan: every Safe step, plus the Confirm steps whose ids are in `confirmed`. Blocked
@@ -309,10 +335,20 @@ pub async fn agent_run(
     plan_id: String,
     confirmed: Vec<String>,
 ) -> CmdResult<Vec<Task>> {
+    run_plan(&app, &state, &plan_id, &confirmed).await
+}
+
+/// The body of `agent_run`, shared with the voice path.
+async fn run_plan(
+    app: &AppHandle,
+    state: &AgentState,
+    plan_id: &str,
+    confirmed: &[String],
+) -> CmdResult<Vec<Task>> {
     let (touched, dispatches, started) = {
         let mut session = state.session.lock().map_err(lock_err)?;
         let out = session
-            .begin_run(&plan_id, &confirmed, now_ms())
+            .begin_run(plan_id, confirmed, now_ms())
             .map_err(|e| e.to_string())?;
         let started: Vec<Task> = out
             .touched
@@ -322,7 +358,7 @@ pub async fn agent_run(
         (out.touched, out.dispatches, started)
     };
     for task in &started {
-        emit_task(&app, task);
+        emit_task(app, task);
     }
 
     if !dispatches.is_empty() {
@@ -348,12 +384,75 @@ pub async fn agent_run(
             }
         }
         for task in &finished {
-            emit_task(&app, task);
+            emit_task(app, task);
         }
     }
 
     let session = state.session.lock().map_err(lock_err)?;
     Ok(touched.iter().filter_map(|id| session.task(*id)).collect())
+}
+
+// ---------------------------------------------------------------------------------------------
+// talking to the Agent (the voice shortcut in dictation.rs)
+// ---------------------------------------------------------------------------------------------
+
+/// Plan what was said, run its Safe steps exactly as `agent_run(planId, [])` would for a typed
+/// sentence, and tell the webview (`agent-voice-plan`). Steps that need an OK stay
+/// `awaiting-confirmation` and show as cards in the panel; blocked steps never run. A run that
+/// fails is reported in the event's `error` and the plan is still shown.
+async fn voice_plan(app: &AppHandle, text: String) -> CmdResult<()> {
+    let state = app.state::<AgentState>();
+    let plan = make_plan(&state, &text).await?;
+    let run_error = if plan.steps.iter().any(|s| !s.is_blocked()) {
+        run_plan(app, &state, &plan.id, &[]).await.err()
+    } else {
+        None
+    };
+    let _ = app.emit(
+        "agent-voice-plan",
+        json!({ "planId": plan.id, "text": text, "plan": plan, "error": run_error }),
+    );
+    Ok(())
+}
+
+/// Bring the panel up on the Agent tool, the way the tray's "Settings..." opens Settings: ask
+/// the UI to expand (so the pill morphs), wait for it, then ask for the tool. Blocks for up to
+/// a couple of seconds: call it from a worker thread, never the UI or an async task.
+fn show_panel(app: &AppHandle) {
+    use crate::shell::{shell_get_mode, shell_set_mode, Mode};
+    match shell_get_mode(app.clone()) {
+        Mode::Panel => {}
+        Mode::Hidden => {
+            // no pill on screen to morph from
+            shell_set_mode(app.clone(), Mode::Panel);
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        Mode::Pill => {
+            let _ = app.emit("shell-request", json!({ "action": "expand" }));
+            for _ in 0..40 {
+                if shell_get_mode(app.clone()) == Mode::Panel {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            if shell_get_mode(app.clone()) != Mode::Panel {
+                // nobody answered the request (no UI listening yet): expand directly
+                shell_set_mode(app.clone(), Mode::Panel);
+            }
+            // let the panel mount before asking for a tool
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
+    let _ = app.emit("shell-open-tool", json!({ "tool": "agent" }));
+}
+
+/// The Agent shortcut's entry point: the words you spoke become a plan (Safe steps run now, the
+/// rest wait for your OK) and the panel opens on it. Blocking; call from a worker thread.
+/// The words are not logged.
+pub fn handle_voice(app: &AppHandle, text: String) -> CmdResult<()> {
+    tauri::async_runtime::block_on(voice_plan(app, text))?;
+    show_panel(app);
+    Ok(())
 }
 
 /// Every task, newest first (history is capped at 50).

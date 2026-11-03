@@ -44,6 +44,10 @@ export interface DictationSettings {
   device: string | null;
   vocabulary: string[];
   options: DictationOptions;
+  /** Talk to Agent Mode: a second shortcut whose words go to the planner and are never typed (D-020). */
+  agentEnabled: boolean;
+  /** e.g. "Ctrl+Alt+A". Follows the same hold / toggle choice as dictation. */
+  agentShortcut: string;
 }
 
 export type ModelStatus = { state: 'installed'; path: string; bytes: number } | { state: 'missing' } | { state: 'partial' };
@@ -65,15 +69,20 @@ export interface InputDevice {
 
 export type DictationPhase = 'idle' | 'listening' | 'loading-model' | 'transcribing';
 
+/** What a recording is for: typed into the app in front ("dictate") or sent to Agent Mode ("agent"). */
+export type SessionKind = 'dictate' | 'agent';
+
 /** Payload of the `dictation-state` event. */
 export interface StatePayload {
   state: DictationPhase;
   level?: number;
+  mode?: SessionKind;
 }
 
 /** Payload of the `dictation-result` event. */
 export interface DictationResult {
   ok: boolean;
+  mode?: SessionKind;
   /** Present on success, and with `ok: false` when typing was blocked (the text is then offered to copy). */
   text?: string;
   chars?: number;
@@ -151,6 +160,8 @@ export const DEFAULT_DICTATION_SETTINGS: DictationSettings = {
   device: null,
   vocabulary: [],
   options: { style: 'plain', replacements: [], remove_fillers: true, auto_punctuate: true },
+  agentEnabled: false,
+  agentShortcut: 'Ctrl+Alt+A',
 };
 
 const STYLE_IDS = DICTATION_STYLES.map((s) => s.id);
@@ -188,6 +199,8 @@ export function normalizeDictationSettings(raw: unknown): DictationSettings {
       remove_fillers: bool(o.remove_fillers, d.options.remove_fillers),
       auto_punctuate: bool(o.auto_punctuate, d.options.auto_punctuate),
     },
+    agentEnabled: bool(r.agentEnabled, d.agentEnabled),
+    agentShortcut: str(r.agentShortcut, d.agentShortcut),
   };
 }
 
@@ -349,6 +362,8 @@ export interface DictationNotice {
   text: string;
   /** Only for `blocked`: copied to the clipboard solely when the user clicks Copy. */
   copy?: string;
+  /** Present (true) only when the session was a spoken Agent command, not dictation. */
+  agent?: boolean;
 }
 
 export interface DictationLive {
@@ -356,21 +371,26 @@ export interface DictationLive {
   /** Raw RMS 0..1 while listening; use `meterLevel` to draw it. */
   level: number;
   notice: DictationNotice | null;
+  /** Present (true) only while the session is a spoken Agent command, not dictation. */
+  agent?: boolean;
 }
 
 export const dictationLive = writable<DictationLive>({ phase: 'idle', level: 0, notice: null });
 
 const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0);
 
+/** `{ agent: true }` for a spoken Agent command, nothing for dictation (so dictation's shapes stay as they were). */
+const agentFlag = (mode: SessionKind | undefined): { agent?: true } => (mode === 'agent' ? { agent: true } : {});
+
 export function reduceLive(prev: DictationLive, p: StatePayload): DictationLive {
   switch (p.state) {
     case 'listening':
-      return { phase: 'listening', level: clamp01(p.level ?? 0), notice: null };
+      return { phase: 'listening', level: clamp01(p.level ?? 0), notice: null, ...agentFlag(p.mode) };
     case 'loading-model':
     case 'transcribing':
-      return { phase: p.state, level: 0, notice: null };
+      return { phase: p.state, level: 0, notice: null, ...agentFlag(p.mode) };
     default:
-      return { ...prev, phase: 'idle', level: 0 };
+      return { phase: 'idle', level: 0, notice: prev.notice };
   }
 }
 
@@ -383,10 +403,11 @@ export function meterLevel(rms: number): number {
 
 /** The notice (if any) a finished dictation deserves. A clean success says nothing. */
 export function noticeFor(r: DictationResult): Omit<DictationNotice, 'id'> | null {
-  if (r.ok) return r.nothingHeard ? { kind: 'info', text: NOTHING_HEARD } : null;
+  const agent = agentFlag(r.mode);
+  if (r.ok) return r.nothingHeard ? { kind: 'info', text: NOTHING_HEARD, ...agent } : null;
   const why = (r.error ?? '').trim();
-  if (r.text) return { kind: 'blocked', text: why || 'Krovi couldn’t type into that app.', copy: r.text };
-  return { kind: 'error', text: why || 'Dictation didn’t work.' };
+  if (r.text) return { kind: 'blocked', text: why || 'Krovi couldn’t type into that app.', copy: r.text, ...agent };
+  return { kind: 'error', text: why || (r.mode === 'agent' ? 'The voice command didn’t work.' : 'Dictation didn’t work.'), ...agent };
 }
 
 export const NOTICE_MS: Record<DictationNotice['kind'], number> = { info: 2400, error: 5200, blocked: 15000 };
@@ -400,7 +421,7 @@ export type DictationFace =
 export function pillFace(live: DictationLive): DictationFace | null {
   switch (live.phase) {
     case 'listening':
-      return { kind: 'listening', label: 'Listening', level: meterLevel(live.level) };
+      return { kind: 'listening', label: live.agent ? 'Listening for a command' : 'Listening', level: meterLevel(live.level) };
     case 'loading-model':
       return { kind: 'loading-model', label: 'Loading speech model' };
     case 'transcribing':
@@ -412,7 +433,7 @@ export function pillFace(live: DictationLive): DictationFace | null {
   return {
     kind: 'notice',
     tone: n.kind,
-    label: n.kind === 'blocked' ? 'Couldn’t type it' : 'Dictation failed',
+    label: n.kind === 'blocked' ? 'Couldn’t type it' : n.agent ? 'Voice command failed' : 'Dictation failed',
     detail: n.text,
     copy: n.copy,
   };

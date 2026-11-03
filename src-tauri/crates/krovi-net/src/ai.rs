@@ -71,8 +71,15 @@ pub const EXCLUDED_MODEL_MARKERS: [&str; 1] = ["deepseek"];
 
 /// Is `id` in a banned family (`muse-spark`, `muse-wonder`, `muse-glimmer`)?
 pub fn is_banned_model(id: &str) -> bool {
-    let l = id.to_ascii_lowercase();
-    BANNED_MODEL_MARKERS.iter().any(|m| l.contains(m))
+    // `muse_spark`, `muse.spark`, `muse spark` and `musespark` are the same family.
+    let squash = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    };
+    let l = squash(id);
+    BANNED_MODEL_MARKERS.iter().any(|m| l.contains(&squash(m)))
 }
 
 /// Banned, or not offered in v1. Everything that builds a model list or accepts a model id asks
@@ -2200,6 +2207,9 @@ mod tests {
             "MUSE-SPARK",
             "x-muse-wonder-y",
             "models/muse-glimmer-2",
+            "muse_spark_1_3",
+            "Muse.Spark",
+            "musespark-open",
         ] {
             assert!(is_banned_model(banned), "{banned}");
             assert!(is_excluded_model(banned), "{banned}");

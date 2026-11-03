@@ -81,6 +81,28 @@ describe('settings normalisation', () => {
     expect(s.options.style).toBe('plain');
   });
 
+  it('the Agent voice shortcut is off by default, on Ctrl+Alt+A, and old saved settings without it still load', async () => {
+    const d = await fresh();
+    expect(d.DEFAULT_DICTATION_SETTINGS).toMatchObject({ agentEnabled: false, agentShortcut: 'Ctrl+Alt+A' });
+    // a dictation.v1 saved before the Agent shortcut existed has neither field
+    const old = d.normalizeDictationSettings({ enabled: true, shortcut: 'Ctrl+Alt+D', mode: 'toggle' });
+    expect(old).toMatchObject({ enabled: true, agentEnabled: false, agentShortcut: 'Ctrl+Alt+A' });
+    // and it never shares the dictation shortcut by default
+    expect(d.DEFAULT_DICTATION_SETTINGS.agentShortcut).not.toBe(d.DEFAULT_DICTATION_SETTINGS.shortcut);
+  });
+
+  it('keeps a saved Agent shortcut and ignores junk in those two fields', async () => {
+    const d = await fresh();
+    expect(d.normalizeDictationSettings({ agentEnabled: true, agentShortcut: 'Ctrl+Shift+J' })).toMatchObject({
+      agentEnabled: true,
+      agentShortcut: 'Ctrl+Shift+J',
+    });
+    expect(d.normalizeDictationSettings({ agentEnabled: 'yes', agentShortcut: 5 })).toMatchObject({
+      agentEnabled: false,
+      agentShortcut: 'Ctrl+Alt+A',
+    });
+  });
+
   it('normalises a model list and its three statuses', async () => {
     const d = await fresh();
     const models = d.normalizeModels([
@@ -124,6 +146,21 @@ describe('live state reducer', () => {
     expect(d.reduceLive(withNotice, { state: 'idle' }).notice).toEqual(withNotice.notice);
   });
 
+  it('marks a spoken Agent command, and a dictation session after it is a plain dictation again', async () => {
+    const d = await fresh();
+    let s: ReturnType<typeof d.reduceLive> = { phase: 'idle', level: 0, notice: null };
+    s = d.reduceLive(s, { state: 'listening', level: 0.1, mode: 'agent' });
+    expect(s).toEqual({ phase: 'listening', level: 0.1, notice: null, agent: true });
+    s = d.reduceLive(s, { state: 'transcribing', mode: 'agent' });
+    expect(s).toMatchObject({ phase: 'transcribing', agent: true });
+    s = d.reduceLive(s, { state: 'idle', mode: 'agent' });
+    expect(s).toEqual({ phase: 'idle', level: 0, notice: null }); // idle drops the flag
+    s = d.reduceLive(s, { state: 'listening', mode: 'dictate' });
+    expect(s).toEqual({ phase: 'listening', level: 0, notice: null });
+    // an event from a backend that predates the field is dictation
+    expect(d.reduceLive(s, { state: 'listening' })).not.toHaveProperty('agent');
+  });
+
   it('maps RMS to a 0..1 meter on a decibel scale', async () => {
     const d = await fresh();
     expect(d.meterLevel(0)).toBe(0);
@@ -157,6 +194,21 @@ describe('results become notices', () => {
     expect(d.noticeFor({ ok: false })?.text).toBeTruthy();
   });
 
+  it('a voice command that failed or heard nothing says so as a command, and never offers Copy', async () => {
+    const d = await fresh();
+    expect(d.noticeFor({ ok: true, nothingHeard: true, mode: 'agent' })).toEqual({ kind: 'info', text: 'Didn’t catch that', agent: true });
+    expect(d.noticeFor({ ok: false, error: 'Still working on the last voice command.', mode: 'agent' })).toEqual({
+      kind: 'error',
+      text: 'Still working on the last voice command.',
+      agent: true,
+    });
+    expect(d.noticeFor({ ok: false, mode: 'agent' })?.text).toBe('The voice command didn’t work.');
+    // a recognised command was handed to the Agent: nothing to announce
+    expect(d.noticeFor({ ok: true, mode: 'agent' })).toBeNull();
+    // dictation results carry no agent flag at all
+    expect(d.noticeFor({ ok: false, error: 'boom', mode: 'dictate' })).toEqual({ kind: 'error', text: 'boom' });
+  });
+
   it('typing blocked with text offers it for Copy', async () => {
     const d = await fresh();
     expect(d.noticeFor({ ok: false, text: 'Send the report', error: 'That window blocks typing.' })).toEqual({
@@ -178,6 +230,20 @@ describe('pill face', () => {
     expect(d.pillFace({ phase: 'listening', level: 0.1, notice: null })).toMatchObject({ kind: 'listening', label: 'Listening' });
     expect(d.pillFace({ phase: 'loading-model', level: 0, notice: null })?.kind).toBe('loading-model');
     expect(d.pillFace({ phase: 'transcribing', level: 0, notice: null })?.kind).toBe('transcribing');
+  });
+
+  it('says "Listening for a command" for the Agent shortcut and plain "Listening" for dictation', async () => {
+    const d = await fresh();
+    expect(d.pillFace({ phase: 'listening', level: 0.1, notice: null, agent: true })).toMatchObject({ kind: 'listening', label: 'Listening for a command' });
+    expect(d.pillFace({ phase: 'listening', level: 0.1, notice: null })).toMatchObject({ label: 'Listening' });
+  });
+
+  it('labels a failed voice command as one', async () => {
+    const d = await fresh();
+    const err = d.pillFace({ phase: 'idle', level: 0, notice: { id: 1, kind: 'error', text: 'No microphone was found.', agent: true } });
+    expect(err).toMatchObject({ kind: 'notice', tone: 'error', label: 'Voice command failed', detail: 'No microphone was found.' });
+    const dict = d.pillFace({ phase: 'idle', level: 0, notice: { id: 2, kind: 'error', text: 'x' } });
+    expect(dict).toMatchObject({ label: 'Dictation failed' });
   });
 
   it('a live phase wins over a leftover notice', async () => {

@@ -2199,6 +2199,7 @@ dependencies = [
  "krovi-clean",
  "krovi-core",
  "krovi-explain",
+ "krovi-extras",
  "krovi-net",
  "krovi-store",
  "krovi-sys",
@@ -2234,6 +2235,16 @@ dependencies = [
  "serde",
  "serde_json",
  "ureq",
+ "windows 0.58.0",
+]
+
+[[package]]
+name = "krovi-extras"
+version = "0.1.0"
+dependencies = [
+ "krovi-clean",
+ "serde",
+ "serde_json",
  "windows 0.58.0",
 ]
 

@@ -1004,6 +1004,13 @@ pub fn aware_start(
     Ok(status)
 }
 
+/// True while a screen-awareness session runs. The shell keeps the pill (and its red indicator)
+/// on screen during a session even over fullscreen apps, so the session is never invisible (D-021).
+pub fn aware_active(app: &AppHandle) -> bool {
+    app.try_state::<Circle>()
+        .is_some_and(|c| lk(&c.aware).as_ref().is_some_and(|r| !r.session.is_over(Instant::now())))
+}
+
 /// One click: the session ends now.
 #[tauri::command]
 pub fn aware_stop(app: AppHandle) {

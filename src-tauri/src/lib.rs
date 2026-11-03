@@ -16,6 +16,7 @@ mod clean;
 mod commands;
 mod dictation;
 mod explain;
+mod extras;
 mod live;
 mod reminders;
 mod shell;
@@ -42,6 +43,7 @@ pub fn run() {
             ai::setup(app)?;
             circle::setup(app)?;
             agent::setup(app)?;
+            extras::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
@@ -84,6 +86,26 @@ pub fn run() {
             circle::aware_stop,
             circle::aware_status,
             circle::aware_ask,
+            // [extras] — Quick Launcher names, snippets, file organizer, workflows, file-name search
+            extras::extras_apps,
+            extras::snippets_list,
+            extras::snippets_save,
+            extras::snippets_remove,
+            extras::snippets_use,
+            extras::workflows_list,
+            extras::workflows_save,
+            extras::workflows_remove,
+            extras::organizer_folders,
+            extras::organizer_rules,
+            extras::organizer_save_rule,
+            extras::organizer_remove_rule,
+            extras::organizer_preview,
+            extras::organizer_run,
+            extras::organizer_undo_info,
+            extras::organizer_undo,
+            extras::filesearch_start,
+            extras::filesearch_cancel,
+            extras::filesearch_open,
             // [clean] — Clean My OS: scan, review, Recycle Bin only
             clean::clean_categories,
             clean::clean_scan,

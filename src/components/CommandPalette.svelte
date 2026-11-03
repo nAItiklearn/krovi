@@ -19,18 +19,35 @@
   import { roundDisplay } from '../lib/units';
   import { pop } from '../lib/motion';
   import type { IconName } from '../lib/icons';
+  import { extrasAvailable, openExtras } from '../lib/extrasNav';
+  import { launcherApps, snippetPreview, snippets as snippetApi, workflows as workflowApi, rankSnippets, type Snippet, type Workflow } from '../lib/extras';
+  import { launchApp, rankApps } from '../lib/launcher';
 
   // Spotlight for Krovi: one input, tools + actions, inline calculator. Everything is local.
+  // With the Extras tool registered it also finds installed apps (Quick Launcher: Enter opens the
+  // app through an ordinary Agent Mode "open <app>" Safe step), your snippets (Enter copies one) and
+  // your workflows (Enter opens Workflows and starts it there, where its confirmation cards show).
   interface Cmd {
     id: string;
     label: string;
     hint: string;
     icon: IconName;
-    group: 'Tools' | 'Actions';
+    group: 'Tools' | 'Actions' | 'Apps' | 'Snippets' | 'Workflows';
     keywords: string[];
     kbd?: string;
     run: () => void;
   }
+
+  const GROUP_LABEL: Record<Cmd['group'], string> = {
+    Tools: 'Tool',
+    Actions: 'Action',
+    Apps: 'App',
+    Snippets: 'Snippet',
+    Workflows: 'Workflow',
+  };
+
+  /** Extras (apps, snippets, workflows) only show once the Extras tool is registered. */
+  const extrasOn = extrasAvailable();
 
   const commands: Cmd[] = [
     ...TOOLS.map<Cmd>((t) => ({
@@ -130,16 +147,98 @@
     },
   ];
 
+  if (extrasOn) {
+    commands.push(
+      { id: 'x-snippets', label: 'Snippets', hint: 'Saved text you copy on purpose', icon: 'text', group: 'Actions', keywords: ['snippet', 'text', 'template', 'boilerplate', 'canned'], run: () => openExtras('snippets') },
+      { id: 'x-organize', label: 'Organize files', hint: 'Rules: preview, confirm, move, undo', icon: 'folder', group: 'Actions', keywords: ['organize', 'organise', 'sort', 'rules', 'downloads', 'move files', 'tidy'], run: () => openExtras('organize') },
+      { id: 'x-workflows', label: 'Workflows', hint: 'Saved lists of Agent commands', icon: 'listChecks', group: 'Actions', keywords: ['workflow', 'routine', 'macro', 'automation', 'agent'], run: () => openExtras('workflows') },
+      { id: 'x-search', label: 'Search files', hint: 'File and folder names, no index', icon: 'search', group: 'Actions', keywords: ['find', 'file', 'folder', 'locate', 'search'], run: () => openExtras('search') },
+    );
+  }
+
   let q = $state('');
   let sel = $state(0);
   let inputEl: HTMLInputElement | undefined = $state();
   let listEl: HTMLElement | undefined = $state();
   let opener: Element | null = null;
 
+  // The Start-menu names (Agent Mode's own list), your snippets and your workflows. Loaded once when
+  // the palette opens; searching them is local and instant. If a load fails they are simply absent.
+  let apps = $state<string[]>([]);
+  let userSnippets = $state<Snippet[]>([]);
+  let userWorkflows = $state<Workflow[]>([]);
+
   interface Row {
     cmd: Cmd;
     score: number;
     ranges: [number, number][];
+  }
+
+  const failText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  async function openApp(name: string) {
+    try {
+      pushToast(await launchApp(name), 1600);
+    } catch (e) {
+      pushToast(failText(e), 3800, 'error');
+    }
+  }
+
+  async function copySnippet(s: Snippet) {
+    try {
+      const used = await snippetApi.use(s.id);
+      const extra = used.notes.length ? ` ${used.notes.join(' ')}` : '';
+      pushToast(`Copied "${s.name}".${extra}`, used.notes.length ? 4200 : 1800);
+    } catch (e) {
+      pushToast(failText(e), 3800, 'error');
+    }
+  }
+
+  /** Apps, snippets and workflows that match what was typed (nothing is listed for an empty box). */
+  function extraRows(query: string): Row[] {
+    const out: Row[] = [];
+    // an app never outranks a Krovi tool or action with the same name
+    for (const h of rankApps(query, apps, 5)) {
+      out.push({
+        cmd: { id: `app:${h.name}`, label: h.name, hint: 'Open app', icon: 'appWindow', group: 'Apps', keywords: [], run: () => void openApp(h.name) },
+        score: Math.min(99, h.score),
+        ranges: h.ranges,
+      });
+    }
+    for (const h of rankSnippets(query, userSnippets).slice(0, 4)) {
+      const s = h.snippet;
+      out.push({
+        cmd: {
+          id: `snip:${s.id}`,
+          label: s.name,
+          hint: s.trigger ? `${s.trigger}  ${snippetPreview(s.body, 40)}` : snippetPreview(s.body, 50),
+          icon: 'text',
+          group: 'Snippets',
+          keywords: [],
+          run: () => void copySnippet(s),
+        },
+        score: h.score,
+        ranges: h.ranges,
+      });
+    }
+    for (const w of userWorkflows) {
+      const m = match(query, w.name, ['workflow', ...w.lines]);
+      if (!m) continue;
+      out.push({
+        cmd: {
+          id: `wf:${w.id}`,
+          label: w.name,
+          hint: `${w.lines.length} ${w.lines.length === 1 ? 'step' : 'steps'}`,
+          icon: 'listChecks',
+          group: 'Workflows',
+          keywords: [],
+          run: () => openExtras('workflows', { runWorkflow: w.id }),
+        },
+        score: m.score,
+        ranges: m.ranges,
+      });
+    }
+    return out;
   }
 
   const rows = $derived.by<Row[]>(() => {
@@ -148,7 +247,11 @@
       const m = match(q, cmd.label, [cmd.hint, ...cmd.keywords]);
       if (m) out.push({ cmd, score: m.score, ranges: m.ranges });
     }
-    if (q.trim()) out.sort((a, b) => b.score - a.score);
+    const query = q.trim();
+    if (query) {
+      if (extrasOn) out.push(...extraRows(query));
+      out.sort((a, b) => b.score - a.score);
+    }
     return out;
   });
 
@@ -217,6 +320,11 @@
   });
 
   onMount(() => {
+    if (extrasOn) {
+      void launcherApps().then((a) => (apps = a)).catch(() => {});
+      void snippetApi.list().then((s) => (userSnippets = s)).catch(() => {});
+      void workflowApi.list().then((w) => (userWorkflows = w)).catch(() => {});
+    }
     opener = document.activeElement;
     // the panel may still be opening (Ctrl+K from the pill): keep trying until the field can take focus
     let tries = 0;
@@ -257,7 +365,7 @@
         aria-controls="pal-list"
         aria-activedescendant={total ? currentId : undefined}
         aria-label="Search tools and actions"
-        placeholder="Search tools, run an action, or calculate"
+        placeholder={extrasOn ? 'Search tools, apps and snippets, run an action, or calculate' : 'Search tools, run an action, or calculate'}
         autocomplete="off"
         spellcheck="false"
         onkeydown={onKey} />
@@ -303,7 +411,7 @@
           {:else if r.cmd.kbd}
             <kbd aria-hidden="true">{r.cmd.kbd}</kbd>
           {:else}
-            <span class="grp">{r.cmd.group === 'Tools' ? 'Tool' : 'Action'}</span>
+            <span class="grp">{GROUP_LABEL[r.cmd.group]}</span>
           {/if}
         </li>
       {/each}

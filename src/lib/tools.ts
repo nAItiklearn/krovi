@@ -31,6 +31,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'agent', label: 'Agent', icon: 'sparkles', hint: 'Tell Krovi what to do', keywords: ['agent', 'do', 'open', 'search', 'youtube', 'google', 'launch', 'remind', 'email', 'draft', 'command'] },
   { id: 'circle', label: 'Circle to Ask', icon: 'search', hint: 'Read any part of the screen', keywords: ['circle', 'ocr', 'screen', 'text', 'region', 'ask', 'screenshot', 'awareness'] },
   { id: 'clean', label: 'Clean My OS', icon: 'sparkles', hint: 'Clear junk to the Recycle Bin', keywords: ['clean', 'junk', 'temp', 'cache', 'storage', 'recycle bin', 'free space', 'disk'] },
+  { id: 'extras', label: 'Extras', icon: 'listChecks', hint: 'Snippets, file organizer, workflows, search', keywords: ['snippets', 'organize', 'organise', 'workflow', 'search files', 'find file', 'launcher', 'rules', 'downloads'] },
   { id: 'settings', label: 'Settings', icon: 'settings', hint: 'Shortcut, theme, behaviour', keywords: ['preferences', 'options', 'hotkey'] },
 ];
 

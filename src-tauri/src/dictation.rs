@@ -9,12 +9,19 @@
 //! * Text is typed with `SendInput` Unicode keystrokes: the clipboard is never touched.
 //! * Dictated text is never interpreted as a command.
 //!
-//! The pipeline itself (capture, VAD, Whisper, clean-up, typing) lives in `krovi-voice`
-//! and is unit-tested there; this file is wiring: settings, the shortcut, threads, events.
+//! Talking to Agent Mode is a *separate* shortcut (`agent_shortcut`, off by default, `Ctrl+Alt+A`).
+//! It records through exactly the same Recorder / VAD / Whisper path, but the words are never
+//! typed: they go to Agent Mode's planner (`crate::agent::handle_voice`), which plans them, runs
+//! the Safe steps as a typed command would, and opens the panel on the Agent tool. The only
+//! difference between the two is the [`SessionMode`] the recording carries.
 //!
-//! Events: `dictation-state` `{state, level?}` (`idle` | `listening` | `loading-model` |
-//! `transcribing`), `dictation-result` `{ok, text?, chars?, nothingHeard?, error?}`,
-//! `voice-model-progress` `{id, downloaded, total}`, `voice-model-done` `{id, ok, error?}`.
+//! The pipeline itself (capture, VAD, Whisper, clean-up, typing) lives in `krovi-voice`
+//! and is unit-tested there; this file is wiring: settings, the shortcuts, threads, events.
+//!
+//! Events: `dictation-state` `{state, level?, mode}` (`idle` | `listening` | `loading-model` |
+//! `transcribing`), `dictation-result` `{ok, text?, chars?, nothingHeard?, error?, mode}`
+//! (`mode` is `"dictate"` or `"agent"`), `voice-model-progress` `{id, downloaded, total}`,
+//! `voice-model-done` `{id, ok, error?}`.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -74,6 +81,9 @@ pub struct DictationSettings {
     /// Names / product terms that bias recognition.
     pub vocabulary: Vec<String>,
     pub options: DictationOptions,
+    /// Talk to Agent Mode: a second shortcut whose words go to the planner, never into an app.
+    pub agent_enabled: bool,
+    pub agent_shortcut: String,
 }
 
 impl Default for DictationSettings {
@@ -87,6 +97,28 @@ impl Default for DictationSettings {
             device: None,
             vocabulary: Vec::new(),
             options: DictationOptions::default(),
+            agent_enabled: false,
+            agent_shortcut: "Ctrl+Alt+A".into(),
+        }
+    }
+}
+
+/// What a recording is for. Both shortcuts record the same way; only the destination differs
+/// (D-020: dictated text is typed and never a command, a spoken command is never typed).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SessionMode {
+    /// Type the text into the focused app.
+    Dictate,
+    /// Hand the text to Agent Mode's planner.
+    Agent,
+}
+
+impl SessionMode {
+    /// The value of the `mode` field on `dictation-state` / `dictation-result`.
+    fn as_str(self) -> &'static str {
+        match self {
+            SessionMode::Dictate => "dictate",
+            SessionMode::Agent => "agent",
         }
     }
 }
@@ -115,16 +147,19 @@ pub struct DictationStatus {
 }
 
 type LoadedEngine = (Arc<Engine>, String, Instant);
+/// The open recording and what it is for.
+type ActiveRec = (Recorder, SessionMode);
 
 pub struct Dictation {
     settings: Mutex<DictationSettings>,
     models_dir: Option<PathBuf>,
-    rec: Mutex<Option<Recorder>>,
+    rec: Mutex<Option<ActiveRec>>,
     mic_test: Mutex<Option<Recorder>>,
     engine: Mutex<Option<LoadedEngine>>,
     cancel: Mutex<Arc<AtomicBool>>,
     busy: AtomicBool,
     registered: Mutex<Option<Shortcut>>,
+    agent_registered: Mutex<Option<Shortcut>>,
     download: Mutex<Option<(String, Arc<AtomicBool>)>>,
 }
 
@@ -132,15 +167,21 @@ fn lk<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn emit_state(app: &AppHandle, state: &str) {
-    let _ = app.emit("dictation-state", json!({ "state": state }));
+fn emit_state(app: &AppHandle, state: &str, mode: SessionMode) {
+    let _ = app.emit(
+        "dictation-state",
+        json!({ "state": state, "mode": mode.as_str() }),
+    );
 }
 
-fn emit_error(app: &AppHandle, msg: impl Into<String>) {
-    let _ = app.emit(
-        "dictation-result",
-        json!({ "ok": false, "error": msg.into() }),
-    );
+/// `dictation-result` with the session's `mode` added to `payload` (a JSON object).
+fn emit_result(app: &AppHandle, mode: SessionMode, mut payload: serde_json::Value) {
+    payload["mode"] = json!(mode.as_str());
+    let _ = app.emit("dictation-result", payload);
+}
+
+fn emit_error(app: &AppHandle, mode: SessionMode, msg: impl Into<String>) {
+    emit_result(app, mode, json!({ "ok": false, "error": msg.into() }));
 }
 
 fn model_by_id(id: &str) -> Result<&'static WhisperModel, String> {
@@ -178,18 +219,25 @@ fn installed_path(d: &Dictation, id: &str) -> Result<PathBuf, String> {
 // Session
 // ---------------------------------------------------------------------------------------
 
-fn start(app: &AppHandle) {
+fn start(app: &AppHandle, mode: SessionMode) {
     let d = app.state::<Dictation>();
     if lk(&d.rec).is_some() {
-        return; // key repeat while held
+        return; // key repeat while held, or the other shortcut is recording
     }
     if d.busy.load(Ordering::SeqCst) {
-        emit_error(app, "Still working on the last dictation.");
+        emit_error(
+            app,
+            mode,
+            match mode {
+                SessionMode::Dictate => "Still working on the last dictation.",
+                SessionMode::Agent => "Still working on the last voice command.",
+            },
+        );
         return;
     }
     let s = lk(&d.settings).clone();
     if let Err(e) = installed_path(&d, &s.model) {
-        emit_error(app, e);
+        emit_error(app, mode, e);
         return;
     }
     *lk(&d.cancel) = Arc::new(AtomicBool::new(false));
@@ -199,11 +247,11 @@ fn start(app: &AppHandle) {
         let d = app2.state::<Dictation>();
         match Recorder::start(s.device.clone()) {
             Ok(r) => {
-                *lk(&d.rec) = Some(r);
-                emit_state(&app2, "listening");
+                *lk(&d.rec) = Some((r, mode));
+                emit_state(&app2, "listening", mode);
                 level_loop(app2.clone());
             }
-            Err(e) => emit_error(&app2, e),
+            Err(e) => emit_error(&app2, mode, e),
         }
     });
 }
@@ -216,84 +264,131 @@ fn level_loop(app: AppHandle) {
             let d = app.state::<Dictation>();
             let rec = lk(&d.rec);
             match rec.as_ref() {
-                Some(r) if !r.finished() => Some(r.level()),
+                Some((r, mode)) if !r.finished() => Some((r.level(), *mode)),
                 Some(_) => None, // device lost or the length cap hit
                 None => return,
             }
         };
         match level {
-            Some(level) => {
+            Some((level, mode)) => {
                 let _ = app.emit(
                     "dictation-state",
-                    json!({ "state": "listening", "level": level }),
+                    json!({ "state": "listening", "level": level, "mode": mode.as_str() }),
                 );
             }
             None => {
-                finish(&app); // keep what was recorded
+                finish(&app, None); // keep what was recorded
                 return;
             }
         }
     });
 }
 
-fn finish(app: &AppHandle) {
+/// Stop recording and process what was said. `only` restricts this to a recording made for that
+/// mode: releasing the Agent shortcut must not end a dictation that is still running, and the
+/// other way round.
+fn finish(app: &AppHandle, only: Option<SessionMode>) {
     let d = app.state::<Dictation>();
-    let Some(rec) = lk(&d.rec).take() else {
+    let taken = {
+        let mut slot = lk(&d.rec);
+        if slot
+            .as_ref()
+            .is_some_and(|(_, mode)| only.is_none_or(|o| o == *mode))
+        {
+            slot.take()
+        } else {
+            None
+        }
+    };
+    let Some((rec, mode)) = taken else {
         return;
     };
     d.busy.store(true, Ordering::SeqCst);
     let app2 = app.clone();
     thread::spawn(move || {
         let d = app2.state::<Dictation>();
-        let result = run_pipeline(&app2, &d, rec);
+        let result = run_pipeline(&app2, &d, rec, mode);
         d.busy.store(false, Ordering::SeqCst);
-        emit_state(&app2, "idle");
+        emit_state(&app2, "idle", mode);
         match result {
+            // A recognised voice command went to Agent Mode and the panel shows it: nothing to announce.
+            Ok(Outcome::Typed { .. }) if mode == SessionMode::Agent => {}
             Ok(Outcome::Typed {
                 text,
                 chars,
                 language,
-            }) => {
-                let _ = app2.emit(
-                    "dictation-result",
-                    json!({ "ok": true, "text": text, "chars": chars, "language": language }),
-                );
-            }
+            }) => emit_result(
+                &app2,
+                mode,
+                json!({ "ok": true, "text": text, "chars": chars, "language": language }),
+            ),
             Ok(Outcome::NothingHeard) => {
-                let _ = app2.emit(
-                    "dictation-result",
-                    json!({ "ok": true, "nothingHeard": true }),
-                );
+                emit_result(&app2, mode, json!({ "ok": true, "nothingHeard": true }))
             }
-            Ok(Outcome::NotTyped { text, reason }) => {
-                let _ = app2.emit(
-                    "dictation-result",
-                    json!({ "ok": false, "text": text, "error": reason }),
-                );
-            }
+            Ok(Outcome::NotTyped { text, reason }) => emit_result(
+                &app2,
+                mode,
+                json!({ "ok": false, "text": text, "error": reason }),
+            ),
             Err(e) if e == "Cancelled" => {}
-            Err(e) => emit_error(&app2, e),
+            Err(e) => emit_error(&app2, mode, e),
         }
         schedule_unload(app2.clone());
     });
 }
 
-fn run_pipeline(app: &AppHandle, d: &Dictation, rec: Recorder) -> Result<Outcome, String> {
+fn run_pipeline(
+    app: &AppHandle,
+    d: &Dictation,
+    rec: Recorder,
+    mode: SessionMode,
+) -> Result<Outcome, String> {
     let audio = rec.stop()?;
     let s = lk(&d.settings).clone();
     let cancel = lk(&d.cancel).clone();
-    let engine = engine_for(app, d, &s.model)?;
-    emit_state(app, "transcribing");
+    let engine = engine_for(app, d, &s.model, mode)?;
+    emit_state(app, "transcribing", mode);
+    // A spoken command is not prose: no writing style, replacements or added punctuation
+    // (fillers still go). Dictation keeps the user's own options.
+    let opts = match mode {
+        SessionMode::Dictate => s.options.clone(),
+        SessionMode::Agent => DictationOptions {
+            replacements: Vec::new(),
+            remove_fillers: s.options.remove_fillers,
+            auto_punctuate: false,
+            ..DictationOptions::default()
+        },
+    };
     let stt = SttOptions {
         language: (s.language != "auto").then(|| s.language.clone()),
-        prompt: dictate::prompt_for(&s.vocabulary, &s.options),
+        prompt: dictate::prompt_for(&s.vocabulary, &opts),
         threads: None,
     };
-    dictate::finish(&audio, &*engine, &stt, &s.options, cancel, true)
+    // `type_it` is false for the Agent: the words are returned, never typed.
+    let outcome = dictate::finish(
+        &audio,
+        &*engine,
+        &stt,
+        &opts,
+        cancel.clone(),
+        mode == SessionMode::Dictate,
+    )?;
+    if let (SessionMode::Agent, Outcome::Typed { text, .. }) = (mode, &outcome) {
+        if cancel.load(Ordering::SeqCst) {
+            return Err("Cancelled".into()); // cancelled on the pill: nothing may run
+        }
+        crate::agent::handle_voice(app, text.clone())?;
+    }
+    Ok(outcome)
 }
 
 /// The loaded engine for `model`, loading it on first use (or after a model change).
-fn engine_for(app: &AppHandle, d: &Dictation, model: &str) -> Result<Arc<Engine>, String> {
+fn engine_for(
+    app: &AppHandle,
+    d: &Dictation,
+    model: &str,
+    mode: SessionMode,
+) -> Result<Arc<Engine>, String> {
     {
         let mut slot = lk(&d.engine);
         if let Some((e, id, used)) = slot.as_mut() {
@@ -304,7 +399,7 @@ fn engine_for(app: &AppHandle, d: &Dictation, model: &str) -> Result<Arc<Engine>
         }
         *slot = None; // a different model: release the old one first
     }
-    emit_state(app, "loading-model");
+    emit_state(app, "loading-model", mode);
     let path = installed_path(d, model)?;
     let engine = Arc::new(Engine::load(&path)?);
     *lk(&d.engine) = Some((engine.clone(), model.to_string(), Instant::now()));
@@ -331,45 +426,74 @@ fn schedule_unload(app: AppHandle) {
 fn cancel_session(app: &AppHandle) {
     let d = app.state::<Dictation>();
     lk(&d.cancel).store(true, Ordering::SeqCst);
-    if let Some(r) = lk(&d.rec).take() {
-        r.cancel();
-    }
-    emit_state(app, "idle");
+    let mode = lk(&d.rec)
+        .take()
+        .map(|(r, mode)| {
+            r.cancel();
+            mode
+        })
+        .unwrap_or(SessionMode::Dictate);
+    emit_state(app, "idle", mode);
 }
 
 // ---------------------------------------------------------------------------------------
-// Shortcut
+// Shortcuts
 // ---------------------------------------------------------------------------------------
 
-fn on_shortcut(app: &AppHandle, state: ShortcutState) {
-    let (mode, recording) = {
+/// Hold / toggle behaviour (the one setting both shortcuts share) for the shortcut that
+/// belongs to `mode`.
+fn on_shortcut(app: &AppHandle, state: ShortcutState, mode: SessionMode) {
+    let (talk, recording) = {
         let d = app.state::<Dictation>();
-        let mode = lk(&d.settings).mode;
-        let recording = lk(&d.rec).is_some();
-        (mode, recording)
+        let talk = lk(&d.settings).mode;
+        let recording = lk(&d.rec).as_ref().is_some_and(|(_, m)| *m == mode);
+        (talk, recording)
     };
-    match (mode, state) {
-        (TalkMode::Hold, ShortcutState::Pressed) => start(app),
-        (TalkMode::Hold, ShortcutState::Released) => finish(app),
-        (TalkMode::Toggle, ShortcutState::Pressed) if recording => finish(app),
-        (TalkMode::Toggle, ShortcutState::Pressed) => start(app),
+    match (talk, state) {
+        (TalkMode::Hold, ShortcutState::Pressed) => start(app, mode),
+        (TalkMode::Hold, ShortcutState::Released) => finish(app, Some(mode)),
+        (TalkMode::Toggle, ShortcutState::Pressed) if recording => finish(app, Some(mode)),
+        (TalkMode::Toggle, ShortcutState::Pressed) => start(app, mode),
         (TalkMode::Toggle, ShortcutState::Released) => {}
     }
 }
 
+/// Register the enabled shortcuts (dictation, Agent), dropping the previous ones first.
 fn register(app: &AppHandle, s: &DictationSettings) -> Result<(), String> {
     let d = app.state::<Dictation>();
-    if let Some(old) = lk(&d.registered).take() {
-        let _ = app.global_shortcut().unregister(old);
+    for slot in [&d.registered, &d.agent_registered] {
+        if let Some(old) = lk(slot).take() {
+            let _ = app.global_shortcut().unregister(old);
+        }
     }
-    if !s.enabled {
-        return Ok(());
+    if s.enabled {
+        let sc = crate::shell::parse_shortcut(&s.shortcut)?;
+        app.global_shortcut()
+            .on_shortcut(sc, move |app, _sc, ev| {
+                on_shortcut(app, ev.state(), SessionMode::Dictate)
+            })
+            .map_err(|e| {
+                format!(
+                    "Could not use {} as the dictation shortcut: {e}",
+                    s.shortcut
+                )
+            })?;
+        *lk(&d.registered) = Some(sc);
     }
-    let sc = crate::shell::parse_shortcut(&s.shortcut)?;
-    app.global_shortcut()
-        .on_shortcut(sc, move |app, _sc, ev| on_shortcut(app, ev.state()))
-        .map_err(|e| format!("Could not use {} as the dictation shortcut: {e}", s.shortcut))?;
-    *lk(&d.registered) = Some(sc);
+    if s.agent_enabled {
+        let sc = crate::shell::parse_shortcut(&s.agent_shortcut)?;
+        app.global_shortcut()
+            .on_shortcut(sc, move |app, _sc, ev| {
+                on_shortcut(app, ev.state(), SessionMode::Agent)
+            })
+            .map_err(|e| {
+                format!(
+                    "Could not use {} as the Agent shortcut: {e}",
+                    s.agent_shortcut
+                )
+            })?;
+        *lk(&d.agent_registered) = Some(sc);
+    }
     Ok(())
 }
 
@@ -387,7 +511,12 @@ fn validate(s: &DictationSettings) -> Result<(), String> {
         ));
     }
     validate_replacements(&s.options.replacements)?;
-    crate::shell::parse_shortcut(&s.shortcut).map(|_| ())
+    let dictate_sc = crate::shell::parse_shortcut(&s.shortcut)?;
+    let agent_sc = crate::shell::parse_shortcut(&s.agent_shortcut)?;
+    if s.enabled && s.agent_enabled && dictate_sc == agent_sc {
+        return Err("Dictation and the Agent shortcut need different keys.".into());
+    }
+    Ok(())
 }
 
 pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -403,6 +532,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         cancel: Mutex::new(Arc::new(AtomicBool::new(false))),
         busy: AtomicBool::new(false),
         registered: Mutex::new(None),
+        agent_registered: Mutex::new(None),
         download: Mutex::new(None),
     });
     // A taken shortcut must not stop Krovi from starting; Settings shows the error.
@@ -436,7 +566,13 @@ pub fn dictation_set_settings(
     settings: DictationSettings,
 ) -> CmdResult<DictationSettings> {
     validate(&settings)?;
-    register(&app, &settings)?;
+    if let Err(e) = register(&app, &settings) {
+        // Two shortcuts can half-apply: put the saved ones back so a refused change leaves
+        // the old keys working.
+        let saved = lk(&app.state::<Dictation>().settings).clone();
+        let _ = register(&app, &saved);
+        return Err(e);
+    }
     setting_set(&state, KEY, &settings)?;
     *lk(&app.state::<Dictation>().settings) = settings.clone();
     Ok(settings)
@@ -447,9 +583,9 @@ pub fn dictation_set_settings(
 pub fn dictation_toggle(app: AppHandle) {
     let recording = lk(&app.state::<Dictation>().rec).is_some();
     if recording {
-        finish(&app);
+        finish(&app, None);
     } else {
-        start(&app);
+        start(&app, SessionMode::Dictate);
     }
 }
 
