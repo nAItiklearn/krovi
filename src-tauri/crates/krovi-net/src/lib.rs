@@ -33,12 +33,19 @@
 //! * Whisper model (user-initiated only): `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>`,
 //!   which redirects to Hugging Face's CDN (`*.hf.co` / `*.huggingface.co`, at most 5
 //!   redirects, every hop host-checked). GET only, no body, no cookies.
+//! * AI provider (user-initiated, bring-your-own-key; see [`vision`]): only after an explicit
+//!   "Ask AI" and a confirmed disclosure naming the provider, a single HTTPS POST (no redirects,
+//!   no cookies) to exactly one of `https://api.openai.com/v1/chat/completions`,
+//!   `https://api.anthropic.com/v1/messages`,
+//!   `https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`.
+//!   Sends the user's question and the one picture they chose; the key travels in a header.
 
 mod cache;
 pub mod currency;
 pub mod geocode;
 pub mod reply;
 pub mod resolve;
+pub mod vision;
 pub mod weather;
 pub mod whisper_models;
 
@@ -53,6 +60,10 @@ pub use resolve::{resolve, Cached, Resolved};
 pub use weather::{
     fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
     DayPoint, HourPoint, WeatherData,
+};
+pub use vision::{
+    ask as ask_ai, Answer as AiAnswer, ErrorKind as AiErrorKind, Provider as AiProvider,
+    VisionError,
 };
 pub use whisper_models::{
     catalog as whisper_catalog, delete_model, download_model, find_model, model_status,

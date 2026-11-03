@@ -15,6 +15,7 @@
   import { startVoice, stopVoice, voiceAvailability, voiceState } from '../lib/voice';
   import { cancelDictation, dictationLive, dismissNotice, pillFace, setDictationToaster, wireDictation } from '../lib/dictation';
   import { isIdle, markActivity } from '../lib/idle';
+  import { awareState, awareStop } from '../lib/circle';
   import IdleCompanion from './idle/IdleCompanion.svelte';
   import Icon from './Icon.svelte';
   import {
@@ -453,6 +454,17 @@
           {/if}
         {/if}
 
+        <!-- D-021: while a screen-awareness session runs, an indicator is always visible (pill and
+             panel alike) and one click ends it. -->
+        {#if $awareState.active}
+          <button
+            class="aware-dot"
+            type="button"
+            aria-label="Screen awareness is on. Click to stop."
+            title="Screen awareness is on. Click to stop."
+            onclick={() => void awareStop()}><i></i></button>
+        {/if}
+
         <div
           class="panel-layer"
           class:hidden={!panelIn && p < 0.04}
@@ -471,6 +483,31 @@
 </div>
 
 <style>
+  .aware-dot {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--danger) 22%, transparent);
+    cursor: pointer;
+  }
+  .aware-dot i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+  .aware-dot:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .island {
     position: fixed;
     inset: 0;

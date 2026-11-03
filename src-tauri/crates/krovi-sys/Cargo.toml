@@ -46,10 +46,25 @@ windows = { version = "0.58", optional = true, features = [
     "Win32_System_SystemInformation",
     "Win32_System_WinRT",
     "Win32_Storage_FileSystem",
+    # Circle to Ask / screen awareness (D-021): one-shot GDI region capture (capture.rs),
+    # Windows.Media.Ocr text recognition (ocr.rs) and opening a fixed set of web addresses
+    # (web.rs). No networking feature is enabled: the OCR runs on this PC.
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
 ] }
 # Cross-checked, battle-tested clipboard access (text, images, file lists).
 arboard = { version = "3", optional = true, default-features = false, features = ["image-data"] }
 
 [[example]]
 name = "live_probe"
+required-features = ["native"]
+
+# Reads a piece of the real screen when YOU run it (never from `cargo test`): see its header.
+[[example]]
+name = "capture_probe"
 required-features = ["native"]

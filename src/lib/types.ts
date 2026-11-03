@@ -201,4 +201,5 @@ export type ToolId =
   | 'transfer'
   | 'explain'
   | 'clean'
+  | 'circle'
   | 'settings';

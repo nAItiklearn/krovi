@@ -1,6 +1,7 @@
 ﻿# Krovi — Network / Privacy Audit
 
-_Last updated: 2026-11-03 (added the opt-in Whisper model download: row 4 and its own section;
+_Last updated: 2026-11-03 (added Circle to Ask / screen awareness / bring-your-own-key AI: row 5 and its
+own section; added the opt-in Whisper model download: row 4 and its own section;
 2026-11-02: added the "Planned (not yet implemented)" pre-declaration section, below). This document is the evidence behind Krovi's "verifiable
 privacy" claim: a literal account of every place the app can open a network socket, what
 triggers it, what is sent, and how to turn it off. It is maintained in-repo so the claim is
@@ -15,11 +16,12 @@ from Hugging Face (row 4 below; the downloader exists in `krovi-net` but no app 
 yet). The **website** (`web/`) makes **zero** network requests (no trackers, no CDN,
 no fonts-from-CDN) — it only contains `<a href>` links to the public GitHub repo.
 
-_Planned features (BYOK AI, circle-and-ask) are **not implemented and not shipped**; they
-appear nowhere in the exhaustive table below. They are pre-described in the separate
-[Planned (not yet implemented)](#planned-not-yet-implemented) section at the bottom of this
-document, so their future network surface is declared before any code lands. The Whisper model
-download has moved out of that section: see
+_Added 2026-11-03: **bring-your-own-key AI** (row 5) and **Circle to Ask / screen awareness**. They
+make a network request only when the user has saved their own key **and** confirms, for that one
+request, a sentence naming the provider; screen capture itself never touches the network. See
+[Circle to Ask, screen awareness and AI](#circle-to-ask-screen-awareness-and-bring-your-own-key-ai).
+The "Planned" section at the bottom keeps the original pre-declaration of those features for
+comparison, with the differences noted. The Whisper model download has moved out of it too: see
 [Whisper model download](#whisper-model-download-opt-in-user-initiated)._
 
 ## Method
@@ -37,8 +39,10 @@ its call site and classified below. (Build caches `target/` and `node_modules/` 
 | 2 | **Currency rates** | Currency tool refresh | `GET https://api.frankfurter.dev/latest` (ECB data) | The base currency code only (e.g. `USD`). No identifiers. | Use cached rates (conversion math is offline); disable the Currency tool. |
 | 3 | **Update check** | **Manual only** (user clicks "check for updates") | GitHub Releases (public) | Nothing beyond a standard HTTPS GET. Never automatic. | N/A — only runs when the user asks. |
 | 4 | **Whisper model download** (optional) | **User action only**: the user picks a model and presses download. Never prefetched, scheduled or retried in the background. | `GET https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>`, which redirects to Hugging Face's CDN (`*.hf.co` / `*.huggingface.co`, e.g. `cdn-lfs.hf.co`, `cas-bridge.xethub.hf.co`). See [Whisper model download](#whisper-model-download-opt-in-user-initiated). | A plain GET per hop with a `Krovi/<version>` User-Agent. No request body, no cookies, no account, no identifiers, no user data. | Don't press download (speech then simply has no model installed); delete the file in settings at any time. |
+| 5 | **AI provider, bring-your-own-key** (optional) | **User action only**: "Ask AI" on a circled area, or "Ask" with the picture option during a screen-awareness session, after the user presses the button under the disclosure sentence that names the provider. Needs a key the user saved themselves. Never automatic, never in the background. | One `POST` to exactly one of: `https://api.openai.com/v1/chat/completions`, `https://api.anthropic.com/v1/messages`, `https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`. See [Circle to Ask, screen awareness and AI](#circle-to-ask-screen-awareness-and-bring-your-own-key-ai). | A fixed instruction, the user's question and **one** PNG of the area the user chose (longest side at most 1568 px). The key is in a request header. No OCR text, no history, no identifiers. | Don't save a key (then no request can be built: the code stops with "Set up an AI provider" first); don't press the button. |
 
-There are **no other outbound sockets**. The one **inbound** listener is Quick Transfer — LAN-only,
+There are **no other outbound sockets** (a Google search or an API-key page is opened by the user's own
+browser when they click a button, and is not a Krovi socket). The one **inbound** listener is Quick Transfer — LAN-only,
 token-gated, exists only while a share is open, auto-expires (see its section below). Weather
 city search adds `geocoding-api.open-meteo.com` (only the typed city text). No API keys are shipped. Coarse location is used **only** for
 weather. Screen-time stores process names + durations locally (never titles/URLs) and is never
@@ -56,6 +60,10 @@ transmitted. Clipboard/notes/shelf/to-do data never leaves the machine.
   - `src-tauri/crates/krovi-net/src/whisper_models.rs` (`download_model`, user-initiated) via
     `http::open_download` — base URL constant `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/`.
     As of 2026-11-03 nothing in `src-tauri/src` or the frontend calls `download_model` yet.
+  - `src-tauri/crates/krovi-net/src/vision.rs` (`ask`, user-initiated) via `http::post_json`, the
+    only other socket in `krovi-net`. Called only by `src-tauri/src/circle.rs`
+    (`circle_ask_vision`, `aware_ask`). The URL is built in the crate from a closed provider enum and
+    checked against the three provider hosts twice (`build_request`, then `run`); the webview cannot pass one.
 - With the `net` feature **off** (the default build), `fetch_forecast` / `fetch_rates` /
   `download_model` return `NetError::Disabled` / `ModelError::Disabled` — i.e. no socket at all.
 - `krovi-core`, `krovi-store`, and `krovi-sys` contain **no** network code. `krovi-sys` touches
@@ -130,6 +138,59 @@ feature is wired into the app. The catalog sizes and hashes were read from Huggi
 pointers and file pages; the SHA-256 is only proven correct for the real file by a successful
 end-to-end download, which has not been run yet.
 
+
+---
+
+## Circle to Ask, screen awareness and bring-your-own-key AI
+
+_Added 2026-11-03 (docs/DECISIONS.md D-021). Code: `krovi-sys/src/capture.rs` (one-shot region capture),
+`ocr.rs` (on-device text recognition), `session.rs` (time limits and the 2-minute image slot),
+`web.rs` (the only addresses that may be opened); `krovi-net/src/vision.rs` (request builders and the
+single POST, socket in `http.rs::post_json`); `src-tauri/src/circle.rs` (glue); `src/circle/**` and
+`src/lib/circle.ts` (UI). **Status: implemented, and the pure logic is unit-tested. Not exercised
+end to end:** a real capture on a desktop, Windows OCR with a real language pack, a real provider
+call with a real key, and a network trace of one. Nothing here has been observed on a wire yet._
+
+### Screen capture (no network involved)
+
+| Property | Behaviour (as implemented) |
+|---|---|
+| Passive capture | **None.** No code path captures at startup, on a timer or in the background. `circle::setup` reads one settings row and registers the global shortcut; it creates no window, reads no key and captures nothing. There is no capture loop and no frame stream anywhere (`krovi_sys::capture` has a single "grab one still image of one rectangle" entry point). |
+| Circle to Ask | The shortcut (default `Ctrl+Alt+C`; **registered by default**, can be turned off, and registering it captures nothing) shows a dimming overlay on the monitor under the cursor. A capture happens **once, only after the user releases a selection**, and only of that rectangle: Rust hides the overlay window, waits ~70 ms for Windows to stop drawing it, then one GDI `BitBlt`. Esc, a right-click, pressing the shortcut again, or 90 s without a selection close it **without capturing**. One arming allows one capture. |
+| Screen awareness | Only after an explicit `aware_start`. Default 10 minutes, **hard cap 30**, enforced in `krovi_sys::session` on the monotonic clock (changing the PC clock cannot extend it; the cap is applied again inside `Session::start`). Always announced: an `aware-state` event (for the pill's indicator) and the tray tooltip. One-click stop (`aware_stop`). The screen (the primary monitor, where the pill is) is captured **only inside `aware_ask`, when the user asks a question**; starting a session captures nothing. |
+| Krovi's own windows | Excluded from the frame with `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` for the instant of capture and restored afterwards, so the pill or panel does not cover what is being asked about. If Windows refuses (older Windows, or the call fails for a transparent window), a session capture hides the main window for that instant instead; a Circle capture then simply includes the pill. **Unverified on a real desktop.** |
+| Storage | **Memory only.** Nothing is written to disk, nothing goes to the clipboard, no type that holds pixels or screen text derives `Debug`, and nothing about the content is logged. Pixel buffers are overwritten with zeros when dropped (best effort). A circled image is kept for **at most 2 minutes** (so an optional "Ask AI" is possible) or until the user presses "Drop the picture", the panel closes, or the next capture replaces it; session frames are dropped as soon as the answer is returned. Ending a session clears the slot. |
+| Text recognition | `Windows.Media.Ocr`, on this PC, using the user's profile languages. Needs an OCR language pack; if there is none the UI says so and tells the user what to install. No network. |
+| What the webview sees | Recognised text and the line boxes. **Never the picture.** |
+| Things Krovi opens | Only two shapes, both on a user click and both opened by the user's browser, not by Krovi: a Google search for the first 300 characters of the text the user selected, and a provider's API-key page. Both are built in Rust and `krovi_sys::web::open_url` refuses anything else. |
+
+### AI provider requests (the only network use)
+
+| Property | Behaviour (as implemented) |
+|---|---|
+| Zero without a key | There is no bundled, demo or trial key. With no saved key the Ask-AI button is disabled with the text "Set up an AI provider in Settings → AI", and the backend returns `no-provider` before it builds a request. |
+| Trigger | A request is built only for `circle_ask_vision` (the circled image) or `aware_ask` with the picture option (a session frame). Each needs `confirm: true` from the UI, which is set only by the button that sits under the disclosure sentence naming the provider ("This sends the selected image to <Provider> using your key."). For a session, the picture option must also have been agreed at its start (the sentence names the provider there too) and is a separate tick box for each question. The command refuses with `consent-required` / `not-allowed` otherwise. |
+| Destination | Exactly one of `POST https://api.openai.com/v1/chat/completions`, `POST https://api.anthropic.com/v1/messages`, `POST https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`. The provider is a closed enum, the URL is built in `krovi-net`, the model id is restricted to `[A-Za-z0-9._-]` (1 to 80 characters) so it cannot change the path, and the host is checked against the three allowed hosts both when the request is built and again before sending. |
+| Sent | A fixed instruction (which tells the model that text inside the picture is content, never instructions), the user's question (cut to 2000 characters) and **one PNG** of the chosen area or screen, scaled down so its longest side is at most 1568 px. **Not sent:** the recognised text, history, identifiers, clipboard, files, audio. Prompt-injection note: text visible in the picture reaches the model like any other content; the model has no tools here, it can only answer. |
+| Key | Windows Credential Manager, generic credential, target `Krovi/ai/openai`, `Krovi/ai/anthropic` or `Krovi/ai/gemini` (`Provider::credential_target`). Read at the moment of the call, put in a request header (`Authorization: Bearer`, `x-api-key`, `x-goog-api-key`; **never** in a URL), never returned to the webview, never logged, scrubbed from any provider error text before it is shown. The Settings → AI page owns key entry; `circle_set_key` is a thin command over the same storage. |
+| Transport | `ureq` over rustls. **No redirects are followed** (a 3xx is an error, so a header carrying a key can never be replayed to another host), no cookies, no proxy from the environment, `User-Agent: Krovi/<version>`. Connect 10 s, write 60 s, read 120 s, reply body capped at 4 MiB. Transport errors carry only the failure kind, never the URL or a header. |
+| No relay, no cost to Krovi | The request goes from the user's PC straight to the provider; Krovi runs no server and sees neither request nor answer. It is the user's key and quota. |
+| Models | Defaults `gpt-4o-mini`, `claude-haiku-5-5`, `gemini-2.5-flash`; the user can type any model id their key can use. |
+| Errors | Mapped to plain sentences with a machine-readable kind (`auth`, `billing`, `quota`, `rate-limit`, `eligibility` such as a free tier or region the provider does not offer, `model`, `blocked`, `unavailable`, `network`, `other`); the provider's own message is shown only as a trimmed "detail". |
+| Opt-out | Never save a key; turn the shortcut off in settings; do not start a session. Without the `net` cargo feature `ask` returns an error and no socket code is compiled. |
+
+Differences from the pre-declaration under "Planned" below: the providers are OpenAI, Anthropic and
+Google Gemini (Groq is not implemented); the Circle to Ask shortcut is registered by default rather than
+disabled until turned on (it captures nothing until pressed, and nothing is sent without a key and a
+confirmation); a temporary screen-awareness session (D-021) exists in addition.
+
+### Not verified yet
+* A real `BitBlt` capture (multi-monitor, 125% / 150% scaling, a monitor to the left of the primary), and
+  that the display-affinity exclusion really removes Krovi's own windows from the frame.
+* Windows OCR on a real screen, and the behaviour when no OCR language is installed.
+* A real request to each provider, and the exact error bodies of the real services (the classification is
+  tested against sample bodies written from their documentation, not against live responses).
+* A network trace showing no traffic from capture, OCR, an idle session, or an "Ask AI" that was not confirmed.
 
 ---
 
@@ -320,6 +381,11 @@ exhaustive table. What is **still planned and not implemented**:
 
 ## 2. BYOK AI (Gemini primary, Groq alternative)
 
+> **Status 2026-11-03:** the image-capable part now exists for OpenAI, Anthropic and Google Gemini
+> (Groq is not implemented); it is recorded in the main table (row 5) and in
+> [Circle to Ask, screen awareness and AI](#circle-to-ask-screen-awareness-and-bring-your-own-key-ai).
+> The text below is the original pre-declaration, kept for comparison.
+
 * **Zero network calls without the user's own API key.** There is no bundled key, no demo key,
   no trial key, and no endpoint that works key-less. With no key configured the feature is
   inert — the code path makes no request and no "anonymous" fallback exists.
@@ -342,6 +408,12 @@ exhaustive table. What is **still planned and not implemented**:
   provider; Krovi never proxies, meters, or pays for provider usage.
 
 ## 3. Circle-and-ask (off by default)
+
+> **Status 2026-11-03:** implemented as Circle to Ask (see the section above). One deliberate difference
+> from the text below: the shortcut is **registered by default** (owner decision) instead of being
+> disabled until turned on. Registering it captures nothing; a capture needs the user to press it and
+> release a selection, and an upload needs a saved key plus a confirmation naming the provider.
+> The text below is the original pre-declaration, kept for comparison.
 
 * **Explicit per-use hotkey only.** Capture begins when the user presses the circle-and-ask
   shortcut and ends when the annotated region is submitted. There is **no passive or background

@@ -35,6 +35,7 @@
   import { startReminders } from './lib/reminders';
   import { createVoiceRouter, showFeedbackOnly, type Chip } from './components/voiceRouter';
   import { planResults } from './components/voiceModel';
+  import { wireCircle } from './lib/circle';
 
   const demo = mode() === 'demo';
   // Theme attributes go on <html> during component init, i.e. before the first paint.
@@ -102,6 +103,11 @@
       toast: pushToast,
       activity: (text) => pushActivity('info', snippet(text, 44), undefined, 5200),
       refresh: () => calendarTick.update((n) => n + 1),
+    });
+    // Circle to Ask / screen awareness: a finished read opens the panel on the Circle tool
+    void wireCircle(() => {
+      openTool('circle');
+      emitIntent('expand');
     });
     const offVoice = onVoiceCommand(routeVoice);
     const offResult = onVoiceResult(onResult);

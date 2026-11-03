@@ -268,14 +268,6 @@ mod sys {
         }
     }
 
-    #[repr(C)]
-    struct MonitorInfo {
-        size: u32,
-        monitor: Rect,
-        work: Rect,
-        flags: u32,
-    }
-
     #[link(name = "user32")]
     extern "system" {
         fn GetCursorPos(p: *mut Point) -> i32;
@@ -284,14 +276,10 @@ mod sys {
         fn GetWindowThreadProcessId(h: Hwnd, pid: *mut u32) -> u32;
         fn SetWindowPos(h: Hwnd, after: Hwnd, x: i32, y: i32, cx: i32, cy: i32, flags: u32) -> i32;
         fn SystemParametersInfoW(action: u32, ui_param: u32, pv: *mut c_void, win_ini: u32) -> i32;
-        fn MonitorFromWindow(h: Hwnd, flags: u32) -> isize;
         fn MonitorFromPoint(pt: Point, flags: u32) -> isize;
-        fn GetMonitorInfoW(m: isize, mi: *mut MonitorInfo) -> i32;
         fn GetAsyncKeyState(vk: i32) -> i16;
-        fn IsZoomed(h: Hwnd) -> i32;
         fn IsWindow(h: Hwnd) -> i32;
         fn IsWindowVisible(h: Hwnd) -> i32;
-        fn GetClassNameW(h: Hwnd, buf: *mut u16, n: i32) -> i32;
         fn GetWindowLongW(h: Hwnd, index: i32) -> i32;
         fn SetForegroundWindow(h: Hwnd) -> i32;
     }
@@ -306,7 +294,6 @@ mod sys {
     const GWL_EXSTYLE: i32 = -20;
     const WS_EX_TOPMOST: i32 = 0x0000_0008;
     const SPI_GETWORKAREA: u32 = 0x0030;
-    const MONITOR_DEFAULTTONEAREST: u32 = 2;
     const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
 
     pub fn cursor_pos() -> Option<Point> {
@@ -406,49 +393,11 @@ mod sys {
         }
     }
 
-    fn class_of(h: Hwnd) -> String {
-        let mut buf = [0u16; 64];
-        let n = unsafe { GetClassNameW(h, buf.as_mut_ptr(), 64) };
-        String::from_utf16_lossy(&buf[..n.max(0) as usize])
-    }
-
-    /// Does the foreground window cover its whole monitor (game, video, slideshow)?
-    /// A merely *maximised* window does not count: it is exactly the case where the
-    /// pill should stay visible.
+    /// Is the foreground window fullscreen on the *same monitor as the pill* (`own`)?
+    /// A fullscreen app on another monitor, or a merely maximised window, keeps the pill.
+    /// The decision lives in `krovi_sys::fullscreen` (pure logic, unit-tested).
     pub fn foreground_is_fullscreen(own: Hwnd) -> bool {
-        unsafe {
-            let fg = GetForegroundWindow();
-            if fg == 0 || fg == own || pid_of(fg) == std::process::id() || IsWindowVisible(fg) == 0
-            {
-                return false;
-            }
-            if matches!(
-                class_of(fg).as_str(),
-                "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
-            ) {
-                return false;
-            }
-            if IsZoomed(fg) != 0 {
-                return false;
-            }
-            let Some(r) = window_rect(fg) else {
-                return false;
-            };
-            let m = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
-            let mut mi = MonitorInfo {
-                size: std::mem::size_of::<MonitorInfo>() as u32,
-                monitor: Rect::default(),
-                work: Rect::default(),
-                flags: 0,
-            };
-            if m == 0 || GetMonitorInfoW(m, &mut mi) == 0 {
-                return false;
-            }
-            r.left <= mi.monitor.left
-                && r.top <= mi.monitor.top
-                && r.right >= mi.monitor.right
-                && r.bottom >= mi.monitor.bottom
-        }
+        krovi_sys::fullscreen::foreground_fullscreen_on_pill_monitor(own)
     }
 }
 

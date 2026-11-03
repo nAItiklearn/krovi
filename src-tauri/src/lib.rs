@@ -9,6 +9,7 @@
 //!
 //! Each agent edits only its own `[block]` in the handler list below.
 
+mod circle;
 mod clean;
 mod commands;
 mod dictation;
@@ -36,10 +37,28 @@ pub fn run() {
             explain::setup(app)?;
             dictation::setup(app)?;
             clean::setup(app)?;
+            circle::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            // [circle] — Circle to Ask + temporary visible screen awareness (D-021)
+            circle::circle_start,
+            circle::circle_cancel,
+            circle::circle_overlay_ready,
+            circle::circle_capture,
+            circle::circle_ask_vision,
+            circle::circle_clear,
+            circle::circle_search,
+            circle::circle_open_keys_page,
+            circle::circle_ocr_status,
+            circle::circle_get_settings,
+            circle::circle_set_settings,
+            circle::circle_set_key,
+            circle::aware_start,
+            circle::aware_stop,
+            circle::aware_status,
+            circle::aware_ask,
             // [clean] — Clean My OS: scan, review, Recycle Bin only
             clean::clean_categories,
             clean::clean_scan,

@@ -8,6 +8,8 @@ members = [
     "crates/krovi-voice",
     "crates/krovi-transfer",
     "crates/krovi-explain",
+    "crates/krovi-agent",
+    "crates/krovi-clean",
 ]
 
 # The Tauri app crate is the workspace *root* package below.
@@ -51,6 +53,8 @@ krovi-sys = { path = "crates/krovi-sys" }
 krovi-voice = { path = "crates/krovi-voice" }
 krovi-transfer = { path = "crates/krovi-transfer" }
 krovi-explain = { path = "crates/krovi-explain" }
+krovi-agent = { path = "crates/krovi-agent" }
+krovi-clean = { path = "crates/krovi-clean" }
 
 # Reminders (src/reminders.rs): the local-time-zone offset (SystemTimeToTzSpecificLocalTime),
 # the alert sound (PlaySoundW) and the toast/Focus-Assist probes. Same windows-rs line as

@@ -14,6 +14,12 @@
 //!     URLs, document content or input (SPEC C11).
 //!   * [`location`] — a **coarse** latitude/longitude for weather, nothing else
 //!     (SPEC C7).
+//!   * [`capture`] — **one-shot** region screen capture (GDI) for Circle to Ask and the
+//!     explicit, time-boxed screen-awareness session (DECISIONS.md D-021). No stream, no
+//!     timer, no disk: a still image of one rectangle, in memory, when the caller asks.
+//!   * [`ocr`] — on-device text recognition (Windows.Media.Ocr) over such an image.
+//!   * [`web`] — opens a fixed set of addresses (a Google search for selected text, a
+//!     provider's API-key page) in the user's browser; nothing else can be opened.
 //!
 //! ## Pure by default, native behind a feature
 //! Every piece of pure logic — the clipboard change-token gate and text
@@ -27,13 +33,22 @@
 //! exercised on a real desktop session by `examples/live_probe.rs`
 //! (`cargo run -p krovi-sys --features native --example live_probe`).
 
+pub mod capture;
 pub mod clipboard;
 pub mod foreground;
+pub mod fullscreen;
 pub mod imaging;
 pub mod location;
 pub mod media;
+pub mod ocr;
+pub mod session;
 pub mod stats;
+pub mod web;
 
+pub use capture::{
+    capture_region, clip_to_screen, exclude_window_from_capture, monitor_at, monitor_at_cursor,
+    primary_monitor, virtual_screen, ClipError, Image, Rect,
+};
 pub use clipboard::{
     change_token, classify_text, files_to_text, is_link, is_sensitive, prepare_text, read_capture,
     write_image_png, write_text, CaptureKind, ClipCapture, ClipGate, ReadOutcome,
@@ -47,6 +62,8 @@ pub use media::{
     read_now_playing, send_transport, MediaState, MediaTrack, MediaTracker, MediaWorker,
     TransportCommand,
 };
+pub use ocr::{OcrError, OcrLine, OcrOutput};
+pub use session::{clamp_minutes, Session, Slot, MAX_SESSION_MINUTES, SLOT_TTL};
 pub use stats::{cpu_percent, CpuTimes, StatsSampler, SystemStats};
 
 /// Current time as Unix epoch milliseconds (0 if the clock is before 1970).
