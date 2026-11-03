@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONALITIES, styleById } from '../../lib/idle';
-import { runCompanion, type CompanionEl, type RunnerEnv } from './runner';
+import { FOLLOW_EASE, FOLLOW_MS, runCompanion, type CompanionEl, type RunnerEnv } from './runner';
 
 // ---- fakes -----------------------------------------------------------------------------------
 
@@ -313,6 +313,20 @@ describe('runCompanion', () => {
       expect(e.vars['--gx']).toBe(held);
       r.cursor({ dx: -180, dy: 0 });
       expect(Number(e.vars['--gx'])).toBeLessThan(-0.4);
+    });
+
+    it('follows the cursor with a short eased glide, and wandering goes back to the stepped dart', () => {
+      const f = fakeEnv();
+      const e = fakeEl();
+      const r = runCompanion(e.el, read(), f.env);
+      f.advance(5000);
+      r.cursor({ dx: 1600, dy: 900 }); // far corner of a large screen: still tracked, still clamped
+      expect(e.vars['--look']).toBe(FOLLOW_EASE);
+      expect(e.vars['--look-ms']).toBe(`${FOLLOW_MS}ms`);
+      expect(Number(e.vars['--gx'])).toBeLessThanOrEqual(1);
+      expect(Number(e.vars['--gx'])).toBeGreaterThan(0.5);
+      f.advance(20_000); // the hold ends; wandering takes over again
+      expect(e.vars['--look']).toBeUndefined();
     });
 
     it('does not add timers, however many events arrive', () => {

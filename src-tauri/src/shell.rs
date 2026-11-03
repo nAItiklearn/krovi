@@ -59,6 +59,8 @@ const PANEL_VIS: (f64, f64) = (900.0, 620.0);
 const WATCHDOG: Duration = Duration::from_millis(1500);
 /// Click-through / focus sampler period (~30 Hz).
 const SAMPLE: Duration = Duration::from_millis(33);
+/// Sampler period while the window is hidden (fullscreen app, pill switched off).
+const HIDDEN_SAMPLE: Duration = Duration::from_millis(500);
 /// After a panel opens, ignore blur / outside-click for this long (focus is settling).
 const PANEL_GRACE: Duration = Duration::from_millis(350);
 /// `shell_hold(true)` is a lease: a UI that crashes while holding can't disable
@@ -901,13 +903,16 @@ fn start_sampler(app: AppHandle) {
             let mut n: u64 = 0;
             let mut blur_ticks: u32 = 0;
             let mut glance = Glance::default();
+            let mut visible = true;
             loop {
-                thread::sleep(SAMPLE);
+                // ~30 Hz while the window is shown (click-through, eyes); 2 Hz while hidden,
+                // where only the fullscreen/restore housekeeping has anything to do.
+                thread::sleep(if visible { SAMPLE } else { HIDDEN_SAMPLE });
                 if app.state::<Shell>().quitting.load(Ordering::Relaxed) {
                     break;
                 }
                 n = n.wrapping_add(1);
-                tick(&app, n, &mut blur_ticks, &mut glance);
+                visible = tick(&app, n, &mut blur_ticks, &mut glance);
             }
         });
 }
@@ -930,9 +935,8 @@ fn glance_vector(win: sys::Rect, hit: Option<HitRect>, pt: sys::Point) -> (f64, 
     (dx, dy, dx.hypot(dy))
 }
 
-/// Emit `shell-cursor` at <=10 Hz, only while in range (<=400 px), skipping moves of
-/// <2 px; one final `{0,0,9999}` when the cursor leaves range / the pill goes away.
-/// Costs nothing while out of range (no emit, no allocation).
+/// Emit `shell-cursor` at <=10 Hz while the pill is shown, skipping moves of <2 px (so a
+/// still cursor costs nothing); one final `{0,0,9999}` when the pill goes away.
 fn glance_update(app: &AppHandle, g: &mut Glance, sample: Option<(f64, f64, f64)>) {
     match sample {
         Some((dx, dy, dist)) => {
@@ -968,10 +972,12 @@ fn glance_update(app: &AppHandle, g: &mut Glance, sample: Option<(f64, f64, f64)
     }
 }
 
-fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
+/// One sampler step. Returns whether the window is visible (the caller samples slowly
+/// while it is not).
+fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) -> bool {
     let own = own_hwnd();
     if own == 0 {
-        return;
+        return true;
     }
     let sh = app.state::<Shell>();
     let visible = sys::is_visible(own);
@@ -995,11 +1001,9 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
             let btn = sys::button_down();
             let inside = point_in(hit_to_screen(mode, hit, wr), pt, 1);
 
+            // The pupils follow the cursor anywhere on screen; the pill itself never moves.
             if mode == Mode::Pill {
-                let v = glance_vector(wr, hit, pt);
-                if v.2 <= 400.0 {
-                    sample = Some(v);
-                }
+                sample = Some(glance_vector(wr, hit, pt));
             }
 
             // Click-through. Keep the window interactive while a drag that started
@@ -1061,11 +1065,11 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
         }
     }
 
-    // Eyes: in range only while the pill itself is visible; otherwise recentre once.
+    // Eyes: only while the pill itself is visible; otherwise recentre once.
     glance_update(app, glance, sample);
 
-    // ~2 Hz housekeeping.
-    if n.is_multiple_of(15) {
+    // ~2 Hz housekeeping: every 15th fast tick, or every (500 ms) tick while hidden.
+    if !visible || n.is_multiple_of(15) {
         let (mode, hide_fs, fs_now, settled) = {
             let st = sh.lk();
             (
@@ -1106,6 +1110,7 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
             }
         }
     }
+    visible
 }
 
 // ---------------------------------------------------------------------------

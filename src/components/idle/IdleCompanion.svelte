@@ -51,7 +51,7 @@
     const r = untrack(() => runCompanion(el, read));
     runner = r;
 
-    // Native: Rust emits `shell-cursor` (<=10 Hz, only within ~400 px, only in pill mode).
+    // Native: Rust emits `shell-cursor` (<=10 Hz, anywhere on screen, only in pill mode).
     // Browser demo: there is no Rust side, so follow the pointer ourselves, throttled to 10 Hz.
     let off: (() => void) | null = null;
     let dead = false;
@@ -69,8 +69,7 @@
         const b = el.getBoundingClientRect();
         const dx = e.clientX - (b.left + b.width / 2);
         const dy = e.clientY - (b.top + b.height / 2);
-        const dist = Math.hypot(dx, dy);
-        if (dist <= 400) r.cursor({ dx, dy, dist });
+        r.cursor({ dx, dy, dist: Math.hypot(dx, dy) });
       };
       window.addEventListener('pointermove', onMove, { passive: true });
     }
