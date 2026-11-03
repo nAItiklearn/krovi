@@ -12,6 +12,7 @@
     type PoseId,
   } from '../../lib/idle';
   import { THEMES, parseChoice, resolvedTheme, themeChoice, type ThemeChoice } from '../../lib/theme';
+  import type { ReactionKind } from '../../lib/reactions';
 
   // Standalone harness for the idle companion + themes (dev only). Open
   //   /src/components/idle/preview.html                 everything
@@ -21,6 +22,8 @@
   const perf = q.get('perf');
 
   const POSES: PoseId[] = ['droop', 'tilt', 'happy', 'perk', 'doze'];
+  /** null = no reaction (the mood alone); the rest are held by the `forceReaction` prop */
+  const REACTIONS: (ReactionKind | null)[] = [null, 'curious', 'focused', 'success', 'error'];
   const asStyle = (v: string | null): IdleStyleId =>
     (IDLE_STYLES.find((s) => s.id === v)?.id ?? 'dot') as IdleStyleId;
   const asPers = (v: string | null): PersonalityId =>
@@ -149,6 +152,18 @@
     </section>
 
     <section>
+      <h2>Quick reactions <small>held on purpose: {style} · {personality}, theme {$resolvedTheme}</small></h2>
+      <div class="grid g5">
+        {#each REACTIONS as r (r ?? 'none')}
+          <div class="cell">
+            <div class="pill"><IdleCompanion active preview {style} {personality} forceReaction={r} /></div>
+            <span class="cap">{r ?? 'none (mood only)'}</span>
+          </div>
+        {/each}
+      </div>
+    </section>
+
+    <section>
       <h2>Themes × styles <small>personality: {personality}</small></h2>
       <div class="boards">
         {#each THEMES as t (t.id)}
@@ -157,6 +172,9 @@
             <div class="grid g6">
               {#each IDLE_STYLES as s (s.id)}
                 <div class="pill"><IdleCompanion active preview style={s.id} {personality} /></div>
+              {/each}
+              {#each REACTIONS.slice(1) as r (r)}
+                <div class="pill"><IdleCompanion active preview {style} {personality} forceReaction={r} /></div>
               {/each}
             </div>
             <div class="swatches">

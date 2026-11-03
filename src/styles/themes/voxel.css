@@ -1,0 +1,75 @@
+/* Voxel: an original, blocky, 8-bit-flavoured theme (inspired by block-built worlds, using none
+ * of anyone's art, names or textures). Palette: deep stone-grey for the glass, grass-green for the
+ * one accent, dirt-brown for the frames. Frames are hard-edged box-shadow STEPS with notched
+ * corners instead of blurs; the structural half (square corners, monospace, pixel dither) lives in
+ * _voxel.css, because a colour theme cannot express it. */
+:root[data-theme='voxel'],
+[data-theme-scope='voxel'] {
+  color-scheme: dark;
+  --page: #171a16;
+  --panel-bg: rgba(36, 40, 34, 0.97);
+  --pop-bg: rgba(44, 49, 41, 1);
+  --pill-bg: rgba(20, 23, 19, 0.98);
+  --pill-fg: #f3f6e6;
+  --pill-fg-2: rgba(243, 246, 230, 0.72);
+
+  --surface-1: rgba(214, 232, 170, 0.055);
+  --surface-2: rgba(214, 232, 170, 0.1);
+  --surface-3: rgba(214, 232, 170, 0.15);
+  --line: rgba(190, 210, 150, 0.16);
+  --line-strong: rgba(190, 210, 150, 0.32);
+  --text: rgba(243, 246, 230, 0.96);
+  --text-2: rgba(243, 246, 230, 0.8);
+  --text-3: rgba(243, 246, 230, 0.68);
+
+  --accent: #8dd44f;
+  --accent-ink: #0f1a07;
+  --accent-soft: rgba(141, 212, 79, 0.16);
+  --accent-glow: rgba(141, 212, 79, 0.5);
+  --danger: #ff8274;
+
+  --invert-bg: #e9edd2;
+  --invert-fg: #151a11;
+
+  /* the 1px rim reads as a bevel: pale on top, dark underneath */
+  --rim-a: rgba(214, 232, 170, 0.4);
+  --rim-b: rgba(0, 0, 0, 0.5);
+  --grain-opacity: 0.1;
+  --card-hi: rgba(214, 232, 170, 0.07);
+  --spot: rgba(214, 232, 170, 0.08);
+
+  /* Stepped frames: a 3px dirt-brown ring, then a dark outline whose four arms stop short of the
+   * corners (so each corner is a visible pixel step), then a hard pixel drop-shadow. No blur. */
+  --shadow-pill:
+    0 0 0 3px #4a3622, 0 -6px 0 0 #090b08, 0 6px 0 0 #090b08, -6px 0 0 0 #090b08,
+    6px 0 0 0 #090b08, 6px 10px 0 0 rgba(0, 0, 0, 0.32);
+  --shadow-panel:
+    0 0 0 3px #4a3622, 0 -6px 0 0 #090b08, 0 6px 0 0 #090b08, -6px 0 0 0 #090b08,
+    6px 0 0 0 #090b08, 8px 12px 0 0 rgba(0, 0, 0, 0.34);
+  --shadow-pop:
+    0 0 0 3px #4a3622, 0 -6px 0 0 #090b08, 0 6px 0 0 #090b08, -6px 0 0 0 #090b08,
+    6px 0 0 0 #090b08, 6px 10px 0 0 rgba(0, 0, 0, 0.32);
+
+  /* demo wallpaper: dusk over a meadow, stone below */
+  --wall-top: #33422b;
+  --wall-mid: #1d2519;
+  --wall-bot: #0d110b;
+  --wall-glow: rgba(141, 212, 79, 0.12);
+  --wall-r1: #6f9a45;
+  --wall-r2: #4a3622;
+  --wall-line: rgba(141, 212, 79, 0.12);
+  --wall-vig: rgba(0, 0, 0, 0.55);
+
+  /* idle companion: pale square eyes with a grass-green glint (the dark pupil is --accent-ink) */
+  --eye-fill: #f3f6e6;
+  --eye-fill-2: rgba(243, 246, 230, 0.28);
+  --eye-accent: #8dd44f;
+  --eye-glow: transparent;
+  --eye-blush: rgba(240, 150, 110, 0.35);
+}
+
+/* native window: fully opaque glass, as a pixel UI should be */
+:root[data-env='tauri'][data-theme='voxel'] {
+  --panel-bg: rgba(36, 40, 34, 1);
+  --pill-bg: rgba(20, 23, 19, 0.99);
+}

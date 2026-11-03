@@ -1,0 +1,67 @@
+/* Linen: the elegant light theme. Warm off-white paper, charcoal text, soft warm shadows and ONE
+ * quiet sage accent. Surfaces are tinted with a little brown rather than grey, so the glass looks
+ * like fine paper instead of a hospital wall; secondary text is kept deliberately dark (>= 5:1). */
+:root[data-theme='linen'],
+[data-theme-scope='linen'] {
+  color-scheme: light;
+  --page: #ebe6dc;
+  --panel-bg: rgba(251, 248, 242, 0.88);
+  --pop-bg: rgba(254, 252, 248, 0.98);
+  --pill-bg: rgba(253, 251, 246, 0.95);
+  --pill-fg: #24211d;
+  --pill-fg-2: rgba(36, 33, 29, 0.7);
+
+  --surface-1: rgba(70, 55, 30, 0.04);
+  --surface-2: rgba(70, 55, 30, 0.07);
+  --surface-3: rgba(70, 55, 30, 0.11);
+  --line: rgba(70, 55, 30, 0.12);
+  --line-strong: rgba(70, 55, 30, 0.24);
+  --text: rgba(32, 29, 25, 0.94);
+  --text-2: rgba(32, 29, 25, 0.78);
+  --text-3: rgba(32, 29, 25, 0.7);
+
+  --accent: #4f6d4c;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(79, 109, 76, 0.09);
+  --accent-glow: rgba(79, 109, 76, 0.4);
+  --danger: #b3362f;
+
+  --invert-bg: #25221e;
+  --invert-fg: #f8f4ec;
+
+  --rim-a: rgba(255, 255, 255, 0.95);
+  --rim-b: rgba(70, 55, 30, 0.1);
+  --grain-opacity: 0.045;
+  --card-hi: rgba(255, 255, 255, 0.8);
+  --spot: rgba(255, 255, 255, 0.85);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(70, 55, 30, 0.16), 0 2px 5px rgba(70, 50, 20, 0.1),
+    0 10px 24px -6px rgba(70, 50, 20, 0.2);
+  --shadow-panel:
+    0 0 0 0.5px rgba(70, 55, 30, 0.18), 0 2px 6px rgba(70, 50, 20, 0.09),
+    0 12px 26px -6px rgba(70, 50, 20, 0.18), 0 26px 48px -16px rgba(70, 50, 20, 0.3);
+  --shadow-pop: 0 18px 44px -12px rgba(70, 50, 20, 0.32), 0 0 0 0.5px rgba(70, 55, 30, 0.14);
+
+  /* demo wallpaper: warm stone with a pale sage drift */
+  --wall-top: #efebe2;
+  --wall-mid: #dcd6c9;
+  --wall-bot: #c3bcab;
+  --wall-glow: rgba(255, 255, 255, 0.55);
+  --wall-r1: #fbf9f4;
+  --wall-r2: #b3b9a3;
+  --wall-line: rgba(70, 55, 30, 0.12);
+  --wall-vig: rgba(80, 66, 40, 0.2);
+
+  /* idle companion: ink eyes on the pale pill, a sage glint */
+  --eye-fill: #2a2622;
+  --eye-fill-2: rgba(42, 38, 34, 0.28);
+  --eye-accent: #4f6d4c;
+  --eye-glow: transparent;
+  --eye-blush: rgba(196, 120, 100, 0.3);
+}
+
+:root[data-env='tauri'][data-theme='linen'] {
+  --panel-bg: rgba(251, 248, 242, 0.985);
+  --pill-bg: rgba(253, 251, 246, 0.975);
+}

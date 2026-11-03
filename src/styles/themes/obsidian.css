@@ -1,0 +1,68 @@
+/* Obsidian: the premium dark theme. Deep warm charcoal (a hint of brown, never blue), refined
+ * hairlines, and ONE restrained accent: a muted champagne gold used only for live signals. Text is
+ * warm white; every shadow is tinted warm-black so the glass reads as one material. */
+:root[data-theme='obsidian'],
+[data-theme-scope='obsidian'] {
+  color-scheme: dark;
+  --page: #0e0d0c;
+  --panel-bg: rgba(27, 26, 24, 0.84);
+  --pop-bg: rgba(36, 34, 31, 0.97);
+  --pill-bg: rgba(15, 14, 13, 0.94);
+  --pill-fg: #f7f2ea;
+  --pill-fg-2: rgba(247, 242, 234, 0.7);
+
+  --surface-1: rgba(255, 238, 214, 0.045);
+  --surface-2: rgba(255, 238, 214, 0.08);
+  --surface-3: rgba(255, 238, 214, 0.125);
+  --line: rgba(255, 238, 214, 0.09);
+  --line-strong: rgba(255, 238, 214, 0.19);
+  --text: rgba(250, 245, 237, 0.95);
+  --text-2: rgba(250, 245, 237, 0.75);
+  --text-3: rgba(250, 245, 237, 0.63);
+
+  --accent: #d6b67c;
+  --accent-ink: #1d1508;
+  --accent-soft: rgba(214, 182, 124, 0.14);
+  --accent-glow: rgba(214, 182, 124, 0.45);
+  --danger: #ff8d82;
+
+  --invert-bg: #f4eee4;
+  --invert-fg: #16120c;
+
+  --rim-a: rgba(255, 236, 205, 0.3);
+  --rim-b: rgba(255, 236, 205, 0.04);
+  --grain-opacity: 0.06;
+  --card-hi: rgba(255, 238, 214, 0.05);
+  --spot: rgba(255, 232, 196, 0.075);
+
+  --shadow-pill:
+    0 0 0 0.5px rgba(8, 6, 4, 0.75), 0 2px 5px rgba(8, 6, 4, 0.4),
+    0 10px 24px -6px rgba(8, 6, 4, 0.55);
+  --shadow-panel:
+    0 0 0 0.5px rgba(8, 6, 4, 0.8), 0 2px 6px rgba(8, 6, 4, 0.38),
+    0 12px 26px -6px rgba(8, 6, 4, 0.5), 0 26px 48px -16px rgba(8, 6, 4, 0.65);
+  --shadow-pop: 0 18px 44px -12px rgba(8, 6, 4, 0.7), 0 0 0 0.5px rgba(8, 6, 4, 0.65);
+
+  /* demo wallpaper: warm charcoal with a faint champagne light from above */
+  --wall-top: #2b2723;
+  --wall-mid: #14120f;
+  --wall-bot: #070605;
+  --wall-glow: rgba(214, 182, 124, 0.1);
+  --wall-r1: #a39683;
+  --wall-r2: #5e5547;
+  --wall-line: rgba(255, 232, 196, 0.1);
+  --wall-vig: rgba(0, 0, 0, 0.55);
+
+  /* idle companion: warm-white eyes, a champagne glint and the faintest halo */
+  --eye-fill: #f4eee4;
+  --eye-fill-2: rgba(244, 238, 228, 0.28);
+  --eye-accent: #d6b67c;
+  --eye-glow: rgba(214, 182, 124, 0.14);
+  --eye-blush: rgba(214, 140, 120, 0.34);
+}
+
+/* native window: more body, because the desktop behind it cannot be blurred from a webview */
+:root[data-env='tauri'][data-theme='obsidian'] {
+  --panel-bg: rgba(27, 26, 24, 0.985);
+  --pill-bg: rgba(15, 14, 13, 0.97);
+}
