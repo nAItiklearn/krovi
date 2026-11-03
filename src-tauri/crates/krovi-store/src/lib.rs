@@ -22,6 +22,7 @@
 
 use std::collections::BTreeMap;
 
+use krovi_core::screen_time::retention_cutoff;
 use krovi_core::{FileShelf, ScreenTime, Shelf};
 
 // Re-export the core record types the store round-trips, so callers (and the
@@ -131,14 +132,68 @@ pub fn screen_time_records(st: &ScreenTime) -> Vec<ScreenTimeRecord> {
     out
 }
 
+/// Only the rows of a [`ScreenTime`] that changed since they were last written, as
+/// absolute totals (day asc, app asc) — the input for [`Store::upsert_screen_time`].
+pub fn screen_time_dirty_records(st: &ScreenTime) -> Vec<ScreenTimeRecord> {
+    st.dirty_rows()
+        .into_iter()
+        .map(|(day, app, ms)| ScreenTimeRecord { day, app, ms })
+        .collect()
+}
+
 /// Rebuild a [`ScreenTime`] aggregate from persisted records. Records with
-/// `ms == 0` are ignored, matching `ScreenTime::record`'s semantics.
+/// `ms == 0` are ignored, matching `ScreenTime::record`'s semantics. What was just
+/// loaded is by definition already stored, so nothing in the result is dirty.
 pub fn screen_time_from_records(records: &[ScreenTimeRecord]) -> ScreenTime {
     let mut st = ScreenTime::new();
     for r in records {
         st.record(r.day, r.app.clone(), r.ms);
     }
+    st.clear_dirty();
     st
+}
+
+/// Retention and batched, incremental persistence for screen time — the one call the
+/// app makes after each sample.
+///
+/// * **Retention.** Once after the aggregate is loaded and then once per local day
+///   (`today` is the caller's local day index), days older than
+///   [`krovi_core::screen_time::RETENTION_DAYS`] are dropped from memory and storage.
+/// * **Batching.** Changed rows are upserted at most once per
+///   [`krovi_core::screen_time::FLUSH_EVERY_MS`]; `force` (used on quit) writes them now.
+///   Only the `(day, app)` rows that changed since the last write go out, never the whole
+///   table.
+/// * **Failure.** A failed write leaves the rows dirty and backs off a full interval; the
+///   first error is returned and nothing is lost from memory.
+///
+/// `now_ms` and `today` come from the caller (no clock in this crate).
+pub fn sync_screen_time(
+    store: &mut dyn Store,
+    st: &mut ScreenTime,
+    now_ms: u64,
+    today: u32,
+    force: bool,
+) -> Result<()> {
+    let prune = st.needs_prune(today);
+    let mut first_err: Option<StoreError> = None;
+    if prune {
+        let cutoff = retention_cutoff(today);
+        st.prune_before(cutoff);
+        match store.prune_screen_time(cutoff) {
+            Ok(_) => st.mark_pruned(today),
+            Err(e) => first_err = Some(e),
+        }
+    }
+    if st.has_dirty() && (force || st.flush_due(now_ms)) {
+        match store.upsert_screen_time(&screen_time_dirty_records(st)) {
+            Ok(()) => st.mark_flushed(now_ms),
+            Err(e) => {
+                st.defer_flush(now_ms);
+                first_err.get_or_insert(e);
+            }
+        }
+    }
+    first_err.map_or(Ok(()), Err)
 }
 
 /// Flatten every shelf of a [`FileShelf`], preserving shelf order.
@@ -185,6 +240,40 @@ pub trait Store {
     fn load_screen_time(&self) -> Result<Vec<ScreenTimeRecord>>;
     /// Replace all screen-time records with `records`.
     fn save_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()>;
+    /// Insert or overwrite just the given `(day, app)` totals (absolute values, not
+    /// deltas, so a retry is harmless). Rows not listed are left untouched. This is
+    /// what the app calls while sampling; [`Store::save_screen_time`] stays for tests
+    /// and one-off imports. Backends should skip rows whose total is unchanged.
+    ///
+    /// The default merges through load + replace, so any `Store` works; the shipped
+    /// backends override it with a true incremental write.
+    fn upsert_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()> {
+        let mut all: BTreeMap<(u32, String), u64> = self
+            .load_screen_time()?
+            .into_iter()
+            .map(|r| ((r.day, r.app), r.ms))
+            .collect();
+        for r in records {
+            all.insert((r.day, r.app.clone()), r.ms);
+        }
+        let merged: Vec<ScreenTimeRecord> = all
+            .into_iter()
+            .map(|((day, app), ms)| ScreenTimeRecord { day, app, ms })
+            .collect();
+        self.save_screen_time(&merged)
+    }
+    /// Delete every screen-time row whose `day` is before `min_day` (retention).
+    /// Returns how many rows were removed.
+    fn prune_screen_time(&mut self, min_day: u32) -> Result<usize> {
+        let all = self.load_screen_time()?;
+        let keep: Vec<ScreenTimeRecord> =
+            all.iter().filter(|r| r.day >= min_day).cloned().collect();
+        let removed = all.len() - keep.len();
+        if removed > 0 {
+            self.save_screen_time(&keep)?;
+        }
+        Ok(removed)
+    }
 
     /// Load calendar events in stored (chronological) order.
     fn load_calendar(&self) -> Result<Vec<CalendarEvent>>;
@@ -264,6 +353,317 @@ mod tests {
                 ms: 4
             }]
         );
+    }
+
+    #[test]
+    fn a_rebuilt_aggregate_is_clean_and_only_new_time_is_dirty() {
+        let recs = vec![
+            ScreenTimeRecord {
+                day: 10,
+                app: "a.exe".into(),
+                ms: 5,
+            },
+            ScreenTimeRecord {
+                day: 10,
+                app: "b.exe".into(),
+                ms: 7,
+            },
+        ];
+        let mut st = screen_time_from_records(&recs);
+        assert!(screen_time_dirty_records(&st).is_empty(), "just loaded");
+
+        st.record(10, "b.exe", 3);
+        assert_eq!(
+            screen_time_dirty_records(&st),
+            vec![ScreenTimeRecord {
+                day: 10,
+                app: "b.exe".into(),
+                ms: 10 // the full total, not the 3 ms delta
+            }]
+        );
+    }
+
+    /// Forwards every `Store` method except the two screen-time write paths to the
+    /// `MemStore` in the field `$inner`; the caller supplies those (or leaves them to the
+    /// trait defaults).
+    macro_rules! forward_store {
+        ($ty:ty, $inner:tt, { $($extra:item)* }) => {
+            impl Store for $ty {
+                fn load_clipboard(&self) -> Result<Vec<ClipEntry>> {
+                    self.$inner.load_clipboard()
+                }
+                fn save_clipboard(&mut self, e: &[ClipEntry]) -> Result<()> {
+                    self.$inner.save_clipboard(e)
+                }
+                fn load_notes(&self) -> Result<Vec<Note>> {
+                    self.$inner.load_notes()
+                }
+                fn save_notes(&mut self, n: &[Note]) -> Result<()> {
+                    self.$inner.save_notes(n)
+                }
+                fn load_tasks(&self) -> Result<Vec<Task>> {
+                    self.$inner.load_tasks()
+                }
+                fn save_tasks(&mut self, t: &[Task]) -> Result<()> {
+                    self.$inner.save_tasks(t)
+                }
+                fn load_shelves(&self) -> Result<Vec<StoredShelf>> {
+                    self.$inner.load_shelves()
+                }
+                fn save_shelves(&mut self, s: &[StoredShelf]) -> Result<()> {
+                    self.$inner.save_shelves(s)
+                }
+                fn load_screen_time(&self) -> Result<Vec<ScreenTimeRecord>> {
+                    self.$inner.load_screen_time()
+                }
+                fn save_screen_time(&mut self, r: &[ScreenTimeRecord]) -> Result<()> {
+                    self.$inner.save_screen_time(r)
+                }
+                fn load_calendar(&self) -> Result<Vec<CalendarEvent>> {
+                    self.$inner.load_calendar()
+                }
+                fn save_calendar(&mut self, e: &[CalendarEvent]) -> Result<()> {
+                    self.$inner.save_calendar(e)
+                }
+                fn get_setting(&self, k: &str) -> Result<Option<String>> {
+                    self.$inner.get_setting(k)
+                }
+                fn set_setting(&mut self, k: &str, v: &str) -> Result<()> {
+                    self.$inner.set_setting(k, v)
+                }
+                fn delete_setting(&mut self, k: &str) -> Result<bool> {
+                    self.$inner.delete_setting(k)
+                }
+                fn settings(&self) -> Result<BTreeMap<String, String>> {
+                    self.$inner.settings()
+                }
+                $($extra)*
+            }
+        };
+    }
+
+    /// Only the required methods: the trait's default `upsert_screen_time` /
+    /// `prune_screen_time` are what runs.
+    struct LoadSaveOnly(MemStore);
+    forward_store!(LoadSaveOnly, 0, {});
+
+    #[test]
+    fn default_upsert_and_prune_work_for_any_store() {
+        let mut s = LoadSaveOnly(MemStore::new());
+        crate::testkit::exercise_screen_time_incremental(&mut s);
+    }
+
+    /// Records exactly what `sync_screen_time` asks the store to do, and can be told to
+    /// fail its writes.
+    #[derive(Default)]
+    struct Spy {
+        inner: MemStore,
+        upserts: Vec<Vec<ScreenTimeRecord>>,
+        prunes: Vec<u32>,
+        fail_writes: bool,
+    }
+    forward_store!(Spy, inner, {
+        fn upsert_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()> {
+            if self.fail_writes {
+                return Err(StoreError::Message("disk full".into()));
+            }
+            self.upserts.push(records.to_vec());
+            self.inner.upsert_screen_time(records)
+        }
+        fn prune_screen_time(&mut self, min_day: u32) -> Result<usize> {
+            if self.fail_writes {
+                return Err(StoreError::Message("disk full".into()));
+            }
+            self.prunes.push(min_day);
+            self.inner.prune_screen_time(min_day)
+        }
+    });
+
+    fn srec(day: u32, app: &str, ms: u64) -> ScreenTimeRecord {
+        ScreenTimeRecord {
+            day,
+            app: app.into(),
+            ms,
+        }
+    }
+
+    use krovi_core::screen_time::{retention_cutoff, FLUSH_EVERY_MS};
+
+    const TODAY: u32 = 20_000;
+
+    #[test]
+    fn sampling_every_five_seconds_writes_one_batch_a_minute_with_only_changed_rows() {
+        let mut spy = Spy::default();
+        let mut st = ScreenTime::new();
+        let mut now = 1_000_000u64;
+
+        // tick 0: the first change is written at once (nothing has been written yet)
+        st.record(TODAY, "code.exe", 5_000);
+        st.record(TODAY, "idle-tool.exe", 100);
+        sync_screen_time(&mut spy, &mut st, now, TODAY, false).unwrap();
+        assert_eq!(spy.upserts.len(), 1);
+        assert_eq!(
+            spy.upserts[0],
+            vec![
+                srec(TODAY, "code.exe", 5_000),
+                srec(TODAY, "idle-tool.exe", 100)
+            ]
+        );
+
+        // eleven more 5 s ticks that only touch code.exe: nothing is written...
+        for _ in 0..11 {
+            now += 5_000;
+            st.record(TODAY, "code.exe", 5_000);
+            sync_screen_time(&mut spy, &mut st, now, TODAY, false).unwrap();
+        }
+        assert_eq!(spy.upserts.len(), 1, "no write inside the 60 s window");
+
+        // ...until the minute is up: one write, carrying only the row that changed
+        now += 5_000;
+        st.record(TODAY, "code.exe", 5_000);
+        sync_screen_time(&mut spy, &mut st, now, TODAY, false).unwrap();
+        assert_eq!(spy.upserts.len(), 2);
+        assert_eq!(spy.upserts[1], vec![srec(TODAY, "code.exe", 5_000 * 13)]);
+        assert!(!st.has_dirty());
+
+        // a quiet tick right after writes nothing at all
+        now += 5_000;
+        sync_screen_time(&mut spy, &mut st, now, TODAY, false).unwrap();
+        assert_eq!(spy.upserts.len(), 2);
+
+        // what is stored is what is in memory
+        assert_eq!(spy.load_screen_time().unwrap(), screen_time_records(&st));
+    }
+
+    #[test]
+    fn quitting_writes_what_is_still_waiting_without_waiting_for_the_batch() {
+        let mut spy = Spy::default();
+        let mut st = ScreenTime::new();
+        st.record(TODAY, "a.exe", 10);
+        sync_screen_time(&mut spy, &mut st, 0, TODAY, false).unwrap();
+        st.record(TODAY, "a.exe", 7); // inside the 60 s window: held back
+        sync_screen_time(&mut spy, &mut st, 10_000, TODAY, false).unwrap();
+        assert_eq!(
+            spy.load_screen_time().unwrap(),
+            vec![srec(TODAY, "a.exe", 10)]
+        );
+
+        sync_screen_time(&mut spy, &mut st, 11_000, TODAY, true).unwrap(); // quit
+        assert_eq!(
+            spy.load_screen_time().unwrap(),
+            vec![srec(TODAY, "a.exe", 17)]
+        );
+        assert_eq!(spy.upserts.last().unwrap(), &vec![srec(TODAY, "a.exe", 17)]);
+
+        // forcing with nothing changed writes nothing
+        let writes = spy.upserts.len();
+        sync_screen_time(&mut spy, &mut st, 12_000, TODAY, true).unwrap();
+        assert_eq!(spy.upserts.len(), writes);
+    }
+
+    #[test]
+    fn data_older_than_ninety_days_is_pruned_on_the_first_sync_after_loading() {
+        // a database that has grown past the window
+        let mut spy = Spy::default();
+        spy.inner
+            .save_screen_time(&[
+                srec(TODAY - 400, "ancient.exe", 1),
+                srec(TODAY - 91, "old.exe", 2),
+                srec(TODAY - 89, "edge.exe", 3), // 90th day back: kept
+                srec(TODAY, "now.exe", 4),
+            ])
+            .unwrap();
+        let mut st = screen_time_from_records(&spy.load_screen_time().unwrap());
+        assert!(!st.has_dirty(), "loading must not make everything dirty");
+
+        sync_screen_time(&mut spy, &mut st, 0, TODAY, false).unwrap();
+
+        assert_eq!(spy.prunes, vec![retention_cutoff(TODAY)]);
+        assert_eq!(
+            spy.load_screen_time().unwrap(),
+            vec![srec(TODAY - 89, "edge.exe", 3), srec(TODAY, "now.exe", 4)]
+        );
+        assert_eq!(screen_time_records(&st), spy.load_screen_time().unwrap());
+        assert!(spy.upserts.is_empty(), "pruning alone writes no rows");
+    }
+
+    #[test]
+    fn retention_runs_once_per_local_day_not_every_tick() {
+        let mut spy = Spy::default();
+        let mut st = ScreenTime::new();
+        for i in 0..5 {
+            sync_screen_time(&mut spy, &mut st, i * 5_000, TODAY, false).unwrap();
+        }
+        assert_eq!(spy.prunes.len(), 1, "same day: one prune");
+        sync_screen_time(&mut spy, &mut st, 90_000, TODAY + 1, false).unwrap();
+        assert_eq!(
+            spy.prunes,
+            vec![retention_cutoff(TODAY), retention_cutoff(TODAY + 1)]
+        );
+    }
+
+    #[test]
+    fn a_failing_store_keeps_the_rows_and_backs_off_instead_of_hammering_it() {
+        let mut spy = Spy {
+            fail_writes: true,
+            ..Spy::default()
+        };
+        let mut st = ScreenTime::new();
+        st.record(TODAY, "a.exe", 10);
+
+        let err = sync_screen_time(&mut spy, &mut st, 0, TODAY, false).unwrap_err();
+        assert!(err.to_string().contains("disk full"));
+        assert!(st.has_dirty(), "nothing was written, nothing is forgotten");
+        assert_eq!(st.app_total(TODAY, "a.exe"), 10);
+
+        // within the back-off the store is not touched again (no error spam either)
+        spy.fail_writes = false;
+        sync_screen_time(&mut spy, &mut st, FLUSH_EVERY_MS - 1, TODAY, false).unwrap();
+        assert!(spy.upserts.is_empty());
+
+        // after the interval the retry succeeds and clears the backlog
+        st.record(TODAY, "a.exe", 5);
+        sync_screen_time(&mut spy, &mut st, FLUSH_EVERY_MS, TODAY, false).unwrap();
+        assert_eq!(
+            spy.load_screen_time().unwrap(),
+            vec![srec(TODAY, "a.exe", 15)]
+        );
+        assert!(!st.has_dirty());
+    }
+
+    #[test]
+    fn sync_works_through_the_apps_locked_boxed_store() {
+        // the exact shape `AppState` holds: Mutex<Box<dyn Store + Send>>
+        let store: std::sync::Mutex<Box<dyn Store + Send>> =
+            std::sync::Mutex::new(Box::new(MemStore::new()));
+        let mut st = ScreenTime::new();
+        st.record(TODAY, "a.exe", 3);
+        {
+            let mut guard = store.lock().unwrap();
+            sync_screen_time(&mut **guard, &mut st, 0, TODAY, false).unwrap();
+        }
+        assert_eq!(
+            store.lock().unwrap().load_screen_time().unwrap(),
+            vec![srec(TODAY, "a.exe", 3)]
+        );
+    }
+
+    #[test]
+    fn a_failed_prune_is_retried_on_the_next_sync() {
+        let mut spy = Spy {
+            fail_writes: true,
+            ..Spy::default()
+        };
+        let mut st = ScreenTime::new();
+        assert!(sync_screen_time(&mut spy, &mut st, 0, TODAY, false).is_err());
+        assert!(
+            st.needs_prune(TODAY),
+            "not marked done: it will be tried again"
+        );
+        spy.fail_writes = false;
+        sync_screen_time(&mut spy, &mut st, 5_000, TODAY, false).unwrap();
+        assert!(!st.needs_prune(TODAY));
+        assert_eq!(spy.prunes.len(), 1);
     }
 
     #[test]

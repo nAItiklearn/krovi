@@ -11,9 +11,9 @@
   import type { ShelfItem, StoredShelf } from '../lib/types';
   import type { IconName } from '../lib/icons';
 
-  // Shelves are references (name, size, path), saved locally. The shelf keeps what you parked
-  // within reach; nothing is uploaded and the files themselves are never moved.
-  const KEY = 'krovi.shelves';
+  // Shelves are references (name, size, path), saved on this PC (natively in Krovi's local
+  // database). The shelf keeps what you parked within reach; nothing is uploaded and the files
+  // themselves are never moved.
 
   let shelves = $state<StoredShelf[]>([]);
   let activeIdx = $state(0);
@@ -37,19 +37,16 @@
   }
 
   function save() {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(shelves));
-    } catch {
-      /* ignore */
-    }
+    bridge.saveShelves($state.snapshot(shelves)).catch((e) => {
+      console.warn('[krovi] save_shelves failed', e);
+      pushToast('Could not save the shelf');
+    });
   }
 
   async function load() {
     status = 'loading';
     try {
-      const raw = localStorage.getItem(KEY);
-      const saved = raw ? (JSON.parse(raw) as StoredShelf[]) : null;
-      shelves = saved && saved.length ? saved : await bridge.loadShelves();
+      shelves = await bridge.loadShelves();
       if (!shelves.length) shelves = [{ name: 'Desk', items: [] }];
       status = 'ready';
     } catch {
@@ -179,12 +176,14 @@
     const t = $shelfTick;
     if (t === seenTick) return;
     seenTick = t;
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) shelves = JSON.parse(raw) as StoredShelf[];
-    } catch {
-      /* keep what is shown */
-    }
+    bridge
+      .loadShelves()
+      .then((s) => {
+        if (s.length) shelves = s;
+      })
+      .catch(() => {
+        /* keep what is shown */
+      });
   });
 </script>
 

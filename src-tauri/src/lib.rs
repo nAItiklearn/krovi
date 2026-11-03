@@ -9,8 +9,14 @@
 //!
 //! Each agent edits only its own `[block]` in the handler list below.
 
+mod agent;
+mod ai;
+mod circle;
+mod clean;
 mod commands;
+mod dictation;
 mod explain;
+mod extras;
 mod live;
 mod reminders;
 mod shell;
@@ -32,18 +38,97 @@ pub fn run() {
             transfer::setup(app)?;
             reminders::setup(app)?;
             explain::setup(app)?;
+            dictation::setup(app)?;
+            clean::setup(app)?;
+            ai::setup(app)?;
+            circle::setup(app)?;
+            agent::setup(app)?;
+            extras::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            // [ai] — Settings → AI (BYOK providers, D-022/D-023)
+            ai::ai_status,
+            ai::ai_set_key,
+            ai::ai_remove_key,
+            ai::ai_set_account,
+            ai::ai_test,
+            ai::ai_models,
+            ai::ai_select,
+            ai::ai_set_gemini_consent,
+            ai::ai_complete,
+            ai::ai_open_keys_page,
+            // [agent] — Agent Mode: intent -> plan -> permission -> execute
+            agent::agent_warm,
+            agent::agent_plan,
+            agent::agent_run,
+            agent::agent_tasks,
+            agent::agent_cancel,
+            agent::agent_integrations,
+            agent::agent_mcp_list,
+            agent::agent_mcp_save,
+            agent::agent_mcp_remove,
+            // [circle] — Circle to Ask + temporary visible screen awareness (D-021)
+            circle::circle_start,
+            circle::circle_cancel,
+            circle::circle_overlay_ready,
+            circle::circle_capture,
+            circle::circle_ask_vision,
+            circle::circle_clear,
+            circle::circle_search,
+            circle::circle_open_keys_page,
+            circle::circle_ocr_status,
+            circle::circle_get_settings,
+            circle::circle_set_settings,
+            circle::circle_set_key,
+            circle::aware_start,
+            circle::aware_stop,
+            circle::aware_status,
+            circle::aware_ask,
+            // [extras] — Quick Launcher names, snippets, file organizer, workflows, file-name search
+            extras::extras_apps,
+            extras::snippets_list,
+            extras::snippets_save,
+            extras::snippets_remove,
+            extras::snippets_use,
+            extras::workflows_list,
+            extras::workflows_save,
+            extras::workflows_remove,
+            extras::organizer_folders,
+            extras::organizer_rules,
+            extras::organizer_save_rule,
+            extras::organizer_remove_rule,
+            extras::organizer_preview,
+            extras::organizer_run,
+            extras::organizer_undo_info,
+            extras::organizer_undo,
+            extras::filesearch_start,
+            extras::filesearch_cancel,
+            extras::filesearch_open,
+            // [clean] — Clean My OS: scan, review, Recycle Bin only
+            clean::clean_categories,
+            clean::clean_scan,
+            clean::clean_cancel,
+            clean::clean_delete,
+            clean::clean_recycle_bin_size,
+            // [dictation] — local Whisper dictation into any app (D-020)
+            dictation::dictation_status,
+            dictation::dictation_set_settings,
+            dictation::dictation_toggle,
+            dictation::dictation_cancel,
+            dictation::voice_input_devices,
+            dictation::mic_test_start,
+            dictation::mic_test_level,
+            dictation::mic_test_stop,
+            dictation::voice_model_download,
+            dictation::voice_model_cancel_download,
+            dictation::voice_model_delete,
             // [live] — owner: live-data
             commands::load_clipboard,
             commands::add_clip,
             commands::toggle_clip_pin,
             commands::remove_clip,
-            commands::load_paste_stack,
-            commands::push_paste,
-            commands::pop_paste,
             commands::load_notes,
             commands::create_note,
             commands::update_note,
@@ -60,6 +145,8 @@ pub fn run() {
             commands::weather_set_city,
             commands::load_media,
             commands::load_world_clocks,
+            commands::save_world_clocks,
+            commands::save_shelves,
             commands::load_currency_rates,
             commands::load_currency_info,
             commands::load_calendar,
@@ -109,6 +196,7 @@ pub fn run() {
             // [/transfer]
             // [reminders] — owner: reminders
             reminders::reminders_status,
+            reminders::alarm_sync,
             reminders::reminder_add,
             reminders::reminder_set,
             reminders::reminder_snooze,
@@ -117,6 +205,7 @@ pub fn run() {
             // [/reminders]
             // [explain] — owner: explain
             explain::explain_summarize,
+            explain::explain_cancel_summarize,
             explain::explain_engines,
             explain::explain_get_settings,
             explain::explain_set_settings,

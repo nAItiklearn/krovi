@@ -210,7 +210,7 @@ fn spoken_punctuation(tokens: Vec<Tk>) -> Vec<Tk> {
 // pass 2: fillers
 // ---------------------------------------------------------------------------------------------
 
-fn is_hesitation(w: &str) -> bool {
+pub(crate) fn is_hesitation(w: &str) -> bool {
     matches!(
         lower(w).as_str(),
         "um" | "uh"

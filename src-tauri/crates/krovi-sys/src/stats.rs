@@ -19,6 +19,36 @@ pub struct SystemStats {
     pub disk_label: String,
     /// 0..=100, best effort (0 on the very first sample, which has no delta).
     pub cpu: f64,
+    /// `None` on machines without a battery (desktops) or when Windows reports it as
+    /// unknown. Never guessed.
+    pub battery: Option<Battery>,
+}
+
+/// Battery state from `GetSystemPowerStatus`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Battery {
+    /// 0..=100.
+    pub percent: u8,
+    /// Plugged in (AC power).
+    pub plugged_in: bool,
+    pub charging: bool,
+}
+
+/// Interpret the raw `SYSTEM_POWER_STATUS` fields. `None` when there is no battery
+/// (`BatteryFlag` 128), the status is unknown (255), or the percentage is unknown (255).
+pub fn battery_from(ac_line_status: u8, battery_flag: u8, life_percent: u8) -> Option<Battery> {
+    const NO_BATTERY: u8 = 128;
+    const UNKNOWN: u8 = 255;
+    const CHARGING: u8 = 8;
+    if battery_flag == UNKNOWN || battery_flag & NO_BATTERY != 0 || life_percent > 100 {
+        return None;
+    }
+    Some(Battery {
+        percent: life_percent,
+        plugged_in: ac_line_status == 1,
+        charging: battery_flag & CHARGING != 0,
+    })
 }
 
 /// Cumulative CPU times from `GetSystemTimes`, in 100 ns ticks. Note `kernel`
@@ -99,6 +129,7 @@ impl StatsSampler {
             disk_total,
             disk_label: label,
             cpu,
+            battery: native::battery(),
         })
     }
 
@@ -158,6 +189,13 @@ mod native {
 
     fn ticks(ft: FILETIME) -> u64 {
         (u64::from(ft.dwHighDateTime) << 32) | u64::from(ft.dwLowDateTime)
+    }
+
+    pub(super) fn battery() -> Option<super::Battery> {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+        let mut s = SYSTEM_POWER_STATUS::default();
+        unsafe { GetSystemPowerStatus(&mut s) }.ok()?;
+        super::battery_from(s.ACLineStatus, s.BatteryFlag, s.BatteryLifePercent)
     }
 
     pub(super) fn cpu_times() -> crate::Result<CpuTimes> {
@@ -237,7 +275,9 @@ mod tests {
             disk_total: 4,
             disk_label: "C:".into(),
             cpu: 12.5,
+            battery: battery_from(0, 1, 80),
         };
+        assert_eq!(serde_json::to_value(s.battery).unwrap()["pluggedIn"], false);
         let v = serde_json::to_value(&s).unwrap();
         for k in [
             "memUsed",
@@ -250,6 +290,29 @@ mod tests {
             assert!(v.get(k).is_some(), "missing {k}");
         }
         assert_eq!(v["diskLabel"], "C:");
+    }
+
+    #[test]
+    fn battery_is_none_without_one_and_never_guessed() {
+        assert_eq!(battery_from(1, 128, 255), None); // desktop: no system battery
+        assert_eq!(battery_from(255, 255, 255), None); // unknown status
+        assert_eq!(battery_from(0, 1, 255), None); // unknown percentage
+        assert_eq!(
+            battery_from(1, 8 | 1, 97),
+            Some(Battery {
+                percent: 97,
+                plugged_in: true,
+                charging: true
+            })
+        );
+        assert_eq!(
+            battery_from(0, 4, 4),
+            Some(Battery {
+                percent: 4,
+                plugged_in: false,
+                charging: false
+            })
+        );
     }
 
     #[cfg(not(all(windows, feature = "native")))]

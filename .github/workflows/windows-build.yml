@@ -1,0 +1,149 @@
+name: Windows build
+
+# Native Windows verification for Krovi (Tauri 2 + Rust workspace + Svelte 5).
+# The maintainer's PC has no Visual Studio Build Tools, so this runner is the
+# only place the native app (MSVC, windows-rs, WebView2) is compiled and
+# bundled. Two parallel jobs:
+#   checks -> frontend build/type-check/tests + rustfmt/clippy/Rust tests
+#   build  -> real `tauri build` producing the NSIS + MSI installers
+# Nothing is published: installers and logs are uploaded as workflow artifacts.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - clean-main
+      - 'feat/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  MANIFEST: src-tauri/Cargo.toml
+  # whisper.cpp (built by whisper-rs-sys): generate the bindings on the runner with its
+  # preinstalled LLVM. The crate's bundled bindings.rs (0.15) were generated on Linux/glibc
+  # and fail Windows layout checks (E0080 on _IO_FILE). Also a portable x86-64 baseline
+  # instead of the runner's CPU, so the installer does not crash with illegal instructions
+  # on users' machines. Baseline = AVX2/FMA/F16C (Intel Haswell 2013+, AMD Zen/Excavator).
+  LIBCLANG_PATH: 'C:\Program Files\LLVM\bin'
+  GGML_NATIVE: 'OFF'
+  GGML_AVX: 'ON'
+  GGML_AVX2: 'ON'
+  GGML_FMA: 'ON'
+  GGML_F16C: 'ON'
+  GGML_AVX512: 'OFF'
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  checks:
+    name: Checks (frontend + Rust tests)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies (lockfile)
+        run: npm ci
+
+      - name: Build frontend (vite -> dist/, also needed by generate_context!)
+        run: npm run build
+
+      - name: Type-check (svelte-check)
+        run: npm run check
+
+      - name: Frontend unit tests (vitest)
+        run: npm test
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: krovi-windows
+
+      - name: rustfmt
+        run: cargo fmt --manifest-path $env:MANIFEST --all --check
+
+      - name: clippy (workspace, all targets, default features)
+        run: cargo clippy --manifest-path $env:MANIFEST --workspace --all-targets
+
+      # The krovi-app test binary links the full Tauri runtime and cannot start
+      # headless (docs/DECISIONS.md D-reminders), so library crates are tested and
+      # the app crate's tests are compiled only.
+      - name: Rust tests (library crates)
+        run: cargo test --manifest-path $env:MANIFEST --workspace --exclude krovi-app
+
+      - name: Compile app crate tests (no run)
+        run: cargo test --manifest-path $env:MANIFEST -p krovi-app --no-run
+
+  build:
+    name: Native build (tauri build -> NSIS + MSI)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies (lockfile)
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: krovi-windows
+
+      # beforeBuildCommand in tauri.conf.json builds the frontend; bundle targets
+      # (nsis, msi) also come from tauri.conf.json.
+      - name: tauri build
+        run: |
+          New-Item -ItemType Directory -Force -Path logs | Out-Null
+          npx tauri build --verbose 2>&1 | Tee-Object -FilePath logs/tauri-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Record installer hashes and sizes
+        run: |
+          Get-ChildItem src-tauri/target/release/bundle -Recurse -Include *.exe,*.msi |
+            ForEach-Object { "{0}  {1:N0} bytes  {2}" -f (Get-FileHash $_ -Algorithm SHA256).Hash, $_.Length, $_.Name } |
+            Tee-Object -FilePath logs/installers-sha256.txt
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v5
+        with:
+          name: krovi-windows-installers-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: krovi-build-logs-${{ github.sha }}
+          path: logs/
+          if-no-files-found: ignore
+          retention-days: 14

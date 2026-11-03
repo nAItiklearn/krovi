@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
 import {
+  alarmSpecs,
   POMO,
   pomodoro,
   pomodoroResetCycle,
@@ -26,6 +27,48 @@ const timer = (o: Partial<TimerItem> = {}): TimerItem => ({
   accumulated: 0,
   runningSince: null,
   ...o,
+});
+
+describe('native alarm specs', () => {
+  const pomo = (o: Partial<PomodoroState> = {}): PomodoroState => ({
+    phase: 'work',
+    duration: POMO.work,
+    accumulated: 0,
+    runningSince: null,
+    finished: false,
+    completed: 0,
+    day: 'd',
+    ...o,
+  });
+
+  it('lists only running countdowns, with a due time that is stable while they run', () => {
+    const list = [
+      timer({ id: 1, runningSince: 10_000, accumulated: 60_000 }),
+      timer({ id: 2, runningSince: null, accumulated: 30_000 }),
+    ];
+    const specs = alarmSpecs(list, pomo());
+    expect(specs).toEqual([
+      { key: 'timer:1', label: 'Tea', kind: 'timer', dueAt: 10_000 + 4 * 60_000 - 60_000 },
+    ]);
+    // same inputs later in time -> identical spec (no spurious re-sync)
+    expect(alarmSpecs(list, pomo())).toEqual(specs);
+  });
+
+  it('includes a running pomodoro phase but not a finished or paused one', () => {
+    expect(alarmSpecs([], pomo({ runningSince: 5_000 }))).toEqual([
+      { key: 'pomodoro', label: 'Focus complete', kind: 'pomodoro', dueAt: 5_000 + POMO.work },
+    ]);
+    expect(alarmSpecs([], pomo({ phase: 'short', duration: POMO.short, runningSince: 0 }))[0].label).toBe(
+      'Break over',
+    );
+    expect(alarmSpecs([], pomo({ runningSince: 5_000, finished: true }))).toEqual([]);
+    expect(alarmSpecs([], pomo({ accumulated: 1_000 }))).toEqual([]);
+  });
+
+  it('keeps an overdue running timer (the backend rings it once as missed)', () => {
+    const [s] = alarmSpecs([timer({ runningSince: 0 })], pomo());
+    expect(s.dueAt).toBe(4 * 60_000);
+  });
 });
 
 describe('timers', () => {

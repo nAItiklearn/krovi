@@ -143,6 +143,59 @@ pub fn sample_screen_time() -> Vec<ScreenTimeRecord> {
     ]
 }
 
+fn rec(day: u32, app: &str, ms: u64) -> ScreenTimeRecord {
+    ScreenTimeRecord {
+        day,
+        app: app.into(),
+        ms,
+    }
+}
+
+/// Incremental screen-time persistence: `upsert_screen_time` touches only the rows it is
+/// given (inserting new ones, overwriting changed totals, leaving everything else alone)
+/// and `prune_screen_time` expires old days. Starts from, and leaves, an empty table.
+pub fn exercise_screen_time_incremental<S: Store>(s: &mut S) {
+    s.save_screen_time(&sample_screen_time()).unwrap();
+
+    // overwrite one existing total, add a new row; the other rows are not mentioned
+    s.upsert_screen_time(&[rec(10, "a.exe", 900), rec(12, "c.exe", 40)])
+        .unwrap();
+    assert_eq!(
+        s.load_screen_time().unwrap(),
+        vec![
+            rec(10, "a.exe", 900),
+            rec(10, "b.exe", 1000), // untouched
+            rec(11, "a.exe", 250),  // untouched
+            rec(12, "c.exe", 40),
+        ]
+    );
+
+    // upserting nothing, or the same values again, changes nothing
+    s.upsert_screen_time(&[]).unwrap();
+    s.upsert_screen_time(&[rec(10, "a.exe", 900), rec(12, "c.exe", 40)])
+        .unwrap();
+    assert_eq!(s.load_screen_time().unwrap().len(), 4);
+    assert_eq!(s.load_screen_time().unwrap()[0], rec(10, "a.exe", 900));
+
+    // retention: everything strictly before day 11 goes
+    assert_eq!(s.prune_screen_time(11).unwrap(), 2);
+    assert_eq!(
+        s.load_screen_time().unwrap(),
+        vec![rec(11, "a.exe", 250), rec(12, "c.exe", 40)]
+    );
+    // pruning again (or with an older cutoff) removes nothing
+    assert_eq!(s.prune_screen_time(11).unwrap(), 0);
+    assert_eq!(s.prune_screen_time(0).unwrap(), 0);
+    assert_eq!(s.load_screen_time().unwrap().len(), 2);
+
+    // an upsert into an empty table creates the rows (the very first flush)
+    s.save_screen_time(&[]).unwrap();
+    s.upsert_screen_time(&[rec(7, "z.exe", 1)]).unwrap();
+    assert_eq!(s.load_screen_time().unwrap(), vec![rec(7, "z.exe", 1)]);
+    assert_eq!(s.prune_screen_time(u32::MAX).unwrap(), 1);
+    assert!(s.load_screen_time().unwrap().is_empty());
+}
+
 /// Save every sample collection + a couple of settings into `s`.
 pub fn seed<S: Store>(s: &mut S) {
     s.save_clipboard(&sample_clips()).unwrap();

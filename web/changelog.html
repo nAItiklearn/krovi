@@ -39,7 +39,6 @@
     <symbol id="i-notes" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1-1.5z"/><path d="M14.5 3.5V8H19M8.5 12.5h7M8.5 16h4"/></symbol>
     <symbol id="i-clocks" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-convert" viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></symbol>
-    <symbol id="i-calculator" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8.5 7.5h7M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"/></symbol>
     <symbol id="i-screentime" viewBox="0 0 24 24"><path d="M5 20v-6M12 20V5M19 20V10"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9.5M17.5 7H20M4 17h2.5M10.5 17H20"/><circle cx="15.5" cy="7" r="2"/><circle cx="8.5" cy="17" r="2"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
@@ -102,6 +101,22 @@
   <div class="wrap">
     <div class="timeline">
 
+      <section class="release" id="v0-3" aria-labelledby="v0-3-title">
+        <div class="release-side reveal">
+          <div class="ver">v0.3</div>
+          <div class="date"><span class="status-chip muted">In development</span></div>
+        </div>
+        <div class="release-body reveal d1">
+          <h2 id="v0-3-title">One tool fewer, math still one keystroke away.</h2>
+
+          <h3>Changed</h3>
+          <ul>
+            <li><strong>The standalone Calculator tool is gone.</strong> The panel now has 15 entries. Math lives in the command palette: press <kbd>Ctrl</kbd>+<kbd>K</kbd> and type an expression such as <code>12*7+3</code>; the answer appears as a row and <kbd>Enter</kbd> copies it. It handles <code>+ - * /</code>, parentheses, decimals and percent, parsed by a small built-in evaluator rather than <code>eval</code>. It does not do units; Convert still handles those.</li>
+            <li><strong>Saying &ldquo;open calculator&rdquo; now launches the Windows Calculator app</strong> from your Start menu, like any other installed app.</li>
+          </ul>
+        </div>
+      </section>
+
       <!-- RELEASE-STATUS: flip v0.2 to "Released" (and add the date) when it is published -->
       <section class="release" id="v0-2" aria-labelledby="v0-2-title">
         <div class="release-side reveal">
@@ -161,7 +176,7 @@
           <h3>What shipped</h3>
           <ul>
             <li>Windows installers (<code>.exe</code> and <code>.msi</code>), built by GitHub Actions from a tagged commit.</li>
-            <li>The panel with a left tool rail: clipboard history, paste stack, timers and stopwatch, Pomodoro, file shelf, media controls, weather, notes, world clocks, units and currency, calculator, command palette and screen time.</li>
+            <li>The panel with a left tool rail: clipboard history, timers and stopwatch, Pomodoro, file shelf, media controls, weather, notes, world clocks, units and currency, calculator, command palette and screen time.</li>
             <li>Keyless weather (Open-Meteo) and exchange rates (Frankfurter) as the only network calls, documented in a published network audit.</li>
             <li>An automated test suite: 99 Rust tests and 26 frontend tests at release.</li>
           </ul>

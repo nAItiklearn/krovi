@@ -35,6 +35,8 @@
   import { startReminders } from './lib/reminders';
   import { createVoiceRouter, showFeedbackOnly, type Chip } from './components/voiceRouter';
   import { planResults } from './components/voiceModel';
+  import { wireCircle } from './lib/circle';
+  import { startAgent } from './lib/agent';
 
   const demo = mode() === 'demo';
   // Theme attributes go on <html> during component init, i.e. before the first paint.
@@ -103,6 +105,13 @@
       activity: (text) => pushActivity('info', snippet(text, 44), undefined, 5200),
       refresh: () => calendarTick.update((n) => n + 1),
     });
+    // Circle to Ask / screen awareness: a finished read opens the panel on the Circle tool
+    void wireCircle(() => {
+      openTool('circle');
+      emitIntent('expand');
+    });
+    // Agent Mode: listen for agent-timer / agent-task even while its view is closed
+    void startAgent();
     const offVoice = onVoiceCommand(routeVoice);
     const offResult = onVoiceResult(onResult);
     // surface voice failures instead of leaving the user wondering

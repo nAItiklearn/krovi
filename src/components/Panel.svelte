@@ -13,7 +13,6 @@
 
   import Home from '../views/Home.svelte';
   import Clipboard from '../views/Clipboard.svelte';
-  import PasteStack from '../views/PasteStack.svelte';
   import Timers from '../views/Timers.svelte';
   import Pomodoro from '../views/Pomodoro.svelte';
   import FileShelf from '../views/FileShelf.svelte';
@@ -23,11 +22,14 @@
   import Notes from '../views/Notes.svelte';
   import WorldClocks from '../views/WorldClocks.svelte';
   import Convert from '../views/Convert.svelte';
-  import Calculator from '../views/Calculator.svelte';
   import ScreenTime from '../views/ScreenTime.svelte';
   import Settings from '../views/Settings.svelte';
   import Transfer from '../views/Transfer.svelte';
   import Explain from '../views/Explain.svelte';
+  import CleanView from '../views/CleanView.svelte';
+  import CircleView from '../views/CircleView.svelte';
+  import AgentPanel from './AgentPanel.svelte';
+  import ExtrasView from '../views/ExtrasView.svelte';
 
   // The panel body: rail + header + the active tool. `show` flips true once the Island shape is
   // ~60% open; everything marked .enter then rises in on a stagger (and leaves first on collapse).
@@ -36,7 +38,6 @@
   const VIEWS: Record<ToolId, Component> = {
     home: Home,
     clipboard: Clipboard,
-    paste: PasteStack,
     timers: Timers,
     pomodoro: Pomodoro,
     shelf: FileShelf,
@@ -48,8 +49,11 @@
     explain: Explain,
     clocks: WorldClocks,
     convert: Convert,
-    calculator: Calculator,
     screentime: ScreenTime,
+    clean: CleanView,
+    circle: CircleView,
+    agent: AgentPanel,
+    extras: ExtrasView,
     settings: Settings,
   };
 

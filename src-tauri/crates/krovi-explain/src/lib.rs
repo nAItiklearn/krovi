@@ -16,4 +16,7 @@ pub mod win;
 
 pub use settings::{Settings, VoiceEngine};
 pub use speak::{Engine, SpeakEvent, SpeakInfo, SpeakRequest, SpeakSink, Speaker};
-pub use summary::{summarize, Summary, SummaryError, SummaryLength, MAX_CHARS};
+pub use summary::{
+    summarize, summarize_cancellable, Summary, SummaryError, SummaryItem, SummaryLength,
+    SummaryMode, MAX_CHARS,
+};

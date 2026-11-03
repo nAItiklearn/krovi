@@ -106,6 +106,15 @@ export interface SystemStats {
   /** system drive, e.g. "C:" */
   diskLabel: string;
   cpu: number;
+  /** null on machines without a battery or when Windows reports it as unknown (older builds: absent). */
+  battery?: BatteryStatus | null;
+}
+
+export interface BatteryStatus {
+  /** 0..100 */
+  percent: number;
+  pluggedIn: boolean;
+  charging: boolean;
 }
 
 /** Payload of the `clipboard-changed` event. */
@@ -179,7 +188,6 @@ export interface CalendarEvent {
 export type ToolId =
   | 'home'
   | 'clipboard'
-  | 'paste'
   | 'timers'
   | 'pomodoro'
   | 'shelf'
@@ -189,8 +197,11 @@ export type ToolId =
   | 'notes'
   | 'clocks'
   | 'convert'
-  | 'calculator'
   | 'screentime'
   | 'transfer'
   | 'explain'
+  | 'agent'
+  | 'clean'
+  | 'circle'
+  | 'extras'
   | 'settings';

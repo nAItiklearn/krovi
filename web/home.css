@@ -300,24 +300,6 @@ html:not(.js) .stage-cover { display: flex; }
 .glass-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 0.8rem; font-weight: 640; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); }
 .glass-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 
-/* paste stack */
-.stack { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; min-height: 360px; align-content: start; }
-.stack li {
-  display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border-radius: 11px;
-  background: var(--surface); border: 1px solid var(--line); font-size: 0.88rem;
-  transition: transform 0.45s var(--spring), opacity 0.3s;
-}
-.stack li .n { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 7px; background: var(--surface-3); font-family: var(--mono); font-size: 0.74rem; font-weight: 650; color: var(--text-2); }
-.stack li.top { border-color: var(--line-2); box-shadow: var(--shadow-s); }
-.stack li.top .n { background: var(--ink); color: var(--on-ink); }
-.stack li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stack li.empty { background: transparent; border-style: dashed; color: var(--text-3); }
-.stack li.empty .n { background: transparent; border: 1px dashed var(--line-2); color: var(--text-3); }
-.stack li.enter { animation: slidein 0.55s var(--spring); }
-.stack li.leave { opacity: 0; transform: translateX(24px) scale(0.96); }
-.toast { min-height: 22px; margin-top: 12px; font-size: 0.85rem; color: var(--text-3); }
-.toast b { color: var(--text); font-weight: 600; }
-
 /* pomodoro */
 .pomo { display: grid; justify-items: center; gap: 18px; padding: 8px 0 4px; }
 .ring { position: relative; width: 230px; height: 230px; }
@@ -400,6 +382,13 @@ button.day:active { transform: scale(0.92); }
 .xw-bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 0.86rem; font-weight: 620; }
 .xw-bar small { margin-left: auto; font-weight: 450; color: var(--text-3); }
 .xw-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
+/* Every mock window shows sample values, never live readings: say so on each one. */
+.xw-bar::after, .pz-head::after {
+  content: "Sample data"; flex: none; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line-2); color: var(--text-3); font-family: var(--font-body, inherit);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.pz-head::after { display: inline-block; margin-top: 8px; }
 .xw-body { padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-height: 250px; align-content: start; }
 .xr { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); font-size: 0.88rem; }
 .xr .k { flex: none; padding: 2px 8px; border-radius: 6px; background: var(--surface-3); color: var(--text-2); font-size: 0.68rem; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; }

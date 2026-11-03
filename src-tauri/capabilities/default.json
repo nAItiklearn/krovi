@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Krovi main window. Least privilege: every window mutation (size, position, show/hide, focus, click-through) is done by the Rust shell module, never by the webview. The webview only needs events (shell-mode / shell-request) plus the app's own shell_* commands. Owner: panel-shell.",
-  "windows": ["main"],
+  "description": "Krovi main window and the Circle to Ask selection overlay. Least privilege: every window mutation (size, position, show/hide, focus, click-through) is done by the Rust modules (shell, circle), never by the webview. The webviews only need events (shell-mode / shell-request / circle-arm / circle-result / aware-state) plus the app's own commands. The `circle` window is created on demand by src-tauri/src/circle.rs and only ever loads the bundled overlay page (#circle).",
+  "windows": ["main", "circle"],
   "permissions": [
     "core:default"
   ]

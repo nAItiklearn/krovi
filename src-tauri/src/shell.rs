@@ -59,6 +59,8 @@ const PANEL_VIS: (f64, f64) = (900.0, 620.0);
 const WATCHDOG: Duration = Duration::from_millis(1500);
 /// Click-through / focus sampler period (~30 Hz).
 const SAMPLE: Duration = Duration::from_millis(33);
+/// Sampler period while the window is hidden (fullscreen app, pill switched off).
+const HIDDEN_SAMPLE: Duration = Duration::from_millis(500);
 /// After a panel opens, ignore blur / outside-click for this long (focus is settling).
 const PANEL_GRACE: Duration = Duration::from_millis(350);
 /// `shell_hold(true)` is a lease: a UI that crashes while holding can't disable
@@ -266,14 +268,6 @@ mod sys {
         }
     }
 
-    #[repr(C)]
-    struct MonitorInfo {
-        size: u32,
-        monitor: Rect,
-        work: Rect,
-        flags: u32,
-    }
-
     #[link(name = "user32")]
     extern "system" {
         fn GetCursorPos(p: *mut Point) -> i32;
@@ -282,14 +276,10 @@ mod sys {
         fn GetWindowThreadProcessId(h: Hwnd, pid: *mut u32) -> u32;
         fn SetWindowPos(h: Hwnd, after: Hwnd, x: i32, y: i32, cx: i32, cy: i32, flags: u32) -> i32;
         fn SystemParametersInfoW(action: u32, ui_param: u32, pv: *mut c_void, win_ini: u32) -> i32;
-        fn MonitorFromWindow(h: Hwnd, flags: u32) -> isize;
         fn MonitorFromPoint(pt: Point, flags: u32) -> isize;
-        fn GetMonitorInfoW(m: isize, mi: *mut MonitorInfo) -> i32;
         fn GetAsyncKeyState(vk: i32) -> i16;
-        fn IsZoomed(h: Hwnd) -> i32;
         fn IsWindow(h: Hwnd) -> i32;
         fn IsWindowVisible(h: Hwnd) -> i32;
-        fn GetClassNameW(h: Hwnd, buf: *mut u16, n: i32) -> i32;
         fn GetWindowLongW(h: Hwnd, index: i32) -> i32;
         fn SetForegroundWindow(h: Hwnd) -> i32;
     }
@@ -304,7 +294,6 @@ mod sys {
     const GWL_EXSTYLE: i32 = -20;
     const WS_EX_TOPMOST: i32 = 0x0000_0008;
     const SPI_GETWORKAREA: u32 = 0x0030;
-    const MONITOR_DEFAULTTONEAREST: u32 = 2;
     const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
 
     pub fn cursor_pos() -> Option<Point> {
@@ -404,49 +393,11 @@ mod sys {
         }
     }
 
-    fn class_of(h: Hwnd) -> String {
-        let mut buf = [0u16; 64];
-        let n = unsafe { GetClassNameW(h, buf.as_mut_ptr(), 64) };
-        String::from_utf16_lossy(&buf[..n.max(0) as usize])
-    }
-
-    /// Does the foreground window cover its whole monitor (game, video, slideshow)?
-    /// A merely *maximised* window does not count: it is exactly the case where the
-    /// pill should stay visible.
+    /// Is the foreground window fullscreen on the *same monitor as the pill* (`own`)?
+    /// A fullscreen app on another monitor, or a merely maximised window, keeps the pill.
+    /// The decision lives in `krovi_sys::fullscreen` (pure logic, unit-tested).
     pub fn foreground_is_fullscreen(own: Hwnd) -> bool {
-        unsafe {
-            let fg = GetForegroundWindow();
-            if fg == 0 || fg == own || pid_of(fg) == std::process::id() || IsWindowVisible(fg) == 0
-            {
-                return false;
-            }
-            if matches!(
-                class_of(fg).as_str(),
-                "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
-            ) {
-                return false;
-            }
-            if IsZoomed(fg) != 0 {
-                return false;
-            }
-            let Some(r) = window_rect(fg) else {
-                return false;
-            };
-            let m = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
-            let mut mi = MonitorInfo {
-                size: std::mem::size_of::<MonitorInfo>() as u32,
-                monitor: Rect::default(),
-                work: Rect::default(),
-                flags: 0,
-            };
-            if m == 0 || GetMonitorInfoW(m, &mut mi) == 0 {
-                return false;
-            }
-            r.left <= mi.monitor.left
-                && r.top <= mi.monitor.top
-                && r.right >= mi.monitor.right
-                && r.bottom >= mi.monitor.bottom
-        }
+        krovi_sys::fullscreen::foreground_fullscreen_on_pill_monitor(own)
     }
 }
 
@@ -596,7 +547,7 @@ fn sanitize_hit(r: HitRect, mode: Mode) -> Option<HitRect> {
     (w >= 1.0 && h >= 1.0).then_some(HitRect { x, y, w, h })
 }
 
-fn parse_shortcut(s: &str) -> Result<Shortcut, String> {
+pub(crate) fn parse_shortcut(s: &str) -> Result<Shortcut, String> {
     let s = s.trim();
     if s.is_empty() {
         return Err("The shortcut is empty.".into());
@@ -901,13 +852,16 @@ fn start_sampler(app: AppHandle) {
             let mut n: u64 = 0;
             let mut blur_ticks: u32 = 0;
             let mut glance = Glance::default();
+            let mut visible = true;
             loop {
-                thread::sleep(SAMPLE);
+                // ~30 Hz while the window is shown (click-through, eyes); 2 Hz while hidden,
+                // where only the fullscreen/restore housekeeping has anything to do.
+                thread::sleep(if visible { SAMPLE } else { HIDDEN_SAMPLE });
                 if app.state::<Shell>().quitting.load(Ordering::Relaxed) {
                     break;
                 }
                 n = n.wrapping_add(1);
-                tick(&app, n, &mut blur_ticks, &mut glance);
+                visible = tick(&app, n, &mut blur_ticks, &mut glance);
             }
         });
 }
@@ -930,9 +884,8 @@ fn glance_vector(win: sys::Rect, hit: Option<HitRect>, pt: sys::Point) -> (f64, 
     (dx, dy, dx.hypot(dy))
 }
 
-/// Emit `shell-cursor` at <=10 Hz, only while in range (<=400 px), skipping moves of
-/// <2 px; one final `{0,0,9999}` when the cursor leaves range / the pill goes away.
-/// Costs nothing while out of range (no emit, no allocation).
+/// Emit `shell-cursor` at <=10 Hz while the pill is shown, skipping moves of <2 px (so a
+/// still cursor costs nothing); one final `{0,0,9999}` when the pill goes away.
 fn glance_update(app: &AppHandle, g: &mut Glance, sample: Option<(f64, f64, f64)>) {
     match sample {
         Some((dx, dy, dist)) => {
@@ -968,10 +921,12 @@ fn glance_update(app: &AppHandle, g: &mut Glance, sample: Option<(f64, f64, f64)
     }
 }
 
-fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
+/// One sampler step. Returns whether the window is visible (the caller samples slowly
+/// while it is not).
+fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) -> bool {
     let own = own_hwnd();
     if own == 0 {
-        return;
+        return true;
     }
     let sh = app.state::<Shell>();
     let visible = sys::is_visible(own);
@@ -995,11 +950,9 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
             let btn = sys::button_down();
             let inside = point_in(hit_to_screen(mode, hit, wr), pt, 1);
 
+            // The pupils follow the cursor anywhere on screen; the pill itself never moves.
             if mode == Mode::Pill {
-                let v = glance_vector(wr, hit, pt);
-                if v.2 <= 400.0 {
-                    sample = Some(v);
-                }
+                sample = Some(glance_vector(wr, hit, pt));
             }
 
             // Click-through. Keep the window interactive while a drag that started
@@ -1061,11 +1014,11 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
         }
     }
 
-    // Eyes: in range only while the pill itself is visible; otherwise recentre once.
+    // Eyes: only while the pill itself is visible; otherwise recentre once.
     glance_update(app, glance, sample);
 
-    // ~2 Hz housekeeping.
-    if n.is_multiple_of(15) {
+    // ~2 Hz housekeeping: every 15th fast tick, or every (500 ms) tick while hidden.
+    if !visible || n.is_multiple_of(15) {
         let (mode, hide_fs, fs_now, settled) = {
             let st = sh.lk();
             (
@@ -1075,7 +1028,8 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
                 st.last_apply.elapsed() > Duration::from_millis(400),
             )
         };
-        let fs = hide_fs && sys::foreground_is_fullscreen(own);
+        // A running screen-awareness session must stay visible (D-021): never hide for fullscreen then.
+        let fs = hide_fs && !crate::circle::aware_active(app) && sys::foreground_is_fullscreen(own);
         if fs != fs_now {
             sh.lk().fs_hidden = fs;
             log(format!("fullscreen={fs}"));
@@ -1106,6 +1060,7 @@ fn tick(app: &AppHandle, n: u64, blur_ticks: &mut u32, glance: &mut Glance) {
             }
         }
     }
+    visible
 }
 
 // ---------------------------------------------------------------------------

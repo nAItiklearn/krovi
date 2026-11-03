@@ -15,7 +15,9 @@ pub struct MemStore {
     notes: Vec<Note>,
     tasks: Vec<Task>,
     shelves: Vec<StoredShelf>,
-    screen_time: Vec<ScreenTimeRecord>,
+    /// Keyed like the SQLite primary key `(day, app)`, so `load` is always in the
+    /// canonical (day asc, app asc) order and an upsert is a plain map write.
+    screen_time: BTreeMap<(u32, String), u64>,
     calendar: Vec<CalendarEvent>,
     settings: BTreeMap<String, String>,
 }
@@ -61,11 +63,33 @@ impl Store for MemStore {
     }
 
     fn load_screen_time(&self) -> Result<Vec<ScreenTimeRecord>> {
-        Ok(self.screen_time.clone())
+        Ok(self
+            .screen_time
+            .iter()
+            .map(|((day, app), &ms)| ScreenTimeRecord {
+                day: *day,
+                app: app.clone(),
+                ms,
+            })
+            .collect())
     }
     fn save_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()> {
-        self.screen_time = records.to_vec();
+        self.screen_time = records
+            .iter()
+            .map(|r| ((r.day, r.app.clone()), r.ms))
+            .collect();
         Ok(())
+    }
+    fn upsert_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()> {
+        for r in records {
+            self.screen_time.insert((r.day, r.app.clone()), r.ms);
+        }
+        Ok(())
+    }
+    fn prune_screen_time(&mut self, min_day: u32) -> Result<usize> {
+        let before = self.screen_time.len();
+        self.screen_time.retain(|(day, _), _| *day >= min_day);
+        Ok(before - self.screen_time.len())
     }
 
     fn load_calendar(&self) -> Result<Vec<CalendarEvent>> {
@@ -100,6 +124,29 @@ mod tests {
     fn mem_store_round_trips_everything() {
         let mut s = MemStore::new();
         testkit::exercise(&mut s);
+    }
+
+    #[test]
+    fn mem_store_screen_time_upsert_and_prune_match_the_contract() {
+        let mut s = MemStore::new();
+        testkit::exercise_screen_time_incremental(&mut s);
+    }
+
+    #[test]
+    fn mem_store_screen_time_loads_in_canonical_order_like_sqlite() {
+        let mut s = MemStore::new();
+        let rec = |day: u32, app: &str, ms: u64| ScreenTimeRecord {
+            day,
+            app: app.into(),
+            ms,
+        };
+        // saved out of order → loaded day asc, app asc (what SQLite's ORDER BY gives)
+        s.save_screen_time(&[rec(2, "b", 1), rec(1, "z", 2), rec(2, "a", 3)])
+            .unwrap();
+        assert_eq!(
+            s.load_screen_time().unwrap(),
+            vec![rec(1, "z", 2), rec(2, "a", 3), rec(2, "b", 1)]
+        );
     }
 
     #[test]

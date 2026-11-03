@@ -16,7 +16,6 @@ export interface ToolDef {
 export const TOOLS: ToolDef[] = [
   { id: 'home', label: 'Home', icon: 'home', hint: 'Everything at a glance', keywords: ['dashboard', 'overview'] },
   { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', hint: 'Searchable copy history', keywords: ['copy', 'history', 'paste'] },
-  { id: 'paste', label: 'Paste Stack', icon: 'paste', hint: 'Numbered paste slots', keywords: ['queue', 'slots', 'stack'] },
   { id: 'timers', label: 'Timers', icon: 'timers', hint: 'Countdowns and stopwatch', keywords: ['countdown', 'stopwatch', 'alarm'] },
   { id: 'pomodoro', label: 'Pomodoro', icon: 'pomodoro', hint: 'Focus and break cycles', keywords: ['focus', 'work', 'break'] },
   { id: 'shelf', label: 'File Shelf', icon: 'shelf', hint: 'Park files within reach', keywords: ['files', 'drop', 'tray'] },
@@ -28,8 +27,11 @@ export const TOOLS: ToolDef[] = [
   { id: 'explain', label: 'Explain', icon: 'bookOpen', hint: 'Summarize & explain any text', keywords: ['summarize', 'summary', 'explain', 'read aloud', 'tldr', 'simplify', 'text'] },
   { id: 'clocks', label: 'World Clocks', icon: 'clocks', hint: 'Time zones at a glance', keywords: ['time', 'timezone'] },
   { id: 'convert', label: 'Convert', icon: 'convert', hint: 'Units and currency', keywords: ['unit', 'currency', 'exchange'] },
-  { id: 'calculator', label: 'Calculator', icon: 'calculator', hint: 'Evaluate expressions', keywords: ['math', 'calc'] },
   { id: 'screentime', label: 'Screen Time', icon: 'screentime', hint: 'Where your day went', keywords: ['apps', 'usage', 'focus'] },
+  { id: 'agent', label: 'Agent', icon: 'sparkles', hint: 'Tell Krovi what to do', keywords: ['agent', 'do', 'open', 'search', 'youtube', 'google', 'launch', 'remind', 'email', 'draft', 'command'] },
+  { id: 'circle', label: 'Circle to Ask', icon: 'search', hint: 'Read any part of the screen', keywords: ['circle', 'ocr', 'screen', 'text', 'region', 'ask', 'screenshot', 'awareness'] },
+  { id: 'clean', label: 'Clean My OS', icon: 'sparkles', hint: 'Clear junk to the Recycle Bin', keywords: ['clean', 'junk', 'temp', 'cache', 'storage', 'recycle bin', 'free space', 'disk'] },
+  { id: 'extras', label: 'Extras', icon: 'listChecks', hint: 'Snippets, file organizer, workflows, search', keywords: ['snippets', 'organize', 'organise', 'workflow', 'search files', 'find file', 'launcher', 'rules', 'downloads'] },
   { id: 'settings', label: 'Settings', icon: 'settings', hint: 'Shortcut, theme, behaviour', keywords: ['preferences', 'options', 'hotkey'] },
 ];
 

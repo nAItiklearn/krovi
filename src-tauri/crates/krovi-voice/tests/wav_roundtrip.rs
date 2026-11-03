@@ -103,7 +103,7 @@ fn cases() -> Vec<Case> {
             "start a timer for ninety seconds",
             StartTimer { seconds: 90 },
         ),
-        cmd("cmd-calculator", "launch the calculator", open(Calculator)),
+        cmd("cmd-screentime", "open screen time", open(Screentime)),
         cmd("cmd-media", "open media", open(Media)),
         chatter("chat-fox", "the quick brown fox jumps over the lazy dog"),
         chatter("chat-time", "what time is it in tokyo right now"),

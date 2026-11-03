@@ -64,6 +64,9 @@ export interface Runner {
 const NOOP: Runner = { cursor() {}, stop() {} };
 /** Cursor events closer together than this are dropped (the Rust side already caps at 10 Hz). */
 const CURSOR_MIN_GAP_MS = 80;
+/** Cursor-following glide: ease-out, a little shorter than the 100 ms event spacing plus slack. */
+export const FOLLOW_MS = 140;
+export const FOLLOW_EASE = 'cubic-bezier(0.22, 0.8, 0.3, 1)';
 
 const quant = (v: number, q: number): number => (q > 0 ? Math.round(v * q) / q : v);
 
@@ -79,8 +82,18 @@ export function runCompanion(
   let stopped = false;
   let lastCursor = -Infinity;
 
+  /** Following the cursor: one short eased glide (bounded compositor time, no stepping). */
+  const followGaze = (x: number, y: number) => {
+    const q = read().style.quantize;
+    el.style.setProperty('--gx', quant(x, q).toFixed(3));
+    el.style.setProperty('--gy', quant(y, q).toFixed(3));
+    el.style.setProperty('--look', FOLLOW_EASE);
+    el.style.setProperty('--look-ms', `${FOLLOW_MS}ms`);
+  };
+
   const setGaze = (x: number, y: number, ms: number) => {
     const q = read().style.quantize;
+    el.style.removeProperty('--look'); // back to the stylesheet's stepped dart
     el.style.setProperty('--gx', quant(x, q).toFixed(3));
     el.style.setProperty('--gy', quant(y, q).toFixed(3));
     // A glance is a ballistic dart: one drawn frame per ~60 ms of its length (84 ms = a single
@@ -157,7 +170,7 @@ export function runCompanion(
 
   const reset = () => {
     delete el.dataset.pose;
-    for (const v of ['--gx', '--gy', '--look-ms', '--look-steps', '--side']) el.style.removeProperty(v);
+    for (const v of ['--gx', '--gy', '--look', '--look-ms', '--look-steps', '--side']) el.style.removeProperty(v);
     const lids = el.querySelectorAll('.lid');
     for (let i = 0; i < lids.length; i++) lids[i].getAnimations?.().forEach((a) => a.cancel());
   };
@@ -193,7 +206,7 @@ export function runCompanion(
       sched.gx = g.x;
       sched.gy = g.y;
       if (noteCursor(sched, now)) delete el.dataset.pose; // closed eyes open to look
-      setGaze(g.x, g.y, Math.min(p.lookMs, 130));
+      followGaze(g.x, g.y);
       if (timer === null) schedule(); // woken from a doze: the timer chain starts again
     },
     stop() {

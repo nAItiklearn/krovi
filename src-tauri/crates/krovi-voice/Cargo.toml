@@ -12,9 +12,13 @@ default = []
 # everywhere: the pure command parser works, `available()` is false and starting the
 # microphone returns `VoiceError::Unavailable`.
 native = ["dep:windows"]
+# Local Whisper recognizer (whisper.cpp, built from source by whisper-rs-sys with CMake).
+# The app enables it; CI pins a portable CPU baseline via GGML_* env vars.
+whisper = ["dep:whisper-rs"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+whisper-rs = { version = "0.16", optional = true }
 
 [dev-dependencies]
 serde_json = "1"
@@ -31,6 +35,7 @@ required-features = ["native"]
 [target.'cfg(windows)'.dependencies]
 # Same windows-rs line as krovi-sys, so the workspace links ONE copy of the bindings.
 windows = { version = "0.58", optional = true, features = [
+    "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
     "Win32_Media_Audio",
     "Win32_Media_Speech",
@@ -50,5 +55,6 @@ windows = { version = "0.58", optional = true, features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
 ] }

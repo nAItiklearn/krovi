@@ -35,13 +35,6 @@ export const clipboardFixture: ClipEntry[] = [
   { id: 1, kind: 'Text', content: 'Meeting moved to 3pm Thursday', pinned: false, created_at: NOW - 8 * HOUR },
 ];
 
-export const pasteStackFixture: string[] = [
-  'INV-2026-0042',
-  'naitik@example.com',
-  'https://krovi.tech',
-  'The quick brown fox jumps over the lazy dog.',
-];
-
 export const notesFixture: Note[] = [
   { id: 3, body: 'Launch checklist\n- [x] core tests green\n- [x] website live\n- [ ] package installer', created_at: NOW - 2 * DAY, updated_at: NOW - 6 * MIN },
   { id: 2, body: 'Call the framer back about the 30x40 prints.', created_at: NOW - 1 * DAY, updated_at: NOW - 3 * HOUR },
@@ -76,8 +69,8 @@ export const shelvesFixture: StoredShelf[] = [
   },
 ];
 
-/** Day index = days since the Unix epoch (matches krovi-core ScreenTime). */
-export const today = Math.floor(NOW / DAY);
+/** Day index = LOCAL calendar days since 1970-01-01 (matches krovi-core ScreenTime, which is bucketed by local midnight). */
+export const today = Math.floor((NOW - new Date(NOW).getTimezoneOffset() * MIN) / DAY);
 
 export const screenTimeFixture: ScreenTimeRecord[] = [
   { day: today, app: 'Code.exe', ms: 102 * MIN },

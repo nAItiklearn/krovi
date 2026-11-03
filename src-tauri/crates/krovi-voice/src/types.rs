@@ -35,7 +35,6 @@ impl Mode {
 pub enum ToolId {
     Home,
     Clipboard,
-    Paste,
     Timers,
     Pomodoro,
     Shelf,
@@ -45,7 +44,6 @@ pub enum ToolId {
     Notes,
     Clocks,
     Convert,
-    Calculator,
     Screentime,
     /// Quick Transfer (LAN file transfer to/from a phone).
     Transfer,
@@ -55,10 +53,9 @@ pub enum ToolId {
 }
 
 impl ToolId {
-    pub const ALL: [ToolId; 17] = [
+    pub const ALL: [ToolId; 15] = [
         ToolId::Home,
         ToolId::Clipboard,
-        ToolId::Paste,
         ToolId::Timers,
         ToolId::Pomodoro,
         ToolId::Shelf,
@@ -68,7 +65,6 @@ impl ToolId {
         ToolId::Notes,
         ToolId::Clocks,
         ToolId::Convert,
-        ToolId::Calculator,
         ToolId::Screentime,
         ToolId::Transfer,
         ToolId::Explain,
@@ -79,7 +75,6 @@ impl ToolId {
         match self {
             ToolId::Home => "home",
             ToolId::Clipboard => "clipboard",
-            ToolId::Paste => "paste",
             ToolId::Timers => "timers",
             ToolId::Pomodoro => "pomodoro",
             ToolId::Shelf => "shelf",
@@ -89,7 +84,6 @@ impl ToolId {
             ToolId::Notes => "notes",
             ToolId::Clocks => "clocks",
             ToolId::Convert => "convert",
-            ToolId::Calculator => "calculator",
             ToolId::Screentime => "screentime",
             ToolId::Transfer => "transfer",
             ToolId::Explain => "explain",
@@ -724,7 +718,6 @@ mod tests {
             [
                 "home",
                 "clipboard",
-                "paste",
                 "timers",
                 "pomodoro",
                 "shelf",
@@ -734,7 +727,6 @@ mod tests {
                 "notes",
                 "clocks",
                 "convert",
-                "calculator",
                 "screentime",
                 "transfer",
                 "explain",

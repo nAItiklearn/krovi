@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use krovi_core::{ClipboardHistory, Notes, PasteStack, TodoList};
+use krovi_core::calendar::ZoneOffset;
+use krovi_core::{ClipboardHistory, Notes, ScreenTime, TodoList};
 use krovi_net::{Cached, FxReply, Place, PlaceDto, Rates, WeatherData, WeatherReply};
 use krovi_store::wire::{calendar_dtos, clip_dtos, parse_clip_kind, CalendarDto};
 use krovi_store::{screen_time_records, stored_shelves};
@@ -48,7 +49,7 @@ pub struct TaskDto {
     pub completed_at: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShelfItemDto {
     pub id: u64,
     pub name: String,
@@ -57,7 +58,7 @@ pub struct ShelfItemDto {
     pub added_at: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShelfDto {
     pub name: String,
     pub items: Vec<ShelfItemDto>,
@@ -93,13 +94,13 @@ async fn blocking<T: Send + 'static>(
 // Persisted settings as JSON (weather place + caches, FX cache)
 // ---------------------------------------------------------------------------
 
-fn setting_get<T: DeserializeOwned>(state: &AppState, key: &str) -> Option<T> {
+pub(crate) fn setting_get<T: DeserializeOwned>(state: &AppState, key: &str) -> Option<T> {
     let store = state.store.lock().ok()?;
     let raw = store.get_setting(key).ok().flatten()?;
     serde_json::from_str(&raw).ok()
 }
 
-fn setting_set<T: Serialize>(state: &AppState, key: &str, value: &T) -> CmdResult<()> {
+pub(crate) fn setting_set<T: Serialize>(state: &AppState, key: &str, value: &T) -> CmdResult<()> {
     let raw = serde_json::to_string(value).map_err(|e| e.to_string())?;
     let mut store = state.store.lock().map_err(lock_err)?;
     store.set_setting(key, &raw).map_err(|e| e.to_string())
@@ -174,37 +175,6 @@ pub fn remove_clip(app: AppHandle, state: State<AppState>, id: u64) -> CmdResult
     crate::live::prune_clip_images(&app);
     crate::live::emit_clipboard(&app, &dtos, None);
     Ok(dtos)
-}
-
-// ---------------------------------------------------------------------------
-// Paste stack (SPEC O2) — session-scoped by design (not persisted).
-// ---------------------------------------------------------------------------
-
-fn paste_vec(p: &PasteStack) -> Vec<String> {
-    p.slots().into_iter().map(|(_, v)| v.to_string()).collect()
-}
-
-#[tauri::command]
-pub fn load_paste_stack(state: State<AppState>) -> CmdResult<Vec<String>> {
-    let p = state.paste.lock().map_err(lock_err)?;
-    Ok(paste_vec(&p))
-}
-
-#[tauri::command]
-pub fn push_paste(state: State<AppState>, value: String) -> CmdResult<Vec<String>> {
-    if value.is_empty() {
-        return Err("nothing to push".into());
-    }
-    let mut p = state.paste.lock().map_err(lock_err)?;
-    p.push(value);
-    Ok(paste_vec(&p))
-}
-
-#[tauri::command]
-pub fn pop_paste(state: State<AppState>) -> CmdResult<Vec<String>> {
-    let mut p = state.paste.lock().map_err(lock_err)?;
-    p.pop();
-    Ok(paste_vec(&p))
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +325,49 @@ pub fn load_shelves(state: State<AppState>) -> CmdResult<Vec<ShelfDto>> {
         .collect())
 }
 
+/// Replace every shelf with the UI's list (names + items in display order), persist it,
+/// and return what is now stored. Items are file *references*: nothing on disk is touched.
+#[tauri::command]
+pub fn save_shelves(state: State<AppState>, shelves: Vec<ShelfDto>) -> CmdResult<Vec<ShelfDto>> {
+    use krovi_core::limits::{valid_shelf_item, valid_shelf_name, MAX_SHELF_ITEMS, MAX_SHELVES};
+    use krovi_core::{FileShelf, ShelfItem};
+    if shelves.len() > MAX_SHELVES {
+        return Err(format!("at most {MAX_SHELVES} shelves"));
+    }
+    let mut parts = Vec::with_capacity(shelves.len());
+    for s in shelves {
+        if !valid_shelf_name(&s.name) {
+            return Err("invalid shelf name".into());
+        }
+        if s.items.len() > MAX_SHELF_ITEMS {
+            return Err(format!("at most {MAX_SHELF_ITEMS} items per shelf"));
+        }
+        let mut items = Vec::with_capacity(s.items.len());
+        for i in s.items {
+            if !valid_shelf_item(&i.name, &i.stored_path) {
+                return Err("invalid shelf item".into());
+            }
+            items.push(ShelfItem {
+                id: i.id,
+                name: i.name,
+                stored_path: i.stored_path,
+                size_bytes: i.size_bytes,
+                added_at: i.added_at,
+            });
+        }
+        parts.push((s.name.trim().to_string(), items));
+    }
+    let fs = FileShelf::from_parts(parts);
+    {
+        let mut store = state.store.lock().map_err(lock_err)?;
+        store
+            .save_shelves(&stored_shelves(&fs))
+            .map_err(|e| e.to_string())?;
+    }
+    *state.shelf.lock().map_err(lock_err)? = fs;
+    load_shelves(state)
+}
+
 #[tauri::command]
 pub fn load_screen_time(state: State<AppState>) -> CmdResult<Vec<ScreenTimeDto>> {
     let st = state.screen.lock().map_err(lock_err)?;
@@ -368,33 +381,83 @@ pub fn load_screen_time(state: State<AppState>) -> CmdResult<Vec<ScreenTimeDto>>
         .collect())
 }
 
-/// Close the previous foreground interval, credit it, and persist the aggregate.
+/// The user's local zone offset (ms east of UTC, DST included) at `utc_ms`, from Windows.
+/// Reuses the reminders scheduler's zone, so screen time and reminders agree on "today".
+fn local_offset_ms(utc_ms: u64) -> i64 {
+    crate::reminders::OsZone.offset_ms_at(utc_ms as i64)
+}
+
+/// Close the previous foreground interval, credit it, and persist what changed.
 /// Driven by the 5 s background tick in `live.rs`; the `foreground_tick` command
 /// below calls the same code so a UI-driven tick can never double count (the
 /// sampler credits only the time since the previous tick, whoever made it).
+///
+/// Days are the user's **local** calendar days (the zone offset at `now`), only time
+/// while the user is present is credited (not locked, input within 5 minutes), and a
+/// gap longer than two sample intervals — sleep/resume — is never credited; see
+/// `krovi_sys::foreground`. Rows go to the database in batches (`persist_screen_time`).
 pub(crate) fn tick_screen_time(state: &AppState, now: u64) -> CmdResult<Option<ScreenTimeDto>> {
-    let process = krovi_sys::foreground_process().map_err(|e| e.to_string())?;
-    let mut sampler = state.sampler.lock().map_err(lock_err)?;
-    match sampler.tick(process, now) {
-        Some((day, app, ms)) => {
-            let mut st = state.screen.lock().map_err(lock_err)?;
-            st.record(day, app.as_str(), ms);
-            let records = screen_time_records(&st);
-            let mut store = state.store.lock().map_err(lock_err)?;
-            store
-                .save_screen_time(&records)
-                .map_err(|e| e.to_string())?;
-            Ok(Some(ScreenTimeDto { day, app, ms }))
-        }
-        None => Ok(None),
+    // An app that cannot be read (an elevated or protected process) counts as "no app"
+    // rather than an error: the tick must still close the previous interval, or that
+    // previous app would keep being credited for time it no longer owns.
+    let process = krovi_sys::foreground_process().unwrap_or(None);
+    let presence = krovi_sys::presence();
+    let offset = local_offset_ms(now);
+    let today = krovi_sys::local_day_index(now, offset);
+
+    let credits = state
+        .sampler
+        .lock()
+        .map_err(lock_err)?
+        .tick(process, now, offset, presence);
+
+    let mut st = state.screen.lock().map_err(lock_err)?;
+    for c in &credits {
+        st.record(c.day, c.app.as_str(), c.ms);
     }
+    persist_screen_time(state, &mut st, now, today, false)?;
+    // At most two credits (a span across local midnight); report the latest day's.
+    Ok(credits.into_iter().last().map(|c| ScreenTimeDto {
+        day: c.day,
+        app: c.app,
+        ms: c.ms,
+    }))
+}
+
+/// Retention and batched persistence for screen time: a thin lock-and-call around
+/// `krovi_store::sync_screen_time` (where the policy and its tests live). Most ticks do
+/// nothing; changed `(day, app)` rows are upserted about once a minute, days past the
+/// 90-day window are expired once per local day, and `force` (quit) skips the wait.
+fn persist_screen_time(
+    state: &AppState,
+    st: &mut ScreenTime,
+    now: u64,
+    today: u32,
+    force: bool,
+) -> CmdResult<()> {
+    let mut store = state.store.lock().map_err(lock_err)?;
+    krovi_store::sync_screen_time(&mut **store, st, now, today, force).map_err(|e| e.to_string())
+}
+
+/// Write any screen-time rows still waiting for the next batch. Called once on quit
+/// (`live.rs`), so at most the last few seconds of an open interval are lost.
+pub(crate) fn flush_screen_time_now(state: &AppState) -> CmdResult<()> {
+    let now = now_ms();
+    let today = krovi_sys::local_day_index(now, local_offset_ms(now));
+    let mut st = state.screen.lock().map_err(lock_err)?;
+    persist_screen_time(state, &mut st, now, today, true)
 }
 
 /// Sample the foreground app for screen-time (SPEC C11). The live hub already does
 /// this every 5 s, so the UI does not need to call it; kept for compatibility.
+///
+/// The `now` argument is ignored on purpose: the app's own clock decides what is
+/// credited and when retention runs, so a wrong value from the UI can neither invent
+/// time nor expire the history.
 #[tauri::command]
 pub fn foreground_tick(state: State<AppState>, now: u64) -> CmdResult<Option<ScreenTimeDto>> {
-    tick_screen_time(&state, now)
+    let _ = now;
+    tick_screen_time(&state, now_ms())
 }
 
 // ---------------------------------------------------------------------------
@@ -687,16 +750,72 @@ pub fn convert_currency(amount: f64, from: String, to: String, rates: Rates) -> 
 // fills it from `Intl`.
 // ---------------------------------------------------------------------------
 
+const WORLD_CLOCKS_KEY: &str = "world_clocks.v1";
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WorldClockDto {
+    pub label: String,
+    pub tz: String,
+}
+
+fn default_world_clocks() -> Vec<WorldClockDto> {
+    [
+        ("Local", ""),
+        ("San Francisco", "America/Los_Angeles"),
+        ("New York", "America/New_York"),
+        ("London", "Europe/London"),
+        ("Mumbai", "Asia/Kolkata"),
+        ("Tokyo", "Asia/Tokyo"),
+    ]
+    .into_iter()
+    .map(|(label, tz)| WorldClockDto {
+        label: label.into(),
+        tz: tz.into(),
+    })
+    .collect()
+}
+
+/// The user's clocks as saved, or the starter set when nothing was ever saved.
 #[tauri::command]
-pub fn load_world_clocks() -> serde_json::Value {
-    serde_json::json!([
-        {"label":"Local","tz":""},
-        {"label":"San Francisco","tz":"America/Los_Angeles"},
-        {"label":"New York","tz":"America/New_York"},
-        {"label":"London","tz":"Europe/London"},
-        {"label":"Mumbai","tz":"Asia/Kolkata"},
-        {"label":"Tokyo","tz":"Asia/Tokyo"}
-    ])
+pub fn load_world_clocks(state: State<AppState>) -> CmdResult<Vec<WorldClockDto>> {
+    let store = state.store.lock().map_err(lock_err)?;
+    let saved = store
+        .get_setting(WORLD_CLOCKS_KEY)
+        .map_err(|e| e.to_string())?
+        .and_then(|raw| serde_json::from_str::<Vec<WorldClockDto>>(&raw).ok());
+    Ok(saved.unwrap_or_else(default_world_clocks))
+}
+
+#[tauri::command]
+pub fn save_world_clocks(
+    state: State<AppState>,
+    clocks: Vec<WorldClockDto>,
+) -> CmdResult<Vec<WorldClockDto>> {
+    use krovi_core::limits::{valid_clock_label, valid_tz, MAX_CLOCKS};
+    if clocks.len() > MAX_CLOCKS {
+        return Err(format!("at most {MAX_CLOCKS} clocks"));
+    }
+    if let Some(bad) = clocks
+        .iter()
+        .find(|c| !valid_clock_label(&c.label) || !valid_tz(&c.tz))
+    {
+        return Err(format!("invalid clock {:?}", bad.label));
+    }
+    let clean: Vec<WorldClockDto> = clocks
+        .into_iter()
+        .map(|c| WorldClockDto {
+            label: c.label.trim().to_string(),
+            tz: c.tz,
+        })
+        .collect();
+    let json = serde_json::to_string(&clean).map_err(|e| e.to_string())?;
+    state
+        .store
+        .lock()
+        .map_err(lock_err)?
+        .set_setting(WORLD_CLOCKS_KEY, &json)
+        .map_err(|e| e.to_string())?;
+    Ok(clean)
 }
 
 // ---------------------------------------------------------------------------

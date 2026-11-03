@@ -8,6 +8,7 @@
   import { clockText, freeDisk, memPercent, snippet, type PillMode } from './pillModel';
   import type { SystemStats } from '../lib/live';
   import type { Activity, LiveTimer } from '../lib/stores';
+  import type { DictationFace } from '../lib/dictation';
 
   // The idle face of Krovi: a calm, glanceable strip. All sizing is derived from the
   // measured content (see onmeasure) so the Island's spring always chases the real width.
@@ -22,6 +23,8 @@
     partial,
     voiceError = '',
     showMic = false,
+    dictation = null,
+    action = null,
     onmeasure,
   }: {
     mode: PillMode;
@@ -35,6 +38,10 @@
     voiceError?: string;
     /** reserve room on the right for the mic button the Island overlays */
     showMic?: boolean;
+    /** global dictation (local Whisper): what to draw while it listens / works / has something to say */
+    dictation?: DictationFace | null;
+    /** the button the Island overlays on the right during dictation: cancel, or copy the blocked text */
+    action?: 'cancel' | 'copy' | null;
     onmeasure: (w: number) => void;
   } = $props();
 
@@ -57,9 +64,24 @@
 </script>
 
 {#key mode}
-  <span class="row" class:hover class:mic={showMic} use:measure in:swap={{ y: 6, duration: 260, delay: 50 }}>
+  <span class="row" class:hover class:mic={showMic || action === 'cancel'} class:copy={action === 'copy'} use:measure in:swap={{ y: 6, duration: 260, delay: 50 }}>
     {#if mode === 'voice'}
-      {#if voice === 'error'}
+      {#if dictation}
+        {#if dictation.kind === 'notice'}
+          <span class="act-ico" class:bad={dictation.tone !== 'info'}><Icon name={dictation.tone === 'info' ? 'micOff' : 'alert'} size={14} /></span>
+          <span class="strong">{dictation.label}</span>
+          {#if dictation.detail}<span class="soft ellipsis snip">{snippet(dictation.detail, dictation.copy ? 24 : 38)}</span>{/if}
+        {:else}
+          <span class="act-ico"><Icon name="mic" size={14} /></span>
+          <span class="strong">{dictation.label}</span>
+          {#if dictation.kind === 'listening'}
+            <!-- level-driven: only a transform changes, so it costs no layout -->
+            <span class="meter" aria-hidden="true"><i style:transform="scaleX({dictation.level})"></i></span>
+          {:else}
+            <span class="spin" aria-hidden="true"><Icon name="loader" size={13} /></span>
+          {/if}
+        {/if}
+      {:else if voice === 'error'}
         <span class="act-ico bad"><Icon name="alert" size={14} /></span>
         <span class="strong">Voice input failed</span>
         {#if voiceError}<span class="soft ellipsis snip">{snippet(voiceError, 38)}</span>{/if}
@@ -171,6 +193,38 @@
   }
   .row.mic {
     padding-right: 42px;
+  }
+  .row.copy {
+    padding-right: 80px;
+  }
+  /* dictation: a short level bar (transform only) and a spinner that exists only while it works */
+  .meter {
+    flex: none;
+    width: 38px;
+    height: 4px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--pill-fg) 18%, transparent);
+  }
+  .meter i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transform-origin: left center;
+    transition: transform 110ms var(--ease-out);
+  }
+  .spin {
+    display: grid;
+    place-items: center;
+    color: var(--pill-fg-2);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .act-ico.bad {
     color: var(--danger);

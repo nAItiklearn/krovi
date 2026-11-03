@@ -96,6 +96,37 @@ export function withLocalZone(zones: WorldClockZone[], localTz: string): WorldCl
   return zones.map((z) => (z.label === 'Local' && !z.tz ? { ...z, tz: localTz || 'UTC' } : z));
 }
 
+/** Store `Local` with an empty zone so it keeps following the machine's zone. */
+export function forStorage(zones: WorldClockZone[]): WorldClockZone[] {
+  return zones.map((z) => (z.label === 'Local' ? { ...z, tz: '' } : z));
+}
+
+export const SHELVES_KEY = 'krovi.shelves';
+export const CLOCKS_KEY = 'krovi.clocks';
+
+function readLocal<T>(key: string): T | null {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function writeLocal(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* blocked storage: the demo simply forgets */
+  }
+}
+function dropLocal(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function localTimeZone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -147,17 +178,32 @@ export const bridge = {
   async loadClipboard(): Promise<ClipEntry[]> {
     return isTauri() ? invoke<ClipEntry[]>('load_clipboard') : clone(fx.clipboardFixture);
   },
-  async loadPasteStack(): Promise<string[]> {
-    return isTauri() ? invoke<string[]>('load_paste_stack') : clone(fx.pasteStackFixture);
-  },
   async loadNotes(): Promise<Note[]> {
     return isTauri() ? invoke<Note[]>('load_notes') : clone(fx.notesFixture);
   },
   async loadTasks(): Promise<Task[]> {
     return isTauri() ? invoke<Task[]>('load_tasks') : clone(fx.tasksFixture);
   },
+  /**
+   * Shelves. Natively they live in the Rust store (SQLite); a list left in localStorage by an
+   * older build is migrated once and then removed. The browser demo keeps them in localStorage.
+   */
   async loadShelves(): Promise<StoredShelf[]> {
-    return isTauri() ? invoke<StoredShelf[]>('load_shelves') : clone(fx.shelvesFixture);
+    if (!isTauri()) return readLocal<StoredShelf[]>(SHELVES_KEY) ?? clone(fx.shelvesFixture);
+    const legacy = readLocal<StoredShelf[]>(SHELVES_KEY);
+    if (legacy && legacy.length) {
+      const saved = await invoke<StoredShelf[]>('save_shelves', { shelves: legacy });
+      dropLocal(SHELVES_KEY);
+      return saved;
+    }
+    return invoke<StoredShelf[]>('load_shelves');
+  },
+  async saveShelves(shelves: StoredShelf[]): Promise<StoredShelf[]> {
+    if (!isTauri()) {
+      writeLocal(SHELVES_KEY, shelves);
+      return shelves;
+    }
+    return invoke<StoredShelf[]>('save_shelves', { shelves });
   },
   async loadScreenTime(): Promise<ScreenTimeRecord[]> {
     return isTauri() ? invoke<ScreenTimeRecord[]>('load_screen_time') : clone(fx.screenTimeFixture);
@@ -219,9 +265,25 @@ export const bridge = {
 
   // --- Clocks / currency ----------------------------------------------------
 
+  /** World clocks (native: Rust store, one-time migration from localStorage; demo: localStorage). */
   async loadWorldClocks(): Promise<WorldClockZone[]> {
-    if (!isTauri()) return clone(fx.worldClocksFixture);
-    return withLocalZone(await invoke<WorldClockZone[]>('load_world_clocks'), localTimeZone());
+    if (!isTauri()) return readLocal<WorldClockZone[]>(CLOCKS_KEY) ?? clone(fx.worldClocksFixture);
+    const legacy = readLocal<WorldClockZone[]>(CLOCKS_KEY);
+    let zones: WorldClockZone[];
+    if (legacy && legacy.length) {
+      zones = await invoke<WorldClockZone[]>('save_world_clocks', { clocks: forStorage(legacy) });
+      dropLocal(CLOCKS_KEY);
+    } else {
+      zones = await invoke<WorldClockZone[]>('load_world_clocks');
+    }
+    return withLocalZone(zones, localTimeZone());
+  },
+  async saveWorldClocks(zones: WorldClockZone[]): Promise<void> {
+    if (!isTauri()) {
+      writeLocal(CLOCKS_KEY, zones);
+      return;
+    }
+    await invoke('save_world_clocks', { clocks: forStorage(zones) });
   },
   /** Rates per 1 USD. Empty when offline with nothing cached (never invented). */
   async loadCurrencyRates(): Promise<CurrencyRates> {

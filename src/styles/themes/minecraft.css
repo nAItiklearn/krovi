@@ -1,0 +1,74 @@
+/* Minecraft: the block-world "inventory" look, drawn from scratch. Light stone-grey panels with
+ * hard dark outlines and notched pixel corners, a dirt-brown pill with white square eyes, and a
+ * grass-green accent. Palette and geometry are our own (no game textures, fonts, logos or art are
+ * used or copied); the structural half (square corners, monospace, pixel dither) is _blocky.css,
+ * shared with Voxel, and the square eyes are in IdleCompanion.svelte. Light scheme: dark text on grey. */
+:root[data-theme='minecraft'],
+[data-theme-scope='minecraft'] {
+  color-scheme: light;
+  --page: #6b4f35;
+  --panel-bg: rgba(198, 198, 198, 1);
+  --pop-bg: rgba(214, 214, 214, 1);
+  --pill-bg: rgba(74, 54, 34, 1);
+  --pill-fg: #f6efdc;
+  --pill-fg-2: rgba(246, 239, 220, 0.8);
+
+  --surface-1: rgba(0, 0, 0, 0.06);
+  --surface-2: rgba(0, 0, 0, 0.1);
+  --surface-3: rgba(0, 0, 0, 0.15);
+  --line: rgba(0, 0, 0, 0.28);
+  --line-strong: rgba(0, 0, 0, 0.5);
+  --text: rgba(24, 24, 24, 0.96);
+  --text-2: rgba(24, 24, 24, 0.86);
+  --text-3: rgba(24, 24, 24, 0.8);
+
+  --accent: #14500b;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(20, 80, 11, 0.08);
+  --accent-glow: rgba(92, 179, 56, 0.55);
+  --danger: #8f1313;
+
+  --invert-bg: #373737;
+  --invert-fg: #f6f6f6;
+
+  /* the 1px rim reads as the classic bevel: white on top, dark grey below */
+  --rim-a: rgba(255, 255, 255, 1);
+  --rim-b: rgba(85, 85, 85, 1);
+  --grain-opacity: 0.07;
+  --card-hi: rgba(255, 255, 255, 0.6);
+  --spot: rgba(255, 255, 255, 0.35);
+
+  /* Stepped frames: a 3px mid-grey ring, then a black outline whose four arms stop short of the
+   * corners (a visible pixel step at each), then a hard pixel drop-shadow. No blur anywhere. */
+  --shadow-pill:
+    0 0 0 3px #8b8b8b, 0 -6px 0 0 #000000, 0 6px 0 0 #000000, -6px 0 0 0 #000000,
+    6px 0 0 0 #000000, 6px 10px 0 0 rgba(0, 0, 0, 0.34);
+  --shadow-panel:
+    0 0 0 3px #8b8b8b, 0 -6px 0 0 #000000, 0 6px 0 0 #000000, -6px 0 0 0 #000000,
+    6px 0 0 0 #000000, 8px 12px 0 0 rgba(0, 0, 0, 0.36);
+  --shadow-pop:
+    0 0 0 3px #8b8b8b, 0 -6px 0 0 #000000, 0 6px 0 0 #000000, -6px 0 0 0 #000000,
+    6px 0 0 0 #000000, 6px 10px 0 0 rgba(0, 0, 0, 0.34);
+
+  /* demo wallpaper: packed dirt under a strip of grass light */
+  --wall-top: #7a5a3a;
+  --wall-mid: #5a4029;
+  --wall-bot: #2e2014;
+  --wall-glow: rgba(124, 189, 107, 0.2);
+  --wall-r1: #6aa84f;
+  --wall-r2: #4a3622;
+  --wall-line: rgba(0, 0, 0, 0.18);
+  --wall-vig: rgba(0, 0, 0, 0.5);
+
+  /* idle companion: white square eyes on the dirt pill, a bright-grass glint */
+  --eye-fill: #ffffff;
+  --eye-fill-2: rgba(255, 255, 255, 0.3);
+  --eye-accent: #6fcf3f;
+  --eye-glow: transparent;
+  --eye-blush: rgba(255, 140, 120, 0.4);
+}
+
+:root[data-env='tauri'][data-theme='minecraft'] {
+  --panel-bg: rgba(198, 198, 198, 1);
+  --pill-bg: rgba(74, 54, 34, 0.99);
+}

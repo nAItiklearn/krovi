@@ -31,14 +31,25 @@ export interface ThemeDef {
 const defs = [
   { id: 'graphite', name: 'Graphite', scheme: 'dark', swatch: ['#0b0b0d', '#f4f4f6', '#ff8a4c'], blurb: 'Near-black glass, one ember accent' },
   { id: 'porcelain', name: 'Porcelain', scheme: 'light', swatch: ['#fafafc', '#0a0a0c', '#bc3f09'], blurb: 'Near-white glass, ink text, ember accent' },
+  { id: 'obsidian', name: 'Obsidian', scheme: 'dark', swatch: ['#1b1a18', '#faf5ed', '#d6b67c'], blurb: 'Premium dark: warm charcoal, champagne accent' },
+  { id: 'linen', name: 'Linen', scheme: 'light', swatch: ['#fbf8f2', '#201d19', '#4f6d4c'], blurb: 'Elegant light: warm paper, charcoal text, sage accent' },
   { id: 'mochi', name: 'Mochi', scheme: 'light', swatch: ['#faf2fb', '#342148', '#9c3a62'], blurb: 'Soft lilac and peach, plum ink' },
   { id: 'arcade', name: 'Arcade', scheme: 'dark', swatch: ['#0e0c26', '#f6f3ff', '#ff4fd8'], blurb: 'Indigo-black with an electric glow' },
   { id: 'terracotta', name: 'Terracotta', scheme: 'light', swatch: ['#f1e6d4', '#302016', '#4f5a16'], blurb: 'Warm sand and clay, olive accent' },
   { id: 'tide', name: 'Tide', scheme: 'dark', swatch: ['#152336', '#ecf6ff', '#5fe3c4'], blurb: 'Slate-blue glass, seafoam accent' },
+  { id: 'voxel', name: 'Voxel', scheme: 'dark', swatch: ['#242822', '#f3f6e6', '#8dd44f'], blurb: 'Blocky 8-bit stone and grass, square pixel eyes' },
+  { id: 'minecraft', name: 'Minecraft', scheme: 'light', swatch: ['#c6c6c6', '#181818', '#14500b'], blurb: 'Block-world inventory look: grey bevels, dirt and grass, square eyes' },
 ] as const satisfies readonly ThemeDef[];
 
 export type ThemeId = (typeof defs)[number]['id'];
 export type ThemeChoice = 'system' | ThemeId;
+
+/**
+ * Themes that also change SHAPE, not just colour: square corners, pixel-step frames, a monospace
+ * face (styles/themes/_blocky.css) and square pixel eyes on the idle companion.
+ */
+export const BLOCKY_THEMES: readonly ThemeId[] = ['voxel', 'minecraft'];
+export const isBlockyTheme = (id: string): boolean => (BLOCKY_THEMES as readonly string[]).includes(id);
 
 /** The registry. Order is the picker order. */
 export const THEMES = defs;

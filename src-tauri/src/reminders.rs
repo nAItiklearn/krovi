@@ -38,11 +38,12 @@ use std::io::Write as _;
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_notification::{Action, ActionPerformed, ActionType, NotificationExt};
 
+use krovi_core::alarm::{Alarm, AlarmBook, AlarmKind, AlarmSpec, DueAlarm};
 use krovi_core::calendar::{
     alert_text, format_local_ms, Calendar, DueReminder, ReminderOpts, ZoneOffset,
 };
@@ -390,14 +391,17 @@ pub struct Hub {
     generation: Mutex<u64>,
     cv: Condvar,
     info: Mutex<Info>,
+    /// Running timers / Pomodoro phases the UI asked us to ring (`alarm_sync`).
+    alarms: Mutex<AlarmBook>,
 }
 
 impl Hub {
-    fn new() -> Self {
+    fn new(alarms: AlarmBook) -> Self {
         Self {
             generation: Mutex::new(0),
             cv: Condvar::new(),
             info: Mutex::new(Info::default()),
+            alarms: Mutex::new(alarms),
         }
     }
 
@@ -720,9 +724,206 @@ fn pass(app: &AppHandle, hub: &Hub) -> bool {
     changed
 }
 
+// ---------------------------------------------------------------------------------------
+// Alarms: timers and Pomodoro phases (krovi_core::alarm)
+// ---------------------------------------------------------------------------------------
+
+/// Settings key of the persisted alarm book.
+const ALARMS_KEY: &str = "alarms.v1";
+
+/// Wire/persisted form of one alarm.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AlarmDto {
+    pub key: String,
+    pub label: String,
+    pub kind: String,
+    pub due_at: u64,
+    #[serde(default)]
+    pub fired_at: Option<u64>,
+}
+
+impl AlarmDto {
+    fn from_core(a: &Alarm) -> Self {
+        Self {
+            key: a.key.clone(),
+            label: a.label.clone(),
+            kind: a.kind.as_str().into(),
+            due_at: a.due_at,
+            fired_at: a.fired_at,
+        }
+    }
+
+    fn into_core(self) -> Option<Alarm> {
+        Some(Alarm {
+            kind: AlarmKind::parse(&self.kind)?,
+            key: self.key,
+            label: self.label,
+            due_at: self.due_at,
+            fired_at: self.fired_at,
+        })
+    }
+}
+
+/// Payload of the `alarm-fired` event (the in-app banner / pill).
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AlarmFired {
+    pub key: String,
+    pub label: String,
+    pub kind: String,
+    pub due_at: u64,
+    pub fired_at: u64,
+    pub missed: bool,
+}
+
+fn load_alarms(state: &AppState) -> AlarmBook {
+    let raw = match state.store.lock() {
+        Ok(s) => s.get_setting(ALARMS_KEY).ok().flatten(),
+        Err(_) => None,
+    };
+    let list: Vec<AlarmDto> = raw
+        .and_then(|r| serde_json::from_str(&r).ok())
+        .unwrap_or_default();
+    AlarmBook::from_alarms(list.into_iter().filter_map(AlarmDto::into_core).collect())
+}
+
+fn persist_alarms(state: &AppState, book: &AlarmBook) -> CmdResult<()> {
+    let list: Vec<AlarmDto> = book.list().iter().map(AlarmDto::from_core).collect();
+    let json = serde_json::to_string(&list).map_err(|e| e.to_string())?;
+    let mut store = state.store.lock().map_err(lock_err)?;
+    store
+        .set_setting(ALARMS_KEY, &json)
+        .map_err(|e| e.to_string())
+}
+
+fn alarm_text(d: &DueAlarm) -> (String, String) {
+    let a = &d.alarm;
+    let title = if a.label.is_empty() {
+        match a.kind {
+            AlarmKind::Timer => "Timer".to_string(),
+            AlarmKind::Pomodoro => "Pomodoro".to_string(),
+        }
+    } else {
+        a.label.clone()
+    };
+    let body = match (a.kind, d.missed) {
+        (AlarmKind::Timer, false) => "Timer finished".to_string(),
+        (AlarmKind::Pomodoro, false) => "Pomodoro phase finished".to_string(),
+        (_, true) => format!(
+            "Finished at {} while Krovi was closed or asleep",
+            stamp(a.due_at)
+        ),
+    };
+    (title, body)
+}
+
+/// Collect due alarms, persist the fired marks first, then ring them. `true` if any fired.
+fn alarm_pass(app: &AppHandle, hub: &Hub) -> bool {
+    let state = app.state::<AppState>();
+    let now = now_ms();
+    let due = {
+        let mut book = lk(&hub.alarms);
+        let due = book.collect_due(now);
+        if due.is_empty() {
+            return false;
+        }
+        if let Err(e) = persist_alarms(&state, &book) {
+            // the in-memory mark still prevents a repeat while running
+            log(format!("could not save alarm marks: {e}"));
+            lk(&hub.info).last_error = Some(e);
+        }
+        due
+    };
+    let env = probe_environment(app);
+    let mut sound_played = false;
+    for d in &due {
+        if d.silent {
+            log(format!(
+                "alarm {:?} was a day overdue: marked, not announced",
+                d.alarm.key
+            ));
+            continue;
+        }
+        let (title, body) = alarm_text(d);
+        let toast = match app
+            .notification()
+            .builder()
+            .title(&title)
+            .body(&body)
+            .show()
+        {
+            Ok(()) => "requested".to_string(),
+            Err(e) => format!("error: {e}"),
+        };
+        let sound = if sound_played {
+            "grouped".to_string()
+        } else {
+            sound_played = true;
+            play_sound(&env, false)
+        };
+        let _ = app.emit(
+            "alarm-fired",
+            &AlarmFired {
+                key: d.alarm.key.clone(),
+                label: d.alarm.label.clone(),
+                kind: d.alarm.kind.as_str().into(),
+                due_at: d.alarm.due_at,
+                fired_at: now,
+                missed: d.missed,
+            },
+        );
+        log(format!(
+            "ALARM key={} kind={} late={}ms missed={} toast={toast} sound={sound}",
+            d.alarm.key,
+            d.alarm.kind.as_str(),
+            d.late_ms,
+            d.missed
+        ));
+        if toast.starts_with("error") {
+            lk(&hub.info).last_error = Some(toast);
+        }
+    }
+    true
+}
+
+/// The UI's complete set of running countdowns (timers + the Pomodoro phase). Replaces
+/// the previous set; returns how many are pending. The scheduler re-plans at once.
+#[tauri::command]
+pub fn alarm_sync(app: AppHandle, alarms: Vec<AlarmDto>) -> CmdResult<usize> {
+    let mut specs = Vec::with_capacity(alarms.len());
+    for a in alarms {
+        let kind = AlarmKind::parse(&a.kind).ok_or_else(|| format!("unknown kind {:?}", a.kind))?;
+        specs.push(AlarmSpec {
+            key: a.key,
+            label: a.label,
+            kind,
+            due_at: a.due_at,
+        });
+    }
+    let hub = app.state::<Hub>();
+    let state = app.state::<AppState>();
+    let pending = {
+        let mut book = lk(&hub.alarms);
+        let before = book.clone();
+        book.sync(&specs, now_ms()).map_err(|e| e.to_string())?;
+        if *book != before {
+            persist_alarms(&state, &book)?;
+        }
+        book.pending()
+    };
+    hub.wake();
+    Ok(pending)
+}
+
 /// How long to sleep: until the next alert, capped, never zero.
-fn next_wait_ms(state: &AppState) -> u64 {
-    let next = lk(&state.calendar).next_alert_ms(&OsZone);
+fn next_wait_ms(state: &AppState, hub: &Hub) -> u64 {
+    let cal = lk(&state.calendar).next_alert_ms(&OsZone);
+    let alarm = lk(&hub.alarms).next_due();
+    let next = match (cal, alarm) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
     let wait = match next {
         Some(at) => at.saturating_sub(now_ms()),
         None => MAX_SLEEP_MS,
@@ -754,19 +955,22 @@ fn run(app: AppHandle) {
         // read the generation BEFORE looking, so a change made during the pass is not lost
         let seen = hub.generation();
         let changed = pass(&app, &hub);
+        alarm_pass(&app, &hub);
         lk(&hub.info).passes += 1;
         if changed {
             let list = calendar_dtos(lk(&state.calendar).list());
             emit_calendar_changed(&app, &list);
         }
-        let wait = next_wait_ms(&state);
+        let wait = next_wait_ms(&state, &hub);
         hub.wait(seen, Duration::from_millis(wait));
     }
 }
 
 pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
-    app.manage(Hub::new());
+    // live::setup has already hydrated the store; overdue alarms ring on the first pass
+    let alarms = load_alarms(&app.state::<AppState>());
+    app.manage(Hub::new(alarms));
     register_toast_actions(&handle);
     std::thread::Builder::new()
         .name("krovi-reminders".into())

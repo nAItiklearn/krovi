@@ -8,6 +8,9 @@ members = [
     "crates/krovi-voice",
     "crates/krovi-transfer",
     "crates/krovi-explain",
+    "crates/krovi-agent",
+    "crates/krovi-clean",
+    "crates/krovi-extras",
 ]
 
 # The Tauri app crate is the workspace *root* package below.
@@ -51,6 +54,9 @@ krovi-sys = { path = "crates/krovi-sys" }
 krovi-voice = { path = "crates/krovi-voice" }
 krovi-transfer = { path = "crates/krovi-transfer" }
 krovi-explain = { path = "crates/krovi-explain" }
+krovi-agent = { path = "crates/krovi-agent" }
+krovi-clean = { path = "crates/krovi-clean" }
+krovi-extras = { path = "crates/krovi-extras" }
 
 # Reminders (src/reminders.rs): the local-time-zone offset (SystemTimeToTzSpecificLocalTime),
 # the alert sound (PlaySoundW) and the toast/Focus-Assist probes. Same windows-rs line as
@@ -71,7 +77,9 @@ windows = { version = "0.58", features = [
 # fake data partly because these were opt-in; a Tauri build must never fall back
 # to fixtures. The 64-bit WinLibs MinGW toolchain builds all of them locally
 # (docs/CONTRACTS.md Â§0). Fixtures remain only for the browser demo.
-default = ["net", "native", "sqlite"]
+default = ["net", "native", "sqlite", "whisper"]
+# Local Whisper speech recognition (whisper.cpp built from source; needs CMake + MSVC).
+whisper = ["krovi-voice/whisper"]
 sqlite = ["krovi-store/sqlite"]
 net = ["krovi-net/net"]
 native = ["krovi-sys/native", "krovi-voice/native"]

@@ -15,7 +15,7 @@ _Last updated: 2026-10-31_
 ## Phase 1 — Core Rust engine (unit-tested before UI)  🔄
 - ✅ Workspace scaffold (`src-tauri/`, `krovi-core` crate) — `cargo test` green
 - ✅ Clipboard history (unpinned-cap ring, dedup-promote, pin-to-top, search/filter) — 13 tests
-- ✅ Paste stack (9 numbered slots, LIFO) — 5 tests
+- ❎ Paste stack — removed 2026-11-02 (D-015): redundant with clipboard search; 5 tests removed
 - ✅ Timers + stopwatch (injected clock, pause/resume/finish, laps) — 9 tests
 - ✅ Pomodoro state machine (layered on `CountdownTimer`, work/break cycles) — 7 tests
 - ✅ File shelf (named shelves, park/retrieve/move metadata model) — 6 tests
@@ -36,7 +36,7 @@ Maintainer asleep; authorised an unattended build "till morning, safe way". Oper
 
 ## Phase 2 — Panel UI (the shelf)  ✅ clickable demo
 - ✅ Svelte 5 + Vite + TS frontend; left tool rail, header, Home overview cards, Command Palette (Ctrl/Cmd+K)
-- ✅ 15 interactive per-tool views (home, clipboard, paste stack, timers, pomodoro, file shelf, media, calendar, weather, notes, world clocks, convert, calculator, screen-time, settings)
+- ✅ 15 interactive per-tool views (home, clipboard, timers, pomodoro, file shelf, transfer, media, calendar, weather, notes, explain, world clocks, convert, screen-time, settings); the standalone calculator was removed in v0.3, inline math lives in the command palette
 - ✅ Demo mode (auto-detects no Tauri → in-memory fixtures); fully runnable in a browser
 - ✅ Tauri shell authored (frameless / always-on-top / skipTaskbar, Ctrl+Alt+Space summon, thin commands over `krovi-core` + `MemStore`) — **native build is toolchain-blocked locally** (see blockers); builds on CI/MSVC
 - ✅ Frontend tests: **26 vitest green**; `svelte-check` 0 errors; `vite build` green

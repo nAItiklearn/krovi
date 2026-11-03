@@ -54,7 +54,7 @@ rests on three commitments that are also its differentiators:
   - **Content area** — the Home overview (card grid) or a focused tool view.
 - **Dismiss:** click-away, `Esc`, or hotkey toggle. Optional pinned (stay-open) mode.
 - **Drag affordances** `[ref]`: drag files out of the File Shelf into any app; drag
-  clipboard/paste-stack items straight into the focused app.
+  clipboard items straight into the focused app.
 
 ## 5. Core features (reference-equivalent, rebuilt original)
 
@@ -93,10 +93,15 @@ A **focused** set chosen to deepen the shelf identity rather than sprawl (ration
 | # | Feature | Why it fits | Priority |
 |---|---------|-------------|----------|
 | O1 | **Command Palette** | Quick-launch installed apps + run Krovi actions from one search box; the keyboard spine of the shelf. | High |
-| O2 | **Paste Stack** | Numbered clipboard slots (1–9) you *actively* push/pop — distinct from passive history; great for repetitive paste workflows. | High |
 | O3 | **Pomodoro focus** | A mode on the existing timer engine (work/break cycles, session count) — reuses C3, no new subsystem. | Med |
-| O4 | **Calculator** | Natural companion to the conversion tools; expression + unit-aware. | Med |
 | O5 | **To-do list** | Lightweight checkable tasks alongside notes/reminders. | Med |
+
+**Removed:** O2 Paste Stack (2026-11-02, D-015). Once clipboard history has good
+search, a second, numbered way to hold clips is redundant — exactly the feature bloat this
+section exists to prevent.
+O4 Calculator (v0.3): the standalone tool is gone. Arithmetic (`+ - * /`, parentheses,
+decimals, percent; no units) survives as inline math in the command palette, and "open
+calculator" by voice launches the Windows Calculator app.
 
 **Explicitly deferred (anti-scope-creep):** system quick-toggles (Wi-Fi/Bluetooth/DND).
 Windows exposes these inconsistently and several need elevated or vendor-specific APIs;
@@ -154,8 +159,8 @@ FAQ → final download CTA.
 - Columns: **Krovi** (featured, highlighted, first) vs **Vayli** vs 1–2 generic alternatives
   (e.g. "Typical paid utility suite", "A pile of separate free tools").
 - Row groups: *Cost & ownership* (price / free, open source, no account, fully offline, local
-  files, no telemetry) · *Daily tools* (clipboard history, paste stack, timers, Pomodoro, file
-  shelf, media controls, weather, notes, to-do, world clocks, unit & currency, calculator,
+  files, no telemetry) · *Daily tools* (clipboard history, timers, Pomodoro, file
+  shelf, media controls, weather, notes, to-do, world clocks, unit & currency,
   command palette, screen-time) · *Platform* (Windows, auto-start, global hotkey, hot-corner).
 - Cells: ✓ / ✗ / "Paid" / "Partial" / **"Not verified"**, with a legend.
 - **Clean-room honesty rule (D-002):** the Vayli column is filled from its **public listing only**;
@@ -178,7 +183,7 @@ private. Each feature must hold the idle-RAM/CPU bar measured in `docs/PERF.md`.
 | 11.2 | Live data: OS clipboard, GSMTC media, RAM/disk/CPU strip, SQLite persistence | live-data | `live.rs`, `commands.rs`, `krovi-sys`, `live.ts` |
 | 11.3 | Premium black/white glass UI + spring motion | frontend-design | `App.svelte`, `components/**`, `views/**` |
 | 11.4 | Holidays: IN (DoPT), US (OPM), GB/SCT/NIR (GOV.UK), offline | holidays | `src/lib/holidays/**` |
-| 11.5 | Local voice: dictated notes + voice commands (SAPI 5, on-device) | voice | `krovi-voice`, `voice.rs`, `voice.ts` |
+| 11.5 | Local voice: dictated notes + voice commands (SAPI 5, on-device) *(planned replacement: Whisper — see below)* | voice | `krovi-voice`, `voice.rs`, `voice.ts` |
 | 11.6 | Real inline checklists in Notes (`- [ ]` blocks mixed with text) | frontend-design | `views/Notes.svelte`, `lib/checklist.ts` |
 | 11.7 | Quick Transfer: LAN-only QR file transfer desktop ⇄ phone, auto-expiring | transfer | `krovi-transfer`, `transfer.rs`, `views/Transfer.svelte` |
 | 11.8 | **Theme system** (token-based; switchable; persists; applies to panel, pill, idle character) | personalization | `src/styles/themes/**`, `src/lib/theme.ts` |
@@ -212,12 +217,20 @@ Each theme ships light-safe contrast (WCAG AA for text) — verified, not assume
   ~400 px of the pill, only in pill mode) — the webview never polls.
 
 ### 11.10 Voice v2 — constraints
+
+> **Planned replacement (not shipped).** Whisper is the planned replacement for SAPI
+> (DECISIONS D-016). The current text describes what ships today; multilingual transcription
+> and Hindi/Hinglish commands are **not built**.
+
 Fully on-device (SAPI 5); if any sub-feature can't be local, DECISIONS.md says so and it
 is not built with a cloud API. Context capture reads only on explicit voice command and
 only the minimum (selected text / focused Explorer item path / foreground app name);
 nothing is stored unless the action stores it (a note, a reminder, a shelf item).
 
 ### 11.13 Supported voice commands (exact)
+
+> **Planned replacement (not shipped).** Whisper is the planned replacement for the SAPI 5
+> recognizer described below (DECISIONS D-016); everything here is what ships this day, for English.
 
 **Voice commands are a closed grammar, not open-ended natural language.** In command mode the
 on-device recognizer (Windows SAPI 5) listens *only* for the phrasings in the tables below,
@@ -240,12 +253,12 @@ heard that right ... Say it again.").
 | `{open|show|show me|go to|switch to|launch|take me to|bring up|view} [the|my] <tool>` | "open the calendar", "show me clipboard", "go to settings" |
 
 `<tool>`: home / home screen / dashboard / overview; clipboard / clipboard history / copy history /
-clips; paste stack / paste / paste slots; timers / timer / stopwatch / countdown / countdowns;
+clips; timers / timer / stopwatch / countdown / countdowns;
 pomodoro / pomodoros / pomodoro timer / focus / focus timer / focus mode / focus session; shelf /
 file shelf / files; media / music / now playing / player / media controls; calendar / agenda /
 schedule / events (also "reminder(s)"); weather / forecast; notes / note / notebook; clocks /
 clock / world clocks / world clock / time zones / time zone; convert / converter / conversion /
-currency / currency converter / unit converter / units / exchange rates; calculator / calc; screen
+currency / currency converter / unit converter / units / exchange rates; screen
 time / screentime / app usage / usage; transfer / quick transfer / send to phone / phone transfer /
 file transfer (Quick Transfer; "send to phone" is the tool only on its own - "send **this** to my phone"
 is the selection action below, and `files` / `file shelf` stay the Shelf); explain / explainer / summarize / summarizer / summary / read

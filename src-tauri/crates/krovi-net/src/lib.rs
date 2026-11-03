@@ -9,6 +9,10 @@
 //!      (Open-Meteo geocoding; sends only the text the user typed — see
 //!      [`geocode`]).
 //!
+//!   4. a **user-initiated, optional** download of a speech model the user picked
+//!      (a plain GET to `huggingface.co` and its CDN; nothing about the user is
+//!      sent, the file is size- and SHA-256-verified — see [`whisper_models`]).
+//!
 //! There is **no** telemetry, analytics, or account traffic anywhere. The
 //! endpoints are listed for the Phase-4 security audit in the crate docs below
 //! and in `docs/SECURITY-network-audit.md`.
@@ -26,25 +30,56 @@
 //! * Weather:  `https://api.open-meteo.com/v1/forecast`  (keyless, GET, coarse lat/long)
 //! * FX rates: `https://api.frankfurter.dev/v1/latest`   (keyless, GET, base currency only)
 //! * Geocode:  `https://geocoding-api.open-meteo.com/v1/search` (keyless, GET, typed city name only)
+//! * Whisper model (user-initiated only): `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>`,
+//!   which redirects to Hugging Face's CDN (`*.hf.co` / `*.huggingface.co`, at most 5
+//!   redirects, every hop host-checked). GET only, no body, no cookies.
+//! * AI provider (user-initiated, bring-your-own-key; see [`ai`] and [`vision`]): only after an
+//!   explicit button press (Ask AI with a confirmed disclosure naming the provider, Test
+//!   connection, a model list) and never in the background, a single HTTPS request (no redirects,
+//!   no cookies) to the host of the provider the user chose:
+//!   `https://api.openai.com/v1/{chat/completions,models}`,
+//!   `https://api.anthropic.com/v1/{messages,models}`,
+//!   `https://generativelanguage.googleapis.com/v1beta/models[/<model>:generateContent]`,
+//!   `https://api.groq.com/openai/v1/{chat/completions,models}`, or (experimental) the user's own
+//!   `https://<account>.snowflakecomputing.com/api/v2/cortex/v1/chat/completions`.
+//!   Sends the user's question and, for pictures, the one picture they chose; the key travels in a
+//!   header, never in a URL.
 
+pub mod ai;
+pub mod ai_settings;
 mod cache;
 pub mod currency;
 pub mod geocode;
 pub mod reply;
 pub mod resolve;
+pub mod vision;
 pub mod weather;
+pub mod whisper_models;
 
 #[cfg(feature = "net")]
 mod http;
 
+pub use ai::{
+    complete_text, is_banned_model, list_models, test_connection, AiError, AuthStyle, Credentials,
+    ModelInfo, ProviderSpec, TestReport, TextPrompt,
+};
+pub use ai_settings::AiSettings;
 pub use cache::TtlCache;
 pub use currency::{convert, fetch_rates, parse_rates, rates_url, Rates, DEFAULT_BASE};
 pub use geocode::{clean_query, geocode_url, parse_places, search_places, Place};
 pub use reply::{fx_reply, needs_city, weather_reply, FxReply, PlaceDto, WeatherReply};
 pub use resolve::{resolve, Cached, Resolved};
+pub use vision::{
+    ask as ask_ai, Answer as AiAnswer, ErrorKind as AiErrorKind, Provider as AiProvider,
+    VisionError,
+};
 pub use weather::{
     fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
     DayPoint, HourPoint, WeatherData,
+};
+pub use whisper_models::{
+    catalog as whisper_catalog, delete_model, download_model, find_model, model_status,
+    verify_model, ModelError, ModelStatus, WhisperModel,
 };
 
 /// Errors from the network layer.

@@ -4,6 +4,60 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-023 · 2026-11-03 · Settings → AI: five BYOK providers, Gemini gated, Snowflake experimental
+Implements D-022's Settings → AI. Providers: Anthropic, OpenAI, Google Gemini, Groq and (owner request)
+Snowflake Cortex. DeepSeek is not in v1, and the `muse-spark` / `muse-wonder` / `muse-glimmer` families are
+banned from every list, selection and request (AGENTS.md). **Gemini is off** until the user accepts a
+versioned notice (own key, 18+, Google's terms, free-tier human review and training, EEA/UK/CH billing);
+the consent is stored as a flag, a time and the notice version. **Snowflake is labelled Experimental** and
+needs the user's account URL (stored in `ai.v1`, validated to `https://*.snowflakecomputing.com`) plus a
+programmatic access token (Credential Manager). It uses Snowflake's documented OpenAI-compatible
+`/api/v2/cortex/v1/chat/completions`, not `inference:complete` (whose schema could not be read).
+"Test connection" is two steps (key accepted, then a one-token request) because a model list passes even
+when inference is blocked. Keys live in Credential Manager only; `ai.v1` holds choices, never a key.
+Circle to Ask no longer has its own provider/model choice: it uses `ai.v1`. No provider is called
+"supported" until its integration has run against a live account and the owner signed off on the terms
+(docs/product/AI_PROVIDERS.md §9–§10).
+
+## D-022 · 2026-11-03 · No accounts or sync in v1 — BYOK AI providers only
+Owner decision: no Krovi account, sign-up, password, auth server, subscription, AI proxy, vault, recovery key,
+cloud storage backend or multi-device sync in v1. Positioning stays "Desktop productivity apps should be free. :)" /
+"Use Krovi without an account. Bring your own AI key when you want AI-powered features." AI features use a provider
+the user configures in Settings → AI (key in Windows Credential Manager only, test connection, model choice, separate
+auth / billing / quota / eligibility errors); requests go directly to the provider. A provider is called supported only
+after a working, terms-checked integration. Local tools never need a key or a connection. `ACCOUNTS_RESEARCH.md` is kept
+as a future idea and is not a release dependency.
+
+## D-021 · 2026-11-03 · Temporary, visible screen awareness (amends the AGENTS.md screen-capture ban)
+The owner's v0.3 directive keeps the ban on **passive/background** screen capture and allows exactly one
+exception: a screen-awareness session the user explicitly starts, with an always-visible indicator, a
+one-click stop, a maximum duration, frames held in memory only, nothing in logs, and no upload unless a
+configured vision provider is used with disclosure. Circle to Ask captures only the selected region.
+Nothing captures at startup or when the feature is off.
+
+## D-020 · 2026-11-03 · Voice: local Whisper dictation into any app; cloud STT stays banned
+whisper.cpp (`whisper-rs` 0.16, Unlicense) runs on-device behind the `whisper` feature; models are
+downloaded only when the user picks one (Hugging Face, SHA-256 verified, sizes shown). Capture is WASAPI
+shared mode at 16 kHz mono; text is typed with `SendInput` Unicode so the clipboard is never touched.
+Dictated text is never parsed as a command (commands get their own shortcut / Agent Mode). Optional cloud
+voice means **text-to-speech only** (ElevenLabs, existing); speech recognition never leaves the PC.
+CI builds whisper.cpp with `GGML_NATIVE=OFF` and an AVX2/FMA/F16C baseline, so the minimum CPU is
+Intel Haswell (2013) / AMD equivalents. SAPI command grammar stays until Agent Mode replaces it.
+
+## D-019 · 2026-11-03 · Companion expressions may use real local hardware state (amends D-017)
+D-017 limited expressions to app events. The owner approved adding moods from **measured** Windows
+values: battery (`GetSystemPowerStatus`; no battery = no battery moods), RAM pressure and CPU load (the
+existing 2 s `stats-tick`). EMA smoothing, enter/leave hysteresis, an 8 s settle and a 15 s minimum
+dwell prevent flicker (`src/components/idle/mood.ts`). Only the native app uses them; the browser demo's
+simulated stats never drive an expression. Values never leave the PC. The pill never moves; only the
+pupils follow the cursor, now across the whole screen (no 400 px gate); the sampler drops to 2 Hz while
+the window is hidden.
+
+## D-018 · 2026-11-03 · Calculator and Paste Stack both removed (owner decision)
+Calculator is removed as a tool (inline math stays in the command palette); Paste Stack stays removed
+(D-015). Krovi ships 15 tools. A brief attempt to restore Paste Stack was reverted the same day at the
+owner's instruction.
+
 ## D-010 · 2026-11-01 · Push + Release authorised; final-delivery plan
 Maintainer's final prompt authorises **`git push` and creating a GitHub Release** (previously gated),
 and wants a working, downloadable app + finished website, all pushed, with the README tying it together.
@@ -481,3 +535,75 @@ thread (`reminders.rs`) rings it at its time with a real Windows toast, whatever
 through "alarms only", needs `scenario="reminder"/"alarm"`, which `tauri-plugin-notification` does not expose on Windows (a direct dependency on
 `tauri-winrt-notification` would). Verified: toast delivery, exact-time firing (8-25 ms late), persistence, missed/stale/grouped, snooze,
 dismiss, voice path, migration of a real v2 database. Not verified live: the toast *buttons* and the on-screen *banner* (both need Do Not Disturb off).
+
+## D-015 · 2026-11-02 · Remove Paste Stack (supersedes O2 in D-006)
+
+**Decision.** Delete the Paste Stack feature entirely. Clipboard history with good search is the one
+place to find and re-use a copy; a second, numbered stack is an overlapping workflow and exactly the
+feature bloat SPEC §2 rules out.
+
+**Dependency check (done before deleting).** The only consumers were: `krovi-core::paste_stack`
+(+ its 5 tests), the three Tauri commands `load_paste_stack` / `push_paste` / `pop_paste` and the
+`AppState.paste` field, the `ToolId::Paste` voice-grammar variant and its phrase/test, the
+`PasteStack.svelte` view plus the tool registry, bridge, fixture and voice-help entries, and the
+marketing/docs/README pages. Nothing else read the stack; clipboard history, the parser, the store
+and the panel are independent. The stack was session-only and never persisted, so there is no data
+migration and no saved user content to lose.
+
+**Removed.** Core module + tests (91 → 86), app commands/state, `ToolId::Paste` (`ALL` 17 → 16 and
+the frontend `ToolId` union), the Svelte view and registry entries, the spoken phrases "paste stack"
+/ "paste" / "paste slots", and every website/docs/README claim. Historical entries (D-006, old
+PROGRESS lines) stay as history; this entry supersedes them.
+
+**Consequence.** Krovi now ships **16 tools**. A spoken "open paste stack" is no longer understood.
+If a genuine repetitive-paste workflow appears later, the right shape is multi-select on clipboard
+history or a paste queue *inside* Clipboard — not a second tool.
+
+**Rejected alternatives.** Keep it hidden behind a setting (still two models to maintain and explain);
+merge it into Clipboard now (not requested, and would re-add the same duplication under a new name).
+
+## D-016 · 2026-11-02 · Whisper replaces SAPI; speech-to-action stays in scope
+**Decision.** Windows SAPI 5 is English-only and weak on names; planned replacement is **whisper.cpp
+running fully on-device** (no cloud STT, ever — AGENTS.md bans cloud STT and Krovi's privacy posture
+depends on it). Whisper handles Hindi, English and natural Hinglish code-switching (both languages in
+one utterance) without a mode switch.
+
+**Stable seam (why this is a swap, not a rewrite).** Whisper only has to produce **text** into the
+existing path: voice `session::Raw` → `krovi-voice::parser` → `src/components/voiceRouter.ts`. The
+parser, router and UI already execute real commands from recognized text; nothing downstream needs
+rewriting for English.
+
+**Build order (whenever it is picked up).**
+1. whisper.cpp DLL via `libloading` + cpal/WASAPI capture + Silero VAD, **behind the existing
+   `sapi.rs` API** so callers (and the session/thread shape of D-012/D-013) are unchanged.
+2. Multilingual transcript cleanup + language-matched replies, routed through the user's own BYOK key
+   (never a Krovi-side key; the audit doc must record this addition to the network surface).
+3. Re-point the parser/router to Whisper text and add Hindi/Hinglish command intents.
+4. Re-derive the confidence gating (D-014's ≥0.75 launch gate and the dictation noise gate) from
+   Whisper's `no_speech_prob` / `avg_logprob` instead of SAPI confidence — the thresholds do not carry over
+   and must be re-measured, not assumed.
+
+**Explicit (honesty).** English speech-to-action **already works on SAPI** (closed grammar, real OS
+actions, D-012/D-014) and must not regress while the replacement is built. Hindi/Hinglish command
+parsing is **new work, not already built**; nothing in the shipped parser understands it today.
+
+**Alternatives rejected.** Cloud STT (violates the verifiable-privacy invariant; hard ban). Keeping
+SAPI for commands + Whisper for notes (two engines, two failure modes, two tuning regimes, and the
+command path is exactly the part that stays English-only under it).
+
+## D-017 · 2026-11-02 · Companion personality system + eye customization (proposal, not shipped)
+**Status: proposal.** Nothing here is built; this entry records scope agreed with the maintainer so
+the eventual build is not re-litigated.
+
+- **Name:** the companion gets one primary name plus two alternates, chosen so the set is **original**
+  and not a competitor's character or likeness (clean-room, D-002; §11.9's "no Apple/Apollo assets"
+  rule extends to AI-generated mascot likeness).
+- **Scope:** the current 6 eye styles + 4 personality timing profiles (D-personalization) stay; add
+  new styles and personalities, plus eye color/size/opacity as theme-style tokens (`--eye-*`
+  vocabulary), and **event-driven expressions tied only to real app events** — clipboard copy, timer
+  finished, error toast. Nothing else qualifies as an event.
+- **Explicitly not in scope:** general code understanding or inferred mood; no passive/background
+  screen reading of any kind (hard project ban).
+- **Cost bar carried over from D-personalization:** CSS transform/opacity only, no continuous rAF
+  loop, paused when hidden/fullscreen/`prefers-reduced-motion`; the RAM/CPU delta must be measured
+  vs. companion-off before it ships, against the PERF.md bar.

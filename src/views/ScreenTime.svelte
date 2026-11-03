@@ -7,7 +7,13 @@
   import type { ScreenTimeRecord } from '../lib/types';
 
   const DAY = 86_400_000;
-  const today = Math.floor(Date.now() / DAY);
+  // `day` is the user's LOCAL calendar day counted from 1970-01-01 (the backend buckets by
+  // local midnight), so "today" must be the local day too, not Math.floor(Date.now() / DAY).
+  const localDay = (ms: number) => Math.floor((ms - new Date(ms).getTimezoneOffset() * 60_000) / DAY);
+  const today = localDay(Date.now());
+  // A day index names a calendar date, not an instant: format it as UTC so no zone shifts it.
+  const dateOf = (d: number, opts: Intl.DateTimeFormatOptions) =>
+    new Date(d * DAY).toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' });
 
   let records = $state<ScreenTimeRecord[]>([]);
   let status = $state<'loading' | 'ready' | 'error'>('loading');
@@ -48,9 +54,9 @@
       ? 'Today'
       : d === today - 1
         ? 'Yesterday'
-        : new Date(d * DAY + 12 * 3_600_000).toLocaleDateString(undefined, long ? { weekday: 'long', day: 'numeric', month: 'short' } : { weekday: 'short' });
+        : dateOf(d, long ? { weekday: 'long', day: 'numeric', month: 'short' } : { weekday: 'short' });
   const appName = (s: string) => s.replace(/\.exe$/i, '');
-  const wk = (d: number) => new Date(d * DAY + 12 * 3_600_000).toLocaleDateString(undefined, { weekday: 'short' });
+  const wk = (d: number) => dateOf(d, { weekday: 'short' });
   let pick = $state(String(today));
   $effect(() => {
     day = Number(pick);

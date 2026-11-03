@@ -13,16 +13,20 @@
   import { mode as envMode } from '../lib/bridge';
   import { clips, media, pulse, stats } from '../lib/live';
   import { startVoice, stopVoice, voiceAvailability, voiceState } from '../lib/voice';
+  import { cancelDictation, dictationLive, dismissNotice, pillFace, setDictationToaster, wireDictation } from '../lib/dictation';
   import { isIdle, markActivity } from '../lib/idle';
+  import { awareState, awareStop } from '../lib/circle';
   import IdleCompanion from './idle/IdleCompanion.svelte';
   import Icon from './Icon.svelte';
   import {
     activity,
     closeVoiceSheets,
+    copyText,
     liveTimer,
     onIntent,
     paletteOpen,
     pushActivity,
+    pushToast,
     voiceHelpOpen,
     voiceResults,
     type Intent,
@@ -77,13 +81,27 @@
   const voiceBusy = $derived(voice === 'listening' || voice === 'processing');
   let micOk = $state(true);
   let micFocus = $state(false);
-  const showMic = $derived(phase === 'pill' && micOk && (hover || micFocus || voiceBusy));
+  // Global dictation (local Whisper) takes over the pill while it listens or works. Its one button
+  // sits where the mic button would be: cancel while it runs, Copy when typing was blocked.
+  const dface = $derived(pillFace($dictationLive));
+  const dictAction: 'cancel' | 'copy' | null = $derived(!dface ? null : dface.kind !== 'notice' ? 'cancel' : dface.copy ? 'copy' : null);
+  const dictKey = $derived(!dface ? '' : dface.kind === 'notice' ? `n:${dface.label}` : dface.kind);
+  const dictSay = $derived(!dface ? '' : dface.kind === 'notice' ? `${dface.label}. ${dface.detail}`.trim() : dface.label);
+  const showMic = $derived(phase === 'pill' && micOk && !dictAction && (hover || micFocus || voiceBusy));
   function toggleMic() {
     if (voiceBusy) void stopVoice();
     // started from the pill the previous app still has focus, so "this" can be read from it
     else void startVoice('command', { captureContext: true });
   }
-  const pmode = $derived(pillMode({ voice: voice !== null, activity: $activity !== null }));
+  /** Copies only because the user clicked: the text was held in memory just for this button. */
+  async function copyBlocked() {
+    const text = dface && dface.kind === 'notice' ? dface.copy : undefined;
+    if (!text) return;
+    const ok = await copyText(text);
+    dismissNotice();
+    if (!ok) pushToast('Could not copy', 1800, 'error');
+  }
+  const pmode = $derived(pillMode({ voice: voice !== null || dface !== null, activity: $activity !== null }));
   const psize = $derived(pillSize(pmode, contentW));
   // The collapsed pill rests as a companion after a quiet spell; anything alive wakes it.
   const pillShown = $derived($shellMode === 'pill' && phase === 'pill' && pmode === 'idle');
@@ -268,7 +286,12 @@
   $effect(() => {
     void $voiceState.state;
     void $activity;
+    void dictKey;
     markActivity();
+  });
+
+  $effect(() => {
+    if (dictSay) announce = dictSay;
   });
 
   $effect(() => {
@@ -279,6 +302,8 @@
   // ---- lifecycle -----------------------------------------------------------------
   onMount(() => {
     void voiceAvailability().then((a) => (micOk = a.commands));
+    void wireDictation();
+    setDictationToaster(pushToast);
     const offIntent = onIntent(act);
     const offShell = onShellRequest((a) => act(a));
     const offMode = shellMode.subscribe((m) => {
@@ -299,6 +324,7 @@
     void tick().then(() => sendHit(measureStage()));
 
     return () => {
+      setDictationToaster(null);
       offIntent();
       offShell();
       offMode();
@@ -375,6 +401,8 @@
             partial={$voiceState.partial}
             voiceError={$voiceState.error ?? ''}
             {showMic}
+            dictation={dface}
+            action={dictAction}
             onmeasure={(w) => (contentW = w)} />
           </div>
         </div>
@@ -404,6 +432,37 @@
               <Icon name="mic" size={14} />
             </button>
           {/if}
+          {#if dictAction === 'cancel'}
+            <button
+              class="pill-act icon"
+              type="button"
+              style:top="{(psize.h - 26) / 2}px"
+              aria-label="Cancel dictation"
+              title="Cancel dictation. Nothing is typed."
+              onclick={() => void cancelDictation()}>
+              <Icon name="close" size={13} />
+            </button>
+          {:else if dictAction === 'copy'}
+            <button
+              class="pill-act"
+              type="button"
+              style:top="{(psize.h - 26) / 2}px"
+              aria-label="Copy the dictated text"
+              onclick={() => void copyBlocked()}>
+              <Icon name="copy" size={13} /> Copy
+            </button>
+          {/if}
+        {/if}
+
+        <!-- D-021: while a screen-awareness session runs, an indicator is always visible (pill and
+             panel alike) and one click ends it. -->
+        {#if $awareState.active}
+          <button
+            class="aware-dot"
+            type="button"
+            aria-label="Screen awareness is on. Click to stop."
+            title="Screen awareness is on. Click to stop."
+            onclick={() => void awareStop()}><i></i></button>
         {/if}
 
         <div
@@ -424,6 +483,31 @@
 </div>
 
 <style>
+  .aware-dot {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--danger) 22%, transparent);
+    cursor: pointer;
+  }
+  .aware-dot i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+  .aware-dot:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .island {
     position: fixed;
     inset: 0;
@@ -599,6 +683,43 @@
   .pill-mic.live {
     color: var(--accent-ink);
     background: var(--accent);
+  }
+  /* dictation's one button: cancel while it runs, Copy when typing was blocked */
+  .pill-act {
+    position: absolute;
+    right: 8px;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 26px;
+    min-width: 26px;
+    padding: 0 10px 0 8px;
+    border-radius: 999px;
+    color: var(--pill-fg);
+    background: color-mix(in srgb, var(--pill-fg) 14%, transparent);
+    font-size: 11.5px;
+    font-weight: 650;
+    animation: act-in 0.4s var(--spring-bouncy) both;
+    transition: background var(--dur-1);
+  }
+  .pill-act.icon {
+    width: 26px;
+    padding: 0;
+  }
+  .pill-act:hover {
+    background: color-mix(in srgb, var(--pill-fg) 24%, transparent);
+  }
+  .pill-act:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @keyframes act-in {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
   }
   .stage[data-phase='pill']:active {
     transform: scale(0.97);

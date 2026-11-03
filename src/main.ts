@@ -15,6 +15,17 @@ if (!target) {
   throw new Error('Krovi: #app mount point not found');
 }
 
-const app = mount(App, { target });
+// Circle to Ask (src-tauri/src/circle.rs) opens a second window on this same bundle with the URL
+// fragment `#circle`. That window shows only the selection overlay, never the app.
+const circleOverlay = typeof location !== 'undefined' && location.hash === '#circle';
+
+let app: ReturnType<typeof mount> | undefined;
+if (circleOverlay) {
+  void import('./circle/Overlay.svelte').then(({ default: Overlay }) => {
+    app = mount(Overlay, { target });
+  });
+} else {
+  app = mount(App, { target });
+}
 
 export default app;
