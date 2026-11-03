@@ -4,6 +4,21 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-023 · 2026-11-03 · Settings → AI: five BYOK providers, Gemini gated, Snowflake experimental
+Implements D-022's Settings → AI. Providers: Anthropic, OpenAI, Google Gemini, Groq and (owner request)
+Snowflake Cortex. DeepSeek is not in v1, and the `muse-spark` / `muse-wonder` / `muse-glimmer` families are
+banned from every list, selection and request (AGENTS.md). **Gemini is off** until the user accepts a
+versioned notice (own key, 18+, Google's terms, free-tier human review and training, EEA/UK/CH billing);
+the consent is stored as a flag, a time and the notice version. **Snowflake is labelled Experimental** and
+needs the user's account URL (stored in `ai.v1`, validated to `https://*.snowflakecomputing.com`) plus a
+programmatic access token (Credential Manager). It uses Snowflake's documented OpenAI-compatible
+`/api/v2/cortex/v1/chat/completions`, not `inference:complete` (whose schema could not be read).
+"Test connection" is two steps (key accepted, then a one-token request) because a model list passes even
+when inference is blocked. Keys live in Credential Manager only; `ai.v1` holds choices, never a key.
+Circle to Ask no longer has its own provider/model choice: it uses `ai.v1`. No provider is called
+"supported" until its integration has run against a live account and the owner signed off on the terms
+(docs/product/AI_PROVIDERS.md §9–§10).
+
 ## D-022 · 2026-11-03 · No accounts or sync in v1 — BYOK AI providers only
 Owner decision: no Krovi account, sign-up, password, auth server, subscription, AI proxy, vault, recovery key,
 cloud storage backend or multi-device sync in v1. Positioning stays "Desktop productivity apps should be free. :)" /

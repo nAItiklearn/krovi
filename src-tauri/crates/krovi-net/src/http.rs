@@ -36,44 +36,55 @@ pub fn get(url: &str) -> crate::Result<String> {
         .map_err(|e| NetError::Request(e.to_string()))
 }
 
-/// Largest response body [`post_json`] reads (a text answer is a few KB; this is a ceiling).
+/// Largest response body [`request_json`] reads (a text answer is a few KB; a model list a few
+/// tens of KB; this is a ceiling).
 const JSON_MAX_BODY: u64 = 4 * 1024 * 1024;
 const JSON_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-/// A vision model can take a while to think about a screenshot.
-const JSON_READ_TIMEOUT: Duration = Duration::from_secs(120);
 const JSON_WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Status and body of a JSON POST. Any HTTP status comes back as a value, not an error, so the
+/// Status and body of a JSON request. Any HTTP status comes back as a value, not an error, so the
 /// caller can read the provider's own error message.
 pub(crate) struct JsonReply {
     pub status: u16,
     pub body: String,
 }
 
-/// POST `body` (JSON text) to `url` with `headers`, once. Used only by [`crate::vision`], which
-/// checks the URL against its three provider hosts first.
+/// Send one JSON request (`GET`, or `POST` with `body`) to `url` with `headers`, once. Used only
+/// by [`crate::ai`], which checks the URL against the provider hosts first.
+///
+/// `read_timeout_secs` bounds the wait for the reply: a vision model can take a while to think
+/// about a screenshot, while a model list should not.
 ///
 /// No redirects are followed (`redirects(0)`: a 3xx is returned as a reply, never chased, so
 /// a header carrying a key can never be replayed to another host), no cookies, no proxy from
 /// the environment, a `Krovi/<version>` User-Agent. Transport errors carry only the failure
 /// kind, never the URL or any header.
-pub(crate) fn post_json(
+pub(crate) fn request_json(
+    method: &str,
     url: &str,
     headers: &[(&'static str, String)],
-    body: &str,
+    body: Option<&str>,
+    read_timeout_secs: u64,
 ) -> crate::Result<JsonReply> {
     let agent = ureq::AgentBuilder::new()
         .redirects(0)
         .timeout_connect(JSON_CONNECT_TIMEOUT)
-        .timeout_read(JSON_READ_TIMEOUT)
+        .timeout_read(Duration::from_secs(read_timeout_secs))
         .timeout_write(JSON_WRITE_TIMEOUT)
         .user_agent(concat!("Krovi/", env!("CARGO_PKG_VERSION")))
         .build();
-    let mut req = agent.post(url).set("Content-Type", "application/json");
+    let mut req = agent.request(method, url);
+    if body.is_some() {
+        req = req.set("Content-Type", "application/json");
+    }
     for (name, value) in headers {
         req = req.set(name, value);
     }
-    let resp = match req.send_string(body) {
+    let sent = match body {
+        Some(b) => req.send_string(b),
+        None => req.call(),
+    };
+    let resp = match sent {
         Ok(r) => r,
         Err(ureq::Error::Status(_, r)) => r,
         Err(ureq::Error::Transport(t)) => return Err(NetError::Request(t.kind().to_string())),

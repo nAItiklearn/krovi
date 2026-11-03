@@ -23,7 +23,9 @@ import { invoke, isTauri, listen } from './bridge';
 // Types (wire shapes: src-tauri/src/circle.rs, all camelCase)
 // ---------------------------------------------------------------------------------------
 
-export type ProviderId = 'openai' | 'anthropic' | 'gemini';
+// The ids match `krovi_net::ai::Provider`. Settings -> AI (src/lib/ai.ts) owns which provider and
+// model are chosen and where keys are entered; Circle only reads that choice.
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'groq' | 'snowflake';
 
 export interface CircleLine {
   text: string;
@@ -58,9 +60,6 @@ export interface ReadResult {
 export interface CircleSettings {
   enabled: boolean;
   shortcut: string;
-  provider: ProviderId | null;
-  /** model id per provider id; missing/empty = the provider's default */
-  models: Record<string, string>;
   /** default length of an awareness session, 1..=30 */
   sessionMinutes: number;
 }
@@ -68,8 +67,11 @@ export interface CircleSettings {
 export interface ProviderInfo {
   id: ProviderId;
   name: string;
+  /** the provider's default model for pictures */
   defaultModel: string;
+  /** the model that will read the picture (Settings -> AI's choice if it can see, else the provider's image model) */
   model: string;
+  /** READY to use: a key is saved and nothing else is missing (Gemini's notice, Snowflake's account URL) */
   hasKey: boolean;
   keyHint: string | null;
 }
@@ -189,13 +191,11 @@ export const MAX_QUERY_CHARS = 300;
 export const DESKTOP_ONLY = 'Available in the desktop app.';
 export const GOOGLE_SEARCH_BASE = 'https://www.google.com/search?q=';
 
-export const PROVIDER_IDS: ProviderId[] = ['openai', 'anthropic', 'gemini'];
+export const PROVIDER_IDS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'groq', 'snowflake'];
 
 export const DEFAULT_SETTINGS: CircleSettings = {
   enabled: true,
   shortcut: 'Ctrl+Alt+C',
-  provider: null,
-  models: {},
   sessionMinutes: DEFAULT_SESSION_MINUTES,
 };
 
@@ -560,12 +560,15 @@ async function callAi<T>(cmd: string, args?: Record<string, unknown>): Promise<T
 }
 
 function demoStatus(settings: CircleSettings): CircleStatus {
+  const none = (id: ProviderId, name: string, model: string): ProviderInfo => ({ id, name, defaultModel: model, model, hasKey: false, keyHint: null });
   return {
     settings,
     providers: [
-      { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-4o-mini', model: settings.models.openai || 'gpt-4o-mini', hasKey: false, keyHint: null },
-      { id: 'anthropic', name: 'Anthropic', defaultModel: 'claude-haiku-5-5', model: settings.models.anthropic || 'claude-haiku-5-5', hasKey: false, keyHint: null },
-      { id: 'gemini', name: 'Google Gemini', defaultModel: 'gemini-2.5-flash', model: settings.models.gemini || 'gemini-2.5-flash', hasKey: false, keyHint: null },
+      none('anthropic', 'Anthropic', 'claude-haiku-5-5'),
+      none('openai', 'OpenAI', 'gpt-6-luna'),
+      none('gemini', 'Google Gemini', 'gemini-3.5-flash-lite'),
+      none('groq', 'Groq', 'qwen/qwen3.8-27b'),
+      none('snowflake', 'Snowflake Cortex', 'claude-sonnet-4-5'),
     ],
     activeProvider: null,
     disclosure: null,
@@ -575,20 +578,17 @@ function demoStatus(settings: CircleSettings): CircleStatus {
   };
 }
 
-let demoSettings: CircleSettings = { ...DEFAULT_SETTINGS, models: {} };
+let demoSettings: CircleSettings = { ...DEFAULT_SETTINGS };
 
 function normalizeStatus(raw: unknown): CircleStatus {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const s = (r.settings && typeof r.settings === 'object' ? r.settings : {}) as Record<string, unknown>;
-  const provider = PROVIDER_IDS.includes(s.provider as ProviderId) ? (s.provider as ProviderId) : null;
   const providers = Array.isArray(r.providers) ? (r.providers as ProviderInfo[]) : [];
   const active = PROVIDER_IDS.includes(r.activeProvider as ProviderId) ? (r.activeProvider as ProviderId) : null;
   return {
     settings: {
       enabled: s.enabled !== false,
       shortcut: typeof s.shortcut === 'string' ? s.shortcut : DEFAULT_SETTINGS.shortcut,
-      provider,
-      models: s.models && typeof s.models === 'object' ? (s.models as Record<string, string>) : {},
       sessionMinutes: clampMinutes(typeof s.sessionMinutes === 'number' ? s.sessionMinutes : null),
     },
     providers,
@@ -809,7 +809,7 @@ export const __test = {
     statusStore.set(null);
     if (demoTimer) clearTimeout(demoTimer);
     demoTimer = null;
-    demoSettings = { ...DEFAULT_SETTINGS, models: {} };
+    demoSettings = { ...DEFAULT_SETTINGS };
     wired = null;
   },
 };

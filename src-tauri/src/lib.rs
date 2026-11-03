@@ -10,6 +10,7 @@
 //! Each agent edits only its own `[block]` in the handler list below.
 
 mod agent;
+mod ai;
 mod circle;
 mod clean;
 mod commands;
@@ -38,12 +39,24 @@ pub fn run() {
             explain::setup(app)?;
             dictation::setup(app)?;
             clean::setup(app)?;
+            ai::setup(app)?;
             circle::setup(app)?;
             agent::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            // [ai] — Settings → AI (BYOK providers, D-022/D-023)
+            ai::ai_status,
+            ai::ai_set_key,
+            ai::ai_remove_key,
+            ai::ai_set_account,
+            ai::ai_test,
+            ai::ai_models,
+            ai::ai_select,
+            ai::ai_set_gemini_consent,
+            ai::ai_complete,
+            ai::ai_open_keys_page,
             // [agent] — Agent Mode: intent -> plan -> permission -> execute
             agent::agent_warm,
             agent::agent_plan,

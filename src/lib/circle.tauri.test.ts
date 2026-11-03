@@ -10,11 +10,13 @@ const errors = new Map<string, unknown>();
 const replies = new Map<string, unknown>();
 
 const statusJson = (over: Record<string, unknown> = {}) => ({
-  settings: { enabled: true, shortcut: 'Ctrl+Alt+C', provider: null, models: {}, sessionMinutes: 10 },
+  settings: { enabled: true, shortcut: 'Ctrl+Alt+C', sessionMinutes: 10 },
   providers: [
-    { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-4o-mini', model: 'gpt-4o-mini', hasKey: false, keyHint: null },
     { id: 'anthropic', name: 'Anthropic', defaultModel: 'claude-haiku-5-5', model: 'claude-haiku-5-5', hasKey: true, keyHint: 'abcd' },
-    { id: 'gemini', name: 'Google Gemini', defaultModel: 'gemini-2.5-flash', model: 'gemini-2.5-flash', hasKey: false, keyHint: null },
+    { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-6-luna', model: 'gpt-6-luna', hasKey: false, keyHint: null },
+    { id: 'gemini', name: 'Google Gemini', defaultModel: 'gemini-3.5-flash-lite', model: 'gemini-3.5-flash-lite', hasKey: false, keyHint: null },
+    { id: 'groq', name: 'Groq', defaultModel: 'qwen/qwen3.8-27b', model: 'qwen/qwen3.8-27b', hasKey: false, keyHint: null },
+    { id: 'snowflake', name: 'Snowflake Cortex', defaultModel: 'claude-sonnet-4-5', model: 'claude-sonnet-4-5', hasKey: false, keyHint: null },
   ],
   activeProvider: 'anthropic',
   disclosure: { provider: 'anthropic', providerName: 'Anthropic', model: 'claude-haiku-5-5', image: 'This sends the selected image to Anthropic using your key.', screen: 'This sends a picture of your screen to Anthropic using your key, each time you ask with the picture option on.' },
@@ -105,20 +107,22 @@ describe('tauri: settings', () => {
     const st = await c.loadCircle();
     expect(st.activeProvider).toBe('anthropic');
     expect(st.providers.map((p) => [p.id, p.hasKey])).toEqual([
-      ['openai', false],
       ['anthropic', true],
+      ['openai', false],
       ['gemini', false],
+      ['groq', false],
+      ['snowflake', false],
     ]);
     expect(st.disclosure?.image).toBe('This sends the selected image to Anthropic using your key.');
     expect(get(c.circleStatus)).toEqual(st);
   });
 
   it('survives a half-empty answer', async () => {
-    replies.set('circle_get_settings', { settings: { sessionMinutes: 999, provider: 'muse' } });
+    replies.set('circle_get_settings', { settings: { sessionMinutes: 999, provider: 'muse' }, activeProvider: 'muse-spark-1.3' });
     const c = await fresh();
     const st = await c.loadCircle();
     expect(st.settings.sessionMinutes).toBe(30);
-    expect(st.settings.provider).toBeNull();
+    expect(st.settings).not.toHaveProperty('provider');
     expect(st.activeProvider).toBeNull();
     expect(st.providers).toEqual([]);
   });
@@ -126,8 +130,8 @@ describe('tauri: settings', () => {
   it('saves the whole settings object and keeps the backend error text', async () => {
     const c = await fresh();
     replies.set('circle_set_settings', statusJson());
-    await c.saveCircleSettings({ ...c.DEFAULT_SETTINGS, provider: 'anthropic', models: { anthropic: 'claude-haiku-5-5' } });
-    expect(calls.at(-1)).toEqual({ cmd: 'circle_set_settings', args: { settings: { ...c.DEFAULT_SETTINGS, provider: 'anthropic', models: { anthropic: 'claude-haiku-5-5' } } } });
+    await c.saveCircleSettings({ ...c.DEFAULT_SETTINGS, sessionMinutes: 5 });
+    expect(calls.at(-1)).toEqual({ cmd: 'circle_set_settings', args: { settings: { enabled: true, shortcut: 'Ctrl+Alt+C', sessionMinutes: 5 } } });
     errors.set('circle_set_settings', 'Could not use Ctrl+Alt+C as the Circle to Ask shortcut: already registered');
     await expect(c.saveCircleSettings(c.DEFAULT_SETTINGS)).rejects.toThrow('already registered');
   });

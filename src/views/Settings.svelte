@@ -3,6 +3,7 @@
   import Icon from '../components/Icon.svelte';
   import Toggle from '../components/Toggle.svelte';
   import State from '../components/State.svelte';
+  import AiSettings from '../components/AiSettings.svelte';
   import { getConfig, setConfig, type ShellConfig } from '../lib/shell';
   import { REGIONS } from '../lib/holidays';
   import { clearClips, clips } from '../lib/live';
@@ -853,12 +854,17 @@
     </section>
 
     <section>
+      <h2>AI (bring your own key)</h2>
+      <AiSettings />
+    </section>
+
+    <section>
       <h2>Privacy</h2>
       <div class="group card">
         <div class="field">
           <div class="lab">
             <strong>Everything stays on this device</strong>
-            <span class="faint">No account, no telemetry, no ads. Only weather and exchange rates reach the network, with no key and no identifier.</span>
+            <span class="faint">No account, no telemetry, no ads. By themselves only weather and exchange rates reach the network, with no key and no identifier. AI features send something only if you add your own key and press their button.</span>
           </div>
           <span class="shield"><Icon name="shield" size={18} /></span>
         </div>

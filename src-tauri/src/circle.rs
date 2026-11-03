@@ -24,6 +24,10 @@
 //! * Nothing leaves the PC unless the user has saved a key for a provider (Credential Manager,
 //!   target `Krovi/ai/<provider>`) **and** confirms, for that one request, the disclosure that
 //!   names the provider. Pictures never go to any other host (`krovi_net::vision`).
+//! * **Which provider and model** is no longer chosen here: Settings -> AI (`ai.rs`, the `ai.v1`
+//!   row) owns the choice, the keys and the Gemini notice / Snowflake account gates. This module
+//!   asks `crate::ai` which provider is usable and which model reads pictures. (`circle.v1` once
+//!   had `provider` and `models`; `ai::setup` carries them over once and they are ignored here.)
 //!
 //! ## Commands
 //! circle_start, circle_cancel, circle_overlay_ready, circle_capture, circle_ask_vision,
@@ -37,7 +41,6 @@
 //! * `aware-state` (an [`AwareStatus`], `reason` = started | stopped | expired): drives the pill's
 //!   always-visible "screen awareness is on" indicator.
 
-use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -48,13 +51,14 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-use krovi_explain::secrets;
-use krovi_net::vision::{self, ErrorKind as AiKind, ImagePart, Prompt, Provider, VisionError};
+use krovi_net::vision::{self, ImagePart, Prompt, Provider};
 use krovi_sys::capture::{self, Image, Rect, UPLOAD_MAX_EDGE};
 use krovi_sys::ocr::{self, OcrLine};
 use krovi_sys::session::{self, Session, Slot, SLOT_TTL};
 use krovi_sys::web;
 
+use crate::ai::keys as ai_keys;
+use crate::ai::{fail, AiFailure, NO_PROVIDER};
 use crate::commands::{setting_get, setting_set, CmdResult};
 use crate::state::AppState;
 
@@ -82,11 +86,6 @@ pub struct CircleSettings {
     /// Registers the Circle to Ask shortcut. Nothing is captured until the user uses it.
     pub enabled: bool,
     pub shortcut: String,
-    /// The AI provider the user prefers for "Ask AI" (`null` = none chosen: the first provider
-    /// with a saved key is used, and the disclosure always names it).
-    pub provider: Option<Provider>,
-    /// Model id per provider id (`openai`, `anthropic`, `gemini`); missing/empty = the default.
-    pub models: BTreeMap<String, String>,
     /// Default length of an awareness session (1 to 30).
     pub session_minutes: u32,
 }
@@ -96,20 +95,9 @@ impl Default for CircleSettings {
         Self {
             enabled: true,
             shortcut: "Ctrl+Alt+C".into(),
-            provider: None,
-            models: BTreeMap::new(),
             session_minutes: session::DEFAULT_SESSION_MINUTES,
         }
     }
-}
-
-fn effective_model(s: &CircleSettings, p: Provider) -> String {
-    s.models
-        .get(p.id())
-        .map(|m| m.trim())
-        .filter(|m| !m.is_empty())
-        .unwrap_or(p.default_model())
-        .to_string()
 }
 
 /// Check settings from the webview and return the cleaned copy to store.
@@ -119,60 +107,11 @@ fn validate(s: &CircleSettings) -> Result<CircleSettings, String> {
     crate::shell::parse_shortcut(&s.shortcut)?;
     s.session_minutes =
         session::clamp_minutes(Some(s.session_minutes), session::DEFAULT_SESSION_MINUTES);
-    let mut models = BTreeMap::new();
-    for (id, m) in &s.models {
-        let Some(p) = Provider::from_id(id) else {
-            continue;
-        };
-        let m = m.trim();
-        if m.is_empty() {
-            continue;
-        }
-        let cleaned = vision::clean_model(p, m)?;
-        models.insert(p.id().to_string(), cleaned);
-    }
-    s.models = models;
     Ok(s)
 }
 
-// ---------------------------------------------------------------------------------------
-// AI keys: the one place that touches Windows Credential Manager for AI providers.
-// Target names are `Krovi/ai/<provider>` (see `Provider::credential_target`); the shared
-// Settings -> AI module reuses these helpers so a key saved anywhere works everywhere.
-// A key is never returned to the webview, logged, or written to disk.
-// ---------------------------------------------------------------------------------------
-
-pub(crate) mod ai_keys {
-    use super::{secrets, vision, Provider};
-
-    /// The saved key for `p`, if any.
-    pub fn read(p: Provider) -> Result<Option<String>, String> {
-        secrets::read(p.credential_target())
-    }
-
-    /// Check and save `raw` as `p`'s key (replacing any earlier one).
-    pub fn store(p: Provider, raw: &str) -> Result<(), String> {
-        let key = vision::clean_key(raw)?;
-        secrets::store(p.credential_target(), &key)
-    }
-
-    /// Remove `p`'s key; `true` when one was removed.
-    pub fn delete(p: Provider) -> Result<bool, String> {
-        secrets::delete(p.credential_target())
-    }
-
-    /// Whether a key is saved, and its last four characters when long enough to show them.
-    pub fn status(p: Provider) -> (bool, Option<String>) {
-        match read(p) {
-            Ok(Some(k)) => (true, secrets::key_hint(&k)),
-            _ => (false, None),
-        }
-    }
-
-    pub fn has(p: Provider) -> bool {
-        matches!(read(p), Ok(Some(_)))
-    }
-}
+// AI keys, provider choice and models: see `crate::ai` (Settings -> AI). `ai_keys` (imported
+// above) is that module's Credential Manager helpers under the name this file always used.
 
 // ---------------------------------------------------------------------------------------
 // State
@@ -269,47 +208,10 @@ impl ReadResult {
     }
 }
 
-/// A failed AI request or a refused one. `kind` is a `krovi_net::vision::ErrorKind` in kebab-case
-/// (`auth`, `billing`, `quota`, `rate-limit`, `eligibility`, `model`, `blocked`, `unavailable`,
-/// `network`, `other`) or one of ours: `no-provider`, `consent-required`, `expired`, `inactive`,
-/// `not-allowed`.
-#[derive(Serialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct AiFailure {
-    pub kind: String,
-    pub message: String,
-    pub detail: Option<String>,
-    pub status: Option<u16>,
-}
-
-fn fail(kind: &str, message: impl Into<String>) -> AiFailure {
-    AiFailure {
-        kind: kind.into(),
-        message: message.into(),
-        detail: None,
-        status: None,
-    }
-}
-
-fn kind_str(k: AiKind) -> String {
-    serde_json::to_value(k)
-        .ok()
-        .and_then(|v| v.as_str().map(String::from))
-        .unwrap_or_else(|| "other".into())
-}
-
-impl From<VisionError> for AiFailure {
-    fn from(e: VisionError) -> Self {
-        AiFailure {
-            kind: kind_str(e.kind),
-            message: e.message,
-            detail: e.detail,
-            status: e.status,
-        }
-    }
-}
-
-const NO_PROVIDER: &str = "Set up an AI provider in Settings \u{2192} AI";
+// `AiFailure` (a failed or refused AI request: `kind` is a kebab-case `ErrorKind` such as `auth`,
+// `billing`, `quota`, `rate-limit`, `eligibility`, `model`, `blocked`, `unavailable`, `network`,
+// `other`, or one of ours: `no-provider`, `consent-required`, `expired`, `inactive`,
+// `not-allowed`), `fail` and `NO_PROVIDER` live in `crate::ai` and are imported above.
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -326,9 +228,14 @@ pub struct AiReply {
 pub struct ProviderInfo {
     pub id: &'static str,
     pub name: &'static str,
+    /// The provider's default model for pictures.
     pub default_model: &'static str,
-    /// The model that will be used (the user's choice or the default).
+    /// The model that will read the picture (Settings -> AI's choice if it can see, else the
+    /// provider's image model).
     pub model: String,
+    /// Here "has a key" means ready to use: a key is saved **and** nothing else is missing
+    /// (Gemini's notice accepted, Snowflake's account URL). Whether a key alone is saved is for
+    /// Settings -> AI to show.
     pub has_key: bool,
     pub key_hint: Option<String>,
 }
@@ -346,13 +253,19 @@ pub struct Disclosure {
 
 fn disclosure_for(p: Provider, model: String) -> Disclosure {
     let name = p.display_name();
+    // A free Gemini key feeds Google's product improvement and human review (AI_PROVIDERS.md 9.4).
+    let free_tier = if p == Provider::Gemini {
+        " If your key is on the free tier, Google may use and review this image."
+    } else {
+        ""
+    };
     Disclosure {
         provider: p.id(),
         provider_name: name,
         model,
-        image: format!("This sends the selected image to {name} using your key."),
+        image: format!("This sends the selected image to {name} using your key.{free_tier}"),
         screen: format!(
-            "This sends a picture of your screen to {name} using your key, each time you ask with the picture option on."
+            "This sends a picture of your screen to {name} using your key, each time you ask with the picture option on.{free_tier}"
         ),
     }
 }
@@ -377,25 +290,25 @@ fn status_of(c: &Circle) -> CircleStatus {
     let providers: Vec<ProviderInfo> = Provider::ALL
         .into_iter()
         .map(|p| {
-            let (has_key, key_hint) = ai_keys::status(p);
+            let (_, key_hint) = ai_keys::status(p);
             ProviderInfo {
                 id: p.id(),
                 name: p.display_name(),
-                default_model: p.default_model(),
-                model: effective_model(&settings, p),
-                has_key,
+                default_model: p.default_vision_model(),
+                model: crate::ai::vision_model(p),
+                has_key: crate::ai::usable(p),
                 key_hint,
             }
         })
         .collect();
-    let active = vision::pick_provider(settings.provider, |p| {
+    let active = vision::pick_provider(crate::ai::selected(), |p| {
         providers.iter().any(|i| i.id == p.id() && i.has_key)
     });
-    let disclosure = active.map(|p| disclosure_for(p, effective_model(&settings, p)));
+    let disclosure = active.map(|p| disclosure_for(p, crate::ai::vision_model(p)));
     let disclosures = Provider::ALL
         .into_iter()
         .filter(|p| providers.iter().any(|i| i.id == p.id() && i.has_key))
-        .map(|p| disclosure_for(p, effective_model(&settings, p)))
+        .map(|p| disclosure_for(p, crate::ai::vision_model(p)))
         .collect();
     CircleStatus {
         providers,
@@ -408,25 +321,14 @@ fn status_of(c: &Circle) -> CircleStatus {
     }
 }
 
-/// The provider to send to: the one asked for (which must have a key), otherwise the preferred
-/// or first provider that has one.
-fn resolve_provider(c: &Circle, requested: Option<Provider>) -> Result<Provider, AiFailure> {
-    let no_key = |p: Provider| {
-        fail(
-            "no-provider",
-            format!(
-                "{NO_PROVIDER} (no {} key is saved yet).",
-                p.display_name()
-            ),
-        )
-    };
+/// The provider to send to: the one asked for (which must be usable: a key is saved and any
+/// notice or account step is done), otherwise the one chosen in Settings -> AI or the first
+/// usable provider.
+fn resolve_provider(requested: Option<Provider>) -> Result<Provider, AiFailure> {
     match requested {
-        Some(p) => ai_keys::has(p).then_some(p).ok_or_else(|| no_key(p)),
-        None => {
-            let preferred = lk(&c.settings).provider;
-            vision::pick_provider(preferred, ai_keys::has)
-                .ok_or_else(|| fail("no-provider", format!("{NO_PROVIDER}.")))
-        }
+        Some(p) => crate::ai::check_usable(p).map(|()| p),
+        None => vision::pick_provider(crate::ai::selected(), crate::ai::usable)
+            .ok_or_else(|| fail("no-provider", format!("{NO_PROVIDER}."))),
     }
 }
 
@@ -754,14 +656,14 @@ fn ask_provider(
             base64: png_b64,
         }),
     );
-    let a = vision::ask(provider, &key, model, &prompt)?;
+    let a = crate::ai::ask_vision(provider, &key, model, &prompt)?;
     Ok(AiReply {
         answer: a.text,
         truncated: a.truncated,
         provider: provider.id(),
         provider_name: provider.display_name(),
         model: vision::clean_model(provider, model)
-            .unwrap_or_else(|_| provider.default_model().to_string()),
+            .unwrap_or_else(|_| provider.default_vision_model().to_string()),
     })
 }
 
@@ -776,8 +678,8 @@ pub async fn circle_ask_vision(app: AppHandle, args: AskArgs) -> Result<AiReply,
         ));
     }
     let c = app.state::<Circle>();
-    let provider = resolve_provider(&c, args.provider)?;
-    let model = effective_model(&lk(&c.settings), provider);
+    let provider = resolve_provider(args.provider)?;
+    let model = crate::ai::vision_model(provider);
     let png_b64 = {
         let mut slot = lk(&c.slot);
         slot.get(Instant::now())
@@ -790,9 +692,11 @@ pub async fn circle_ask_vision(app: AppHandle, args: AskArgs) -> Result<AiReply,
         )
     })?;
     let question = args.question;
-    tauri::async_runtime::spawn_blocking(move || ask_provider(provider, &model, &question, &png_b64))
-        .await
-        .map_err(|e| fail("other", e.to_string()))?
+    tauri::async_runtime::spawn_blocking(move || {
+        ask_provider(provider, &model, &question, &png_b64)
+    })
+    .await
+    .map_err(|e| fail("other", e.to_string()))?
 }
 
 // ---------------------------------------------------------------------------------------
@@ -867,17 +771,19 @@ pub fn circle_set_settings(
     Ok(status_of(&c))
 }
 
-/// Thin wrapper over [`ai_keys`] (the shared AI module owns key entry in the UI): save
-/// (`key = Some`) or remove (`key = None`) the key for `provider` in Credential Manager.
+/// Thin wrapper over `crate::ai` (Settings -> AI owns key entry in the UI): save (`key = Some`,
+/// with the same checks and gates as `ai_set_key`) or remove (`key = None`) the key for
+/// `provider` in Credential Manager.
 #[tauri::command]
 pub fn circle_set_key(
     app: AppHandle,
+    state: State<'_, AppState>,
     provider: String,
     key: Option<String>,
 ) -> CmdResult<CircleStatus> {
     let p = Provider::from_id(&provider).ok_or("Unknown AI provider.")?;
     match key {
-        Some(raw) => ai_keys::store(p, &raw)?,
+        Some(raw) => crate::ai::store_key(&state, p, &raw).map_err(|f| f.message)?,
         None => {
             ai_keys::delete(p)?;
         }
@@ -1024,7 +930,9 @@ fn end_session(app: &AppHandle, id: Option<u64>, reason: &'static str) {
     let c = app.state::<Circle>();
     let ended = {
         let mut g = lk(&c.aware);
-        if g.as_ref().is_some_and(|r| id.is_none_or(|i| r.session.id == i)) {
+        if g.as_ref()
+            .is_some_and(|r| id.is_none_or(|i| r.session.id == i))
+        {
             g.take()
         } else {
             None
@@ -1050,7 +958,7 @@ pub fn aware_start(
 ) -> Result<AwareStatus, AiFailure> {
     let c = app.state::<Circle>();
     let provider = if vision {
-        Some(resolve_provider(&c, None)?)
+        Some(resolve_provider(None)?)
     } else {
         None
     };
@@ -1159,14 +1067,12 @@ pub async fn aware_ask(
             ));
         }
         let p = provider.ok_or_else(|| fail("no-provider", format!("{NO_PROVIDER}.")))?;
-        if !ai_keys::has(p) {
-            return Err(fail("no-provider", format!("{NO_PROVIDER}.")));
-        }
+        crate::ai::check_usable(p)?;
         Some(p)
     } else {
         None
     };
-    let model = provider.map(|p| effective_model(&lk(&c.settings), p));
+    let model = provider.map(crate::ai::vision_model);
     let Some(guard) = Busy::try_take(&c.busy) else {
         return Err(fail("other", "Still reading the last capture."));
     };

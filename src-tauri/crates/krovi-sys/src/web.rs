@@ -16,15 +16,22 @@ pub const GOOGLE_SEARCH_BASE: &str = "https://www.google.com/search?q=";
 /// Longest search text, in characters. Longer selections are cut (the UI says so).
 pub const MAX_QUERY_CHARS: usize = 300;
 
-/// Where each supported vision provider's API-key page is. Opened only from the "Get a key"
-/// button in settings. These are fixed, public pages; nothing is sent to them.
+/// Where each AI provider's API-key page is. Opened only from the "Get a key" button in
+/// Settings -> AI. These are fixed, public pages; nothing is sent to them. They mirror
+/// `krovi_net::ai::ProviderSpec::key_page` (an app-level test keeps the two in step); Snowflake's
+/// entry is the documentation page on creating a programmatic access token.
 const KEYS_PAGES: &[(&str, &str)] = &[
-    ("openai", "https://platform.openai.com/api-keys"),
     ("anthropic", "https://console.anthropic.com/settings/keys"),
-    ("gemini", "https://aistudio.google.com/apikey"),
+    ("openai", "https://platform.openai.com/api-keys"),
+    ("gemini", "https://aistudio.google.com/api-keys"),
+    ("groq", "https://console.groq.com/keys"),
+    (
+        "snowflake",
+        "https://docs.snowflake.com/en/user-guide/programmatic-access-tokens",
+    ),
 ];
 
-/// The API-key page for a provider id (`openai`, `anthropic`, `gemini`).
+/// The API-key page for a provider id (`anthropic`, `openai`, `gemini`, `groq`, `snowflake`).
 pub fn keys_page(provider: &str) -> Option<&'static str> {
     KEYS_PAGES
         .iter()
@@ -93,9 +100,9 @@ pub fn is_allowed_url(url: &str) -> bool {
     match url.strip_prefix(GOOGLE_SEARCH_BASE) {
         Some(rest) => {
             !rest.is_empty()
-                && rest
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~' | b'%'))
+                && rest.bytes().all(|b| {
+                    b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~' | b'%')
+                })
         }
         None => false,
     }
@@ -193,10 +200,12 @@ mod tests {
     fn built_urls_are_allowed() {
         let u = google_search_url("hello world & more").unwrap();
         assert!(is_allowed_url(&u));
-        for p in ["openai", "anthropic", "gemini"] {
+        for p in ["openai", "anthropic", "gemini", "groq", "snowflake"] {
             assert!(is_allowed_url(keys_page(p).unwrap()), "{p}");
         }
         assert_eq!(keys_page("nope"), None);
+        assert_eq!(keys_page("deepseek"), None);
+        assert_eq!(keys_page("muse-spark-1.3"), None);
     }
 
     #[test]

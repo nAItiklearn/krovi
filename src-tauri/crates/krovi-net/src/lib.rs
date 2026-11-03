@@ -33,13 +33,20 @@
 //! * Whisper model (user-initiated only): `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>`,
 //!   which redirects to Hugging Face's CDN (`*.hf.co` / `*.huggingface.co`, at most 5
 //!   redirects, every hop host-checked). GET only, no body, no cookies.
-//! * AI provider (user-initiated, bring-your-own-key; see [`vision`]): only after an explicit
-//!   "Ask AI" and a confirmed disclosure naming the provider, a single HTTPS POST (no redirects,
-//!   no cookies) to exactly one of `https://api.openai.com/v1/chat/completions`,
-//!   `https://api.anthropic.com/v1/messages`,
-//!   `https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`.
-//!   Sends the user's question and the one picture they chose; the key travels in a header.
+//! * AI provider (user-initiated, bring-your-own-key; see [`ai`] and [`vision`]): only after an
+//!   explicit button press (Ask AI with a confirmed disclosure naming the provider, Test
+//!   connection, a model list) and never in the background, a single HTTPS request (no redirects,
+//!   no cookies) to the host of the provider the user chose:
+//!   `https://api.openai.com/v1/{chat/completions,models}`,
+//!   `https://api.anthropic.com/v1/{messages,models}`,
+//!   `https://generativelanguage.googleapis.com/v1beta/models[/<model>:generateContent]`,
+//!   `https://api.groq.com/openai/v1/{chat/completions,models}`, or (experimental) the user's own
+//!   `https://<account>.snowflakecomputing.com/api/v2/cortex/v1/chat/completions`.
+//!   Sends the user's question and, for pictures, the one picture they chose; the key travels in a
+//!   header, never in a URL.
 
+pub mod ai;
+pub mod ai_settings;
 mod cache;
 pub mod currency;
 pub mod geocode;
@@ -52,6 +59,11 @@ pub mod whisper_models;
 #[cfg(feature = "net")]
 mod http;
 
+pub use ai::{
+    complete_text, is_banned_model, list_models, test_connection, AiError, AuthStyle, Credentials,
+    ModelInfo, ProviderSpec, TestReport, TextPrompt,
+};
+pub use ai_settings::AiSettings;
 pub use cache::TtlCache;
 pub use currency::{convert, fetch_rates, parse_rates, rates_url, Rates, DEFAULT_BASE};
 pub use geocode::{clean_query, geocode_url, parse_places, search_places, Place};

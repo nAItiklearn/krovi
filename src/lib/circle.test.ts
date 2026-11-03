@@ -215,17 +215,18 @@ describe('demo mode (no Tauri)', () => {
   it('loads a status with no keys and no active provider', async () => {
     const st = await c.loadCircle();
     expect(st.activeProvider).toBeNull();
-    expect(st.providers.map((p) => p.id)).toEqual(['openai', 'anthropic', 'gemini']);
+    expect(st.providers.map((p) => p.id)).toEqual(['anthropic', 'openai', 'gemini', 'groq', 'snowflake']);
     expect(st.providers.every((p) => !p.hasKey)).toBe(true);
+    // Settings -> AI owns the provider and model choice, so Circle's settings no longer carry one
+    expect(Object.keys(st.settings).sort()).toEqual(['enabled', 'sessionMinutes', 'shortcut']);
     expect(st.settings.shortcut).toBe('Ctrl+Alt+C');
     expect(get(c.circleStatus)).toEqual(st);
     expect(c.askAvailability(st, null, 0).reason).toBe(c.NO_PROVIDER_TEXT);
   });
 
   it('saves settings in memory only, clamping the session length', async () => {
-    const st = await c.saveCircleSettings({ ...c.DEFAULT_SETTINGS, sessionMinutes: 99, models: { gemini: 'gemini-2.5-pro' } });
+    const st = await c.saveCircleSettings({ ...c.DEFAULT_SETTINGS, sessionMinutes: 99 });
     expect(st.settings.sessionMinutes).toBe(30);
-    expect(st.providers.find((p) => p.id === 'gemini')?.model).toBe('gemini-2.5-pro');
   });
 
   it('refuses to start the overlay and to touch keys', async () => {
