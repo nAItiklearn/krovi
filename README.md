@@ -59,10 +59,11 @@ with a full changelog entry for
 | **Checklists in Notes** | tick-boxes inline between paragraphs |
 | **Six themes + idle companion** | Graphite, Porcelain, Mochi, Arcade, Terracotta, Tide — or follow Windows; the pill rests as a pair of eyes that wake when you touch it |
 
-## All 16 tools
+## All 15 tools
 
 | | |
 |---|---|
+| **Home** | glanceable cards for clipboard, focus, now playing, weather, screen time and system load |
 | **Clipboard history** | searchable, pin-to-top, type filters, capped ring |
 | **Timers & stopwatch** | multiple countdowns + laps |
 | **Pomodoro** | work/break cycles on the timer engine |
@@ -75,11 +76,12 @@ with a full changelog entry for
 | **Explain** | on-device summaries + read aloud (optional ElevenLabs voices) |
 | **World clocks** | several zones at a glance |
 | **Unit & currency** | offline units; cached keyless FX |
-| **Calculator** | expression + unit-aware |
 | **Screen-time** | local-only per-app/day (no titles/URLs, never sent) |
+| **Settings** | hotkey, theme, pill and startup behaviour, voice privacy |
 
 A keyboard-first command palette sits above all of them (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd>),
-and the voice grammar drives the same actions by name.
+and the voice grammar drives the same actions by name. The palette also does inline math:
+type `12*7+3` and <kbd>Enter</kbd> copies the answer (`+ - * /`, parentheses, decimals, percent; no units).
 
 ## Performance (measured on a real install)
 
@@ -130,7 +132,7 @@ npm run dev        # → http://localhost:5173
 ```
 
 or just open **[the hosted demo](https://www.krovi.tech/demo/)**. Every tool view
-is interactive (the calculator computes, timers tick, voice help lists every phrase,
+is interactive (the palette does inline math, timers tick, voice help lists every phrase,
 Ctrl/Cmd+K opens the command palette).
 
 ## Build from source

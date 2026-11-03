@@ -94,12 +94,14 @@ A **focused** set chosen to deepen the shelf identity rather than sprawl (ration
 |---|---------|-------------|----------|
 | O1 | **Command Palette** | Quick-launch installed apps + run Krovi actions from one search box; the keyboard spine of the shelf. | High |
 | O3 | **Pomodoro focus** | A mode on the existing timer engine (work/break cycles, session count) — reuses C3, no new subsystem. | Med |
-| O4 | **Calculator** | Natural companion to the conversion tools; expression + unit-aware. | Med |
 | O5 | **To-do list** | Lightweight checkable tasks alongside notes/reminders. | Med |
 
 **Removed:** O2 Paste Stack (2026-11-02, D-015). Once clipboard history has good
 search, a second, numbered way to hold clips is redundant — exactly the feature bloat this
 section exists to prevent.
+O4 Calculator (v0.3): the standalone tool is gone. Arithmetic (`+ - * /`, parentheses,
+decimals, percent; no units) survives as inline math in the command palette, and "open
+calculator" by voice launches the Windows Calculator app.
 
 **Explicitly deferred (anti-scope-creep):** system quick-toggles (Wi-Fi/Bluetooth/DND).
 Windows exposes these inconsistently and several need elevated or vendor-specific APIs;
@@ -158,7 +160,7 @@ FAQ → final download CTA.
   (e.g. "Typical paid utility suite", "A pile of separate free tools").
 - Row groups: *Cost & ownership* (price / free, open source, no account, fully offline, local
   files, no telemetry) · *Daily tools* (clipboard history, timers, Pomodoro, file
-  shelf, media controls, weather, notes, to-do, world clocks, unit & currency, calculator,
+  shelf, media controls, weather, notes, to-do, world clocks, unit & currency,
   command palette, screen-time) · *Platform* (Windows, auto-start, global hotkey, hot-corner).
 - Cells: ✓ / ✗ / "Paid" / "Partial" / **"Not verified"**, with a legend.
 - **Clean-room honesty rule (D-002):** the Vayli column is filled from its **public listing only**;
@@ -256,7 +258,7 @@ pomodoro / pomodoros / pomodoro timer / focus / focus timer / focus mode / focus
 file shelf / files; media / music / now playing / player / media controls; calendar / agenda /
 schedule / events (also "reminder(s)"); weather / forecast; notes / note / notebook; clocks /
 clock / world clocks / world clock / time zones / time zone; convert / converter / conversion /
-currency / currency converter / unit converter / units / exchange rates; calculator / calc; screen
+currency / currency converter / unit converter / units / exchange rates; screen
 time / screentime / app usage / usage; transfer / quick transfer / send to phone / phone transfer /
 file transfer (Quick Transfer; "send to phone" is the tool only on its own - "send **this** to my phone"
 is the selection action below, and `files` / `file shelf` stay the Shelf); explain / explainer / summarize / summarizer / summary / read

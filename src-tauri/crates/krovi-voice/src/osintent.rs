@@ -476,7 +476,9 @@ mod tests {
         assert_eq!(cmd("open timers"), tool(Timers));
         assert_eq!(cmd("open the calendar"), tool(Calendar));
         assert_eq!(cmd("open settings"), tool(Settings), "Krovi's own Settings");
-        assert_eq!(cmd("open calculator"), tool(Calculator));
+        // Krovi has no calculator tool (inline math lives in the command palette), so
+        // "open calculator" resolves to the Windows Calculator app.
+        assert_eq!(cmd("open calculator"), app("Calculator"));
         assert_eq!(
             cmd("launch settings"),
             app("Settings"),

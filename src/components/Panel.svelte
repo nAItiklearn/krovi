@@ -22,7 +22,6 @@
   import Notes from '../views/Notes.svelte';
   import WorldClocks from '../views/WorldClocks.svelte';
   import Convert from '../views/Convert.svelte';
-  import Calculator from '../views/Calculator.svelte';
   import ScreenTime from '../views/ScreenTime.svelte';
   import Settings from '../views/Settings.svelte';
   import Transfer from '../views/Transfer.svelte';
@@ -46,7 +45,6 @@
     explain: Explain,
     clocks: WorldClocks,
     convert: Convert,
-    calculator: Calculator,
     screentime: ScreenTime,
     settings: Settings,
   };

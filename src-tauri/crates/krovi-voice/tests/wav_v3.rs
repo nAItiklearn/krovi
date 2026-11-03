@@ -54,7 +54,9 @@ fn cases() -> Vec<Case> {
         c("l-desktop", "tell me about the desktop", List),
         c("l-pictures", "list the contents of pictures", List),
         c("a-notepad", "open notepad", App),
+        // Krovi has no calculator tool: both verbs resolve to the Windows Calculator app.
         c("a-calculator", "launch calculator", App),
+        c("a-calculator-open", "open calculator", App),
         c("a-chrome", "open google chrome", App),
         c("a-firefox", "start firefox", App),
         c("a-spotify", "launch spotify", App),

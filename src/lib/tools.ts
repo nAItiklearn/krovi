@@ -27,7 +27,6 @@ export const TOOLS: ToolDef[] = [
   { id: 'explain', label: 'Explain', icon: 'bookOpen', hint: 'Summarize & explain any text', keywords: ['summarize', 'summary', 'explain', 'read aloud', 'tldr', 'simplify', 'text'] },
   { id: 'clocks', label: 'World Clocks', icon: 'clocks', hint: 'Time zones at a glance', keywords: ['time', 'timezone'] },
   { id: 'convert', label: 'Convert', icon: 'convert', hint: 'Units and currency', keywords: ['unit', 'currency', 'exchange'] },
-  { id: 'calculator', label: 'Calculator', icon: 'calculator', hint: 'Evaluate expressions', keywords: ['math', 'calc'] },
   { id: 'screentime', label: 'Screen Time', icon: 'screentime', hint: 'Where your day went', keywords: ['apps', 'usage', 'focus'] },
   { id: 'settings', label: 'Settings', icon: 'settings', hint: 'Shortcut, theme, behaviour', keywords: ['preferences', 'options', 'hotkey'] },
 ];

@@ -69,7 +69,6 @@ pub(crate) const TOOL_PHRASES: &[(ToolId, &[&str])] = &[
             "exchange rates",
         ],
     ),
-    (ToolId::Calculator, &["calculator", "calc"]),
     (
         ToolId::Screentime,
         &["screen time", "screentime", "app usage", "usage"],
@@ -938,8 +937,6 @@ mod tests {
             ("go to the calendar", open(Calendar)),
             ("switch to weather", open(Weather)),
             ("take me to settings", open(Settings)),
-            ("launch the calculator", open(Calculator)),
-            ("open calculator app", open(Calculator)),
             ("open world clocks", open(Clocks)),
             ("open screen time", open(Screentime)),
             ("open the file shelf", open(Shelf)),
@@ -1054,7 +1051,6 @@ mod tests {
             ("open calender", open(Calendar)),
             ("open pomodoros", open(Pomodoro)),
             ("open the clip board", open(Clipboard)),
-            ("open calculater", open(Calculator)),
         ]);
     }
 

@@ -1,4 +1,5 @@
-// A tiny, safe arithmetic expression evaluator for the Calculator tool.
+// A tiny, safe arithmetic expression evaluator for the command palette's inline math
+// (there is no standalone Calculator tool).
 //
 // No `eval`/`Function`: a hand-written tokenizer + recursive-descent parser so
 // user input can never execute code. Supports + - * / , parentheses, unary

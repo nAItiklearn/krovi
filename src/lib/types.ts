@@ -188,7 +188,6 @@ export type ToolId =
   | 'notes'
   | 'clocks'
   | 'convert'
-  | 'calculator'
   | 'screentime'
   | 'transfer'
   | 'explain'

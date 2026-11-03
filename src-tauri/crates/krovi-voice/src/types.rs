@@ -44,7 +44,6 @@ pub enum ToolId {
     Notes,
     Clocks,
     Convert,
-    Calculator,
     Screentime,
     /// Quick Transfer (LAN file transfer to/from a phone).
     Transfer,
@@ -54,7 +53,7 @@ pub enum ToolId {
 }
 
 impl ToolId {
-    pub const ALL: [ToolId; 16] = [
+    pub const ALL: [ToolId; 15] = [
         ToolId::Home,
         ToolId::Clipboard,
         ToolId::Timers,
@@ -66,7 +65,6 @@ impl ToolId {
         ToolId::Notes,
         ToolId::Clocks,
         ToolId::Convert,
-        ToolId::Calculator,
         ToolId::Screentime,
         ToolId::Transfer,
         ToolId::Explain,
@@ -86,7 +84,6 @@ impl ToolId {
             ToolId::Notes => "notes",
             ToolId::Clocks => "clocks",
             ToolId::Convert => "convert",
-            ToolId::Calculator => "calculator",
             ToolId::Screentime => "screentime",
             ToolId::Transfer => "transfer",
             ToolId::Explain => "explain",
@@ -730,7 +727,6 @@ mod tests {
                 "notes",
                 "clocks",
                 "convert",
-                "calculator",
                 "screentime",
                 "transfer",
                 "explain",

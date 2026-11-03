@@ -24,7 +24,7 @@ export const HELP_FAMILIES: HelpFamily[] = [
     icon: 'home',
     template: '{open|show|show me|go to|switch to|launch|take me to|bring up|view} [the|my] <tool>',
     examples: ['open the calendar', 'show me clipboard', 'go to settings'],
-    note: 'Tools: home, clipboard, timers, pomodoro, shelf, media, calendar, weather, notes, world clocks, convert, calculator, screen time, settings. A Krovi tool wins over a folder or app of the same name: say “launch settings” for the Windows app, “open music folder” for the folder.',
+    note: 'Tools: home, clipboard, timers, pomodoro, shelf, media, calendar, weather, notes, world clocks, convert, screen time, settings. A Krovi tool wins over a folder or app of the same name: say “launch settings” for the Windows app, “open music folder” for the folder.',
   },
   {
     id: 'timers',
