@@ -27,10 +27,14 @@ pub mod actions;
 pub mod catalog;
 pub mod civil;
 pub mod clean;
+pub mod dictation;
 pub mod intent;
 pub mod listing;
 pub mod parser;
+pub mod speech;
 pub mod types;
+pub mod typing_plan;
+pub mod vad;
 pub mod when;
 
 mod grammar;
@@ -39,11 +43,21 @@ mod result;
 mod session;
 
 #[cfg(all(windows, feature = "native"))]
+pub mod capture;
+#[cfg(all(windows, feature = "native"))]
 pub mod context;
+#[cfg(all(windows, feature = "native"))]
+pub mod dictate;
 #[cfg(all(windows, feature = "native"))]
 pub mod os;
 #[cfg(all(windows, feature = "native"))]
+pub mod typing;
+#[cfg(all(windows, feature = "native"))]
 mod sapi;
+/// Local Whisper speech-to-text (whisper.cpp). Compiled only with the `whisper` feature,
+/// which the app enables; it needs a C++ toolchain, so plain `cargo test` skips it.
+#[cfg(feature = "whisper")]
+pub mod stt;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};

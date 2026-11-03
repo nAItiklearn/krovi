@@ -71,7 +71,9 @@ windows = { version = "0.58", features = [
 # fake data partly because these were opt-in; a Tauri build must never fall back
 # to fixtures. The 64-bit WinLibs MinGW toolchain builds all of them locally
 # (docs/CONTRACTS.md Â§0). Fixtures remain only for the browser demo.
-default = ["net", "native", "sqlite"]
+default = ["net", "native", "sqlite", "whisper"]
+# Local Whisper speech recognition (whisper.cpp built from source; needs CMake + MSVC).
+whisper = ["krovi-voice/whisper"]
 sqlite = ["krovi-store/sqlite"]
 net = ["krovi-net/net"]
 native = ["krovi-sys/native", "krovi-voice/native"]

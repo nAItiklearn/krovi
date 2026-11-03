@@ -27,6 +27,17 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   MANIFEST: src-tauri/Cargo.toml
+  # whisper.cpp (built by whisper-rs-sys): use its pre-generated bindings (no libclang)
+  # and a portable x86-64 baseline instead of the runner's CPU, so the installer does not
+  # crash with illegal instructions on users' machines. Baseline = AVX2/FMA/F16C
+  # (Intel Haswell 2013+, AMD Zen/Excavator).
+  WHISPER_DONT_GENERATE_BINDINGS: '1'
+  GGML_NATIVE: 'OFF'
+  GGML_AVX: 'ON'
+  GGML_AVX2: 'ON'
+  GGML_FMA: 'ON'
+  GGML_F16C: 'ON'
+  GGML_AVX512: 'OFF'
 
 defaults:
   run:
