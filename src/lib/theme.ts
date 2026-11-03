@@ -38,7 +38,7 @@ const defs = [
   { id: 'terracotta', name: 'Terracotta', scheme: 'light', swatch: ['#f1e6d4', '#302016', '#4f5a16'], blurb: 'Warm sand and clay, olive accent' },
   { id: 'tide', name: 'Tide', scheme: 'dark', swatch: ['#152336', '#ecf6ff', '#5fe3c4'], blurb: 'Slate-blue glass, seafoam accent' },
   { id: 'voxel', name: 'Voxel', scheme: 'dark', swatch: ['#242822', '#f3f6e6', '#8dd44f'], blurb: 'Blocky 8-bit stone and grass, square pixel eyes' },
-  { id: 'minecraft', name: 'Minecraft', scheme: 'light', swatch: ['#c6c6c6', '#181818', '#14500b'], blurb: 'Block-world inventory look: grey bevels, dirt and grass, square eyes' },
+  { id: 'pixel-meadow', name: 'Pixel Meadow', scheme: 'light', swatch: ['#c6c6c6', '#181818', '#14500b'], blurb: 'Block-world inventory look: grey bevels, dirt and grass, square eyes' },
 ] as const satisfies readonly ThemeDef[];
 
 export type ThemeId = (typeof defs)[number]['id'];
@@ -48,7 +48,7 @@ export type ThemeChoice = 'system' | ThemeId;
  * Themes that also change SHAPE, not just colour: square corners, pixel-step frames, a monospace
  * face (styles/themes/_blocky.css) and square pixel eyes on the idle companion.
  */
-export const BLOCKY_THEMES: readonly ThemeId[] = ['voxel', 'minecraft'];
+export const BLOCKY_THEMES: readonly ThemeId[] = ['voxel', 'pixel-meadow'];
 export const isBlockyTheme = (id: string): boolean => (BLOCKY_THEMES as readonly string[]).includes(id);
 
 /** The registry. Order is the picker order. */
@@ -102,6 +102,7 @@ export function migrateLegacy(raw: unknown): ThemeChoice | null {
   if (raw === 'light') return SYSTEM_LIGHT;
   if (raw === 'dark') return SYSTEM_DARK;
   if (raw === 'auto') return 'system';
+  if (raw === 'minecraft') return 'pixel-meadow';
   return null;
 }
 

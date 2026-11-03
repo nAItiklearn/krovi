@@ -6,7 +6,8 @@
 
 <p align="center">
   <strong>One pill at the top of your screen. Every little tool inside. Your data stays on your PC.</strong><br>
-  A free, open-source "everything shelf" for Windows — 15 daily tools behind one global hotkey,
+  A free, open-source "everything shelf" for Windows — 19 daily tools behind one global hotkey,
+  bringing your own key (optional) for read‑aloud. No account, no sign‑up, no sync claims.
   summoned as a small pill that springs open into a panel.<br>
   Local-first. No accounts, no telemetry, no paywall.
 </p>
@@ -48,18 +49,20 @@ with a full changelog entry for
 
 | Addition | Detail |
 |---|---|
-| **The Island** | a pill at the top-centre of your screen that morphs into the 15-tool panel and back; never blocks the app underneath, folds away with <kbd>Esc</kbd>, a click elsewhere or the hotkey |
+| **The Island** | a pill at the top-centre of your screen that morphs into the 19-tool panel and back; never blocks the app underneath, folds away with <kbd>Esc</kbd>, a click elsewhere or the hotkey |
 | **Live clipboard** | copies appear within a fraction of a second; password-manager entries are never stored |
 | **Live now playing** | title, artist, artwork and a ticking progress bar from the Windows media session, with play/pause/next/prev |
 | **Real reminders** | a timed calendar entry rings: Windows notification + sound, snooze 5/10, dismiss, missed-while-closed catch-up, Do-Not-Disturb aware |
 | **Voice (100% on-device)** | dictate notes; a closed grammar of spoken commands: open any tool, timer/Pomodoro control, media, launch an app or open a folder, list a folder, find a file, set a reminder. Windows SAPI, zero network — verified by a socket capture |
-| **Explain** | on-device text summary + read aloud (short/medium/key points); optional bring-your-own ElevenLabs key, stored in Windows Credential Manager |
+| **Explain** | on-device text summary + read aloud (short/medium/key points); optional bring your own key (optional), stored in Windows Credential Manager |
 | **Quick Transfer** | send files PC ⇄ phone over your own Wi-Fi with a QR code, optional PIN, no cloud relay |
 | **Holidays, offline** | India, US and GB holidays 2025–2027 bundled with documented sources |
 | **Checklists in Notes** | tick-boxes inline between paragraphs |
-| **Six themes + idle companion** | Graphite, Porcelain, Mochi, Arcade, Terracotta, Tide — or follow Windows; the pill rests as a pair of eyes that wake when you touch it |
+| **Six themes + idle companion** | Graphite, Porcelain, Mochi, Arcade, Terracotta, Tide, Pixel Meadow — or follow Windows; the pill rests as a pair of eyes that wake when you touch it |
 
-## All 15 tools
+**New in v0.3:** Agent, Circle to Ask and Clean My OS — bring your own key (optional) for read‑aloud.
+
+## All 19 tools
 
 | | |
 |---|---|

@@ -1,4 +1,4 @@
-/* The blocky themes (Voxel and Minecraft), structural half. voxel.css / minecraft.css hold the
+/* The blocky themes (Voxel and Pixel Meadow), structural half. voxel.css / pixel-meadow.css hold the
  * colours (audited like every theme); this file holds what a token file cannot say: square
  * corners, a monospace face and a pixel dither. Underscore-prefixed on purpose: themes.test.ts
  * treats every other .css here as a theme file. Everything is keyed on the two theme ids, so no
@@ -7,7 +7,7 @@
  * monospace stack. The companion's square eyes are in IdleCompanion.svelte (data-skin='blocky'). */
 
 :root[data-theme='voxel'],
-:root[data-theme='minecraft'] {
+:root[data-theme='pixel-meadow'] {
   /* blocky: every corner on the radius scale is square */
   --r-1: 0px;
   --r-2: 0px;
@@ -31,13 +31,13 @@
 /* The shared controls hard-code their roundness (999px / 50%) rather than read the radius scale,
  * so the few that are everywhere are squared here: chips, tags, round buttons, toggles (track and
  * knob), slider thumbs and the header search. Selector weight (0,2,1+) beats their single class. */
-:is(:root[data-theme='voxel'], :root[data-theme='minecraft']) :is(.btn-round, .chip, .tag, .toggle, .search, kbd),
-:is(:root[data-theme='voxel'], :root[data-theme='minecraft']) .toggle::after,
-:is(:root[data-theme='voxel'], :root[data-theme='minecraft']) .range::-webkit-slider-thumb {
+:is(:root[data-theme='voxel'], :root[data-theme='pixel-meadow']) :is(.btn-round, .chip, .tag, .toggle, .search, kbd),
+:is(:root[data-theme='voxel'], :root[data-theme='pixel-meadow']) .toggle::after,
+:is(:root[data-theme='voxel'], :root[data-theme='pixel-meadow']) .range::-webkit-slider-thumb {
   border-radius: 0;
 }
 /* the search placeholder is a fixed-width field; monospace must not wrap it */
-:is(:root[data-theme='voxel'], :root[data-theme='minecraft']) .search .ph {
+:is(:root[data-theme='voxel'], :root[data-theme='pixel-meadow']) .search .ph {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -46,14 +46,14 @@
 
 /* The island's radius is morphed in JS (inline --r), so the theme squares the stage itself. The
  * shape, shadows and rim all inherit the radius, which is what makes the stepped frame sit flush. */
-:is(:root[data-theme='voxel'], :root[data-theme='minecraft']) .fitbox > .stage {
+:is(:root[data-theme='voxel'], :root[data-theme='pixel-meadow']) .fitbox > .stage {
   border-radius: 0;
 }
 
 /* Film grain becomes a coarse pixel dither: 2px speckles on a 16px tile, scaled 2x and never
  * smoothed. The tile is a tiny generated SVG, so this is pattern, not artwork. (On a light
  * scheme the island inverts the grain, so the speckles come out dark there.) */
-:is(:root[data-theme='voxel'], :root[data-theme='minecraft']) .grain {
+:is(:root[data-theme='voxel'], :root[data-theme='pixel-meadow']) .grain {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'><g fill='%23d6e8aa'><rect x='2' y='1' width='2' height='2'/><rect x='10' y='3' width='2' height='2'/><rect x='6' y='7' width='2' height='2'/><rect x='13' y='9' width='2' height='2'/><rect x='1' y='12' width='2' height='2'/><rect x='9' y='13' width='2' height='2'/></g></svg>");
   background-size: 32px 32px;
   image-rendering: pixelated;

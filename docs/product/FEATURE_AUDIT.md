@@ -47,7 +47,7 @@ Status key: ✅ works natively · ⚠️ works with real gaps · 🟥 broken/mis
 | Privacy / network | Zero telemetry | Hosts: `api.open-meteo.com`, `geocoding-api.open-meteo.com`, `api.frankfurter.dev`, `api.elevenlabs.io` (opt-in). CSP blocks webview fetches | ✅ | Audit doc should be re-checked: it names `frankfurter.app`, code uses `.dev` | Binary-level network trace |
 
 ## Website / docs accuracy issues
-- Tool count inconsistent: "15 tools" (`web/index.html:8,210,249`) vs "Sixteen" (`:431`) vs docs "16"; list at `:252` has 14.
+- Tool count inconsistent: "15 tools" (`web/index.html:8,210,249`) vs "Sixteen" (`:431`) vs docs "19"; list at `:252` has 14.
 - Unlabelled hard-coded values: Home explorer panel "27° Clear", "61% RAM · C: 43%" (`index.html:462-465`); hero "27° Clear" (`:168`) only captioned "A preview".
 - Section heading says "RAM and disk" (`:328`) but widget shows simulated CPU.
 - README/SPEC call the calculator "unit-aware" — false.

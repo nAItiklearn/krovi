@@ -17,7 +17,7 @@ members = [
 
 [package]
 name = "krovi-app"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 description = "Krovi desktop shell (Tauri 2). Thin #[tauri::command] bridges over krovi-core + krovi-store; no business logic lives here."

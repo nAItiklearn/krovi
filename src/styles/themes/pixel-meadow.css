@@ -1,10 +1,10 @@
-/* Minecraft: the block-world "inventory" look, drawn from scratch. Light stone-grey panels with
+/* Pixel Meadow: the block-world "inventory" look, drawn from scratch. Light stone-grey panels with
  * hard dark outlines and notched pixel corners, a dirt-brown pill with white square eyes, and a
  * grass-green accent. Palette and geometry are our own (no game textures, fonts, logos or art are
  * used or copied); the structural half (square corners, monospace, pixel dither) is _blocky.css,
  * shared with Voxel, and the square eyes are in IdleCompanion.svelte. Light scheme: dark text on grey. */
-:root[data-theme='minecraft'],
-[data-theme-scope='minecraft'] {
+:root[data-theme='pixel-meadow'],
+[data-theme-scope='pixel-meadow'] {
   color-scheme: light;
   --page: #6b4f35;
   --panel-bg: rgba(198, 198, 198, 1);
@@ -68,7 +68,7 @@
   --eye-blush: rgba(255, 140, 120, 0.4);
 }
 
-:root[data-env='tauri'][data-theme='minecraft'] {
+:root[data-env='tauri'][data-theme='pixel-meadow'] {
   --panel-bg: rgba(198, 198, 198, 1);
   --pill-bg: rgba(74, 54, 34, 0.99);
 }

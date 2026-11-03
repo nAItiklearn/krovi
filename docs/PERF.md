@@ -18,7 +18,7 @@ Total working set including shared pages: ~433 MB.
 
 **Verdict, stated plainly:** ~136 MB private. That is **higher than Windy's 103.4 MB and above
 Windy's amended 120 MB budget**. ~95% of it is the WebView2 runtime that keeps the always-visible
-pill rendered; the Rust process itself is 6.3 MB. Krovi's webview hosts far more UI (15 tools,
+pill rendered; the Rust process itself is 6.3 MB. Krovi's webview hosts far more UI (19 tools,
 themes, idle companion) than Windy's popup. Options if this must come down: render the pill
 natively (no webview while collapsed) and create the panel webview on demand — a real
 architectural change, not done in v0.2.

@@ -3,7 +3,7 @@ import { BLOCKY_THEMES, THEMES, isBlockyTheme, nextChoice, parseChoice } from '.
 import { auditTheme, composite, contrast, parseColor, parseThemeCss, type RGBA, type ThemeTokens } from './contrast';
 
 // The "companion polish" themes: Obsidian (premium dark), Linen (elegant light), and the two
-// blocky 8-bit ones, Voxel (dark) and Minecraft (light inventory grey). themes.test.ts already
+// blocky 8-bit ones, Voxel (dark) and Pixel Meadow (light inventory grey). themes.test.ts already
 // audits every theme file; this adds the explicit, named pairs these themes promise (several above
 // AA) plus the pieces only they have.
 const nodeFs = 'node:fs';
@@ -21,7 +21,7 @@ const col = (t: ThemeTokens, name: string): RGBA => {
 const panelOf = (t: ThemeTokens): RGBA => composite(col(t, '--panel-bg'), composite(col(t, '--page'), BLACK));
 const pillOf = (t: ThemeTokens): RGBA => composite(col(t, '--pill-bg'), composite(col(t, '--page'), BLACK));
 
-const NEW = ['obsidian', 'linen', 'voxel', 'minecraft'] as const;
+const NEW = ['obsidian', 'linen', 'voxel', 'pixel-meadow'] as const;
 const tokens = Object.fromEntries(NEW.map((id) => [id, parseThemeCss(read(`${id}.css`))])) as Record<
   (typeof NEW)[number],
   ThemeTokens
@@ -59,19 +59,19 @@ describe.each(NEW)('%s', (id) => {
   });
 });
 
-describe('voxel and minecraft palettes', () => {
-  it('Voxel is dark with a grass-green accent; Minecraft is the light grey inventory with a dark-green one', () => {
+describe('voxel and pixel-meadow palettes', () => {
+  it('Voxel is dark with a grass-green accent; Pixel Meadow is the light grey inventory with a dark-green one', () => {
     expect(tokens.voxel.base['color-scheme']).toBe('dark');
-    expect(tokens.minecraft.base['color-scheme']).toBe('light');
-    for (const id of ['voxel', 'minecraft'] as const) {
+    expect(tokens['pixel-meadow'].base['color-scheme']).toBe('light');
+    for (const id of ['voxel', 'pixel-meadow'] as const) {
       const accent = col(tokens[id], '--accent');
       expect(accent.g, id).toBeGreaterThan(accent.r);
       expect(accent.g, id).toBeGreaterThan(accent.b);
     }
   });
 
-  it('Minecraft panels are the classic mid-grey (a neutral grey, not tinted)', () => {
-    const p = col(tokens.minecraft, '--panel-bg');
+  it('Pixel Meadow panels are the classic mid-grey (a neutral grey, not tinted)', () => {
+    const p = col(tokens['pixel-meadow'], '--panel-bg');
     expect(p.a).toBe(1);
     expect(Math.max(p.r, p.g, p.b) - Math.min(p.r, p.g, p.b)).toBeLessThanOrEqual(2);
     expect(p.r).toBeGreaterThan(150);
@@ -79,7 +79,7 @@ describe('voxel and minecraft palettes', () => {
   });
 });
 
-describe.each(['voxel', 'minecraft'] as const)('blocky theme: %s', (id) => {
+describe.each(['voxel', 'pixel-meadow'] as const)('blocky theme: %s', (id) => {
   const t = tokens[id];
   const blocky = read('_blocky.css');
 
@@ -134,13 +134,13 @@ describe('blocky structural css (_blocky.css)', () => {
 });
 
 describe('picker order', () => {
-  it('cycles through the new themes after porcelain and ends on voxel, minecraft', () => {
+  it('cycles through the new themes after porcelain and ends on voxel, pixel-meadow', () => {
     const ids = THEMES.map((x) => x.id);
     expect(ids.slice(0, 4)).toEqual(['graphite', 'porcelain', 'obsidian', 'linen']);
-    expect(ids.slice(-2)).toEqual(['voxel', 'minecraft']);
+    expect(ids.slice(-2)).toEqual(['voxel', 'pixel-meadow']);
     expect(nextChoice('porcelain')).toBe('obsidian');
-    expect(nextChoice('voxel')).toBe('minecraft');
-    expect(nextChoice('minecraft')).toBe('system');
+    expect(nextChoice('voxel')).toBe('pixel-meadow');
+    expect(nextChoice('pixel-meadow')).toBe('system');
   });
 
   it('only registered themes are blocky', () => {

@@ -58,7 +58,7 @@
   let runner: Runner | null = null;
 
   // The skin the eyes are drawn in: the live theme, or the per-theme preview board (the harness's
-  // data-theme-scope) the companion sits in. Only the blocky themes (Voxel, Minecraft) change the
+  // data-theme-scope) the companion sits in. Only the blocky themes (Voxel, Pixel Meadow) change the
   // eye SHAPE (square eyes, pixel pupil, gaze snapped to a coarse grid); every other theme is
   // colour only, via the --eye-* tokens.
   let scope = $state<string | null>(null);
@@ -635,7 +635,7 @@
     transition: transform var(--look-ms, 80ms) var(--look);
   }
 
-  /* ================= Blocky skin (Voxel and Minecraft themes): square eyes, pixel pupil =================
+  /* ================= Blocky skin (Voxel and Pixel Meadow themes): square eyes, pixel pupil =================
      `data-skin='blocky'` is stamped by the script from the live theme, or from the preview board's
      data-theme-scope, so a board shows its own theme's eyes whatever the page theme is. It sits on top
      of whichever style is chosen (Pixel is already blocky and the Visor is a bar, so they keep their
