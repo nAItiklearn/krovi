@@ -222,7 +222,7 @@ impl ClipboardHistory {
         let needle = needle.map(|n| n.to_lowercase());
         self.visible()
             .into_iter()
-            .filter(|e| kind.map_or(true, |k| e.kind == k))
+            .filter(|e| kind.is_none_or(|k| e.kind == k))
             .filter(|e| match &needle {
                 Some(n) if !n.is_empty() => e.content.to_lowercase().contains(n),
                 _ => true,

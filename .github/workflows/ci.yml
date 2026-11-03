@@ -26,12 +26,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -51,14 +51,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # The Tauri crate embeds the built frontend via generate_context!, so the
       # Rust build needs dist/ to exist before it can compile krovi-app.
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install frontend deps + build (for generate_context!)

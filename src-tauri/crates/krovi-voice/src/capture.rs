@@ -220,7 +220,7 @@ impl Recorder {
 
     /// Whether the worker ended on its own (device lost or the length cap hit).
     pub fn finished(&self) -> bool {
-        self.worker.as_ref().map_or(true, |w| w.is_finished())
+        self.worker.as_ref().is_none_or(|w| w.is_finished())
     }
 
     /// Stop and return everything recorded (16 kHz mono f32).

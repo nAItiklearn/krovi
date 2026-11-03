@@ -458,7 +458,7 @@ fn normalize(raw: &str) -> String {
     let mut text = stripped.split_whitespace().collect::<Vec<_>>().join(" ");
     if dropped {
         text = text
-            .trim_start_matches(|c: char| matches!(c, ',' | '.' | ';' | ':' | '!' | '?' | ' '))
+            .trim_start_matches([',', '.', ';', ':', '!', '?', ' '])
             .to_string();
     }
     if is_lone_hallucination(&text) {
@@ -675,9 +675,7 @@ fn protect_fillers(text: &str) -> String {
     let words: Vec<&str> = text.split(' ').collect();
     let mut out: Vec<String> = Vec::with_capacity(words.len());
     for (i, w) in words.iter().enumerate() {
-        let core_end = w
-            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '!' | '?'))
-            .len();
+        let core_end = w.trim_end_matches(['.', ',', ';', ':', '!', '?']).len();
         let (core, trail) = w.split_at(core_end);
         let lc = core.to_lowercase();
         let next_is_know = words.get(i + 1).is_some_and(|n| word_lc(n) == "know");
@@ -710,9 +708,7 @@ fn close_corrected(mut s: String) -> String {
     if !last.is_alphanumeric() {
         return s;
     }
-    let start = s
-        .rfind(|c| matches!(c, '.' | '!' | '?' | '\n'))
-        .map_or(0, |p| p + 1);
+    let start = s.rfind(['.', '!', '?', '\n']).map_or(0, |p| p + 1);
     if s[start..].split_whitespace().count() >= 3 {
         s.push('.');
     }
@@ -1047,7 +1043,7 @@ fn split_paragraphs(text: &str) -> Vec<String> {
 fn finish_piece(toks: &[&str]) -> String {
     toks.join(" ")
         .trim()
-        .trim_end_matches(|c: char| matches!(c, ',' | ';' | ' '))
+        .trim_end_matches([',', ';', ' '])
         .to_string()
 }
 
@@ -1199,10 +1195,7 @@ fn split_signoff(paras: &mut Vec<String>) {
         phrase_text
     } else {
         phrase_text.push(',');
-        let name = rest
-            .join(" ")
-            .trim_end_matches(|c: char| matches!(c, '.' | '!'))
-            .to_string();
+        let name = rest.join(" ").trim_end_matches(['.', '!']).to_string();
         format!("{phrase_text}\n{name}")
     };
     let top = format!("{head}{}", toks[..s].join(" "));
@@ -1286,7 +1279,7 @@ fn note(text: &str, opts: &DictationOptions) -> String {
     let edge = |c: char| matches!(c, ',' | '.' | ';' | ':' | ' ');
     let mut lines: Vec<String> = Vec::new();
     let heading = pieces[0].join(" ");
-    let heading = heading.trim_end_matches(|c: char| matches!(c, ',' | ';' | ' '));
+    let heading = heading.trim_end_matches([',', ';', ' ']);
     if !heading.is_empty() {
         let h = paragraph_with(heading, opts, opts.auto_punctuate);
         if !h.is_empty() {
@@ -1300,9 +1293,7 @@ fn note(text: &str, opts: &DictationOptions) -> String {
             continue;
         }
         let item = paragraph_with(body, opts, false);
-        let item = item
-            .trim()
-            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';'));
+        let item = item.trim().trim_end_matches(['.', ',', ';']);
         if !item.is_empty() {
             lines.push(format!("- {item}"));
         }
@@ -1646,7 +1637,7 @@ fn code(text: &str, opts: &DictationOptions) -> String {
     // Whisper's own end-of-word punctuation is pause-driven noise here; symbols are spoken.
     let words: Vec<&str> = text
         .split(' ')
-        .map(|w| w.trim_end_matches(|c: char| matches!(c, '.' | ',' | '!' | '?')))
+        .map(|w| w.trim_end_matches(['.', ',', '!', '?']))
         .filter(|w| !w.is_empty())
         .collect();
     let lcs: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();

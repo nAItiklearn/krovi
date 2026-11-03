@@ -104,7 +104,10 @@ impl Pomodoro {
         let next = match self.phase {
             Phase::Work => {
                 self.completed_work_sessions += 1;
-                if self.completed_work_sessions % self.config.long_break_every == 0 {
+                if self
+                    .completed_work_sessions
+                    .is_multiple_of(self.config.long_break_every)
+                {
                     Phase::LongBreak
                 } else {
                     Phase::ShortBreak

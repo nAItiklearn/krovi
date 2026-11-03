@@ -1677,7 +1677,7 @@ Next meeting is on Tuesday at 3 pm. The final go/no-go call happens on 2026-04-1
                      If anything is still broken, tell me by Thursday noon. \
                      I will be travelling and slow to answer after that.";
         let words = text::word_count(input);
-        assert!(words >= 40 && words <= 70, "{words}");
+        assert!((40..=70).contains(&words), "{words}");
         let s = summarize(input, DETAILED).unwrap();
         assert!(!s.already_short);
         assert!(
@@ -1743,10 +1743,7 @@ Next meeting is on Tuesday at 3 pm. The final go/no-go call happens on 2026-04-1
         assert!(!s.text.contains("---"), "{}", s.text);
         assert!(!s.text.contains('|'), "{}", s.text);
         for it in &s.items {
-            assert!(
-                !it.text.starts_with(|c: char| c == '|' || c == '-'),
-                "{it:?}"
-            );
+            assert!(!it.text.starts_with(['|', '-']), "{it:?}");
         }
     }
 

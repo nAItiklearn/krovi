@@ -27,11 +27,12 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   MANIFEST: src-tauri/Cargo.toml
-  # whisper.cpp (built by whisper-rs-sys): use its pre-generated bindings (no libclang)
-  # and a portable x86-64 baseline instead of the runner's CPU, so the installer does not
-  # crash with illegal instructions on users' machines. Baseline = AVX2/FMA/F16C
-  # (Intel Haswell 2013+, AMD Zen/Excavator).
-  WHISPER_DONT_GENERATE_BINDINGS: '1'
+  # whisper.cpp (built by whisper-rs-sys): generate the bindings on the runner with its
+  # preinstalled LLVM. The crate's bundled bindings.rs (0.15) were generated on Linux/glibc
+  # and fail Windows layout checks (E0080 on _IO_FILE). Also a portable x86-64 baseline
+  # instead of the runner's CPU, so the installer does not crash with illegal instructions
+  # on users' machines. Baseline = AVX2/FMA/F16C (Intel Haswell 2013+, AMD Zen/Excavator).
+  LIBCLANG_PATH: 'C:\Program Files\LLVM\bin'
   GGML_NATIVE: 'OFF'
   GGML_AVX: 'ON'
   GGML_AVX2: 'ON'
@@ -49,9 +50,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -97,9 +98,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -129,7 +130,7 @@ jobs:
             Tee-Object -FilePath logs/installers-sha256.txt
 
       - name: Upload installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: krovi-windows-installers-${{ github.sha }}
           path: |
@@ -140,7 +141,7 @@ jobs:
 
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: krovi-build-logs-${{ github.sha }}
           path: logs/

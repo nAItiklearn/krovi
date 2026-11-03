@@ -440,7 +440,7 @@ mod tests {
         // at `w * h * 4` bytes owned by the DIB section until it is deleted.
         unsafe {
             let dc = CreateCompatibleDC(None);
-            let bmp = CreateDIBSection(dc, &mut bmi, DIB_RGB_COLORS, &mut bits, None, 0)
+            let bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &mut bits, None, 0)
                 .expect("offscreen bitmap");
             let old_bmp = SelectObject(dc, HGDIOBJ(bmp.0));
             let _ = PatBlt(dc, 0, 0, w, h, WHITENESS);

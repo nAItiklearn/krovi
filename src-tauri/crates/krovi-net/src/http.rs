@@ -166,7 +166,7 @@ pub fn open_download(url: &str, cancel: &AtomicBool) -> Result<Download, ModelEr
 
         let encoded = resp
             .header("Content-Encoding")
-            .map_or(false, |e| !e.trim().eq_ignore_ascii_case("identity"));
+            .is_some_and(|e| !e.trim().eq_ignore_ascii_case("identity"));
         let content_length = if encoded {
             None
         } else {

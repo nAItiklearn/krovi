@@ -202,7 +202,7 @@ fn wipe(buf: &mut [u8]) {
 /// Set every alpha byte of a BGRA buffer to 255. GDI leaves it undefined (usually 0), and a
 /// premultiplied bitmap with alpha 0 would read as fully transparent.
 pub fn force_opaque(bgra: &mut [u8]) {
-    for px in bgra.chunks_exact_mut(4) {
+    for px in bgra.as_chunks_mut::<4>().0 {
         px[3] = 0xFF;
     }
 }
@@ -210,7 +210,7 @@ pub fn force_opaque(bgra: &mut [u8]) {
 /// BGRA to RGBA (swap the first and third byte of every pixel).
 pub fn bgra_to_rgba(bgra: &[u8]) -> Vec<u8> {
     let mut out = bgra.to_vec();
-    for px in out.chunks_exact_mut(4) {
+    for px in out.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
     out
@@ -241,7 +241,7 @@ impl Image {
     /// (DRM video, some games) that Windows will not hand over.
     pub fn is_uniform(&self) -> bool {
         match self.bgra.get(..4) {
-            Some(first) => self.bgra.chunks_exact(4).all(|p| p == first),
+            Some(first) => self.bgra.as_chunks::<4>().0.iter().all(|p| p == first),
             None => true,
         }
     }

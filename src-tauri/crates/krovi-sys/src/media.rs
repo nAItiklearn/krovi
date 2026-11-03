@@ -232,7 +232,7 @@ pub const ART_GIVE_UP_POLLS: u32 = 240;
 
 /// Whether poll number `polls` (0-based, per track) should try to read missing artwork.
 pub fn art_attempt_due(polls: u32) -> bool {
-    polls < ART_FAST_POLLS || (polls < ART_GIVE_UP_POLLS && polls % ART_RETRY_EVERY == 0)
+    polls < ART_FAST_POLLS || (polls < ART_GIVE_UP_POLLS && polls.is_multiple_of(ART_RETRY_EVERY))
 }
 
 /// Decides which samples are worth emitting as `media-changed`.

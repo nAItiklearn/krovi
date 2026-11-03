@@ -26,14 +26,25 @@ jobs:
   release:
     name: Build Windows installer (MSVC)
     runs-on: windows-latest
+    # Same whisper.cpp settings as windows-build.yml: bindings generated with the runner's
+    # LLVM (the bundled ones are Linux-only), and a portable AVX2 baseline instead of the
+    # runner's CPU so the installer runs on users' machines.
+    env:
+      LIBCLANG_PATH: 'C:\Program Files\LLVM\bin'
+      GGML_NATIVE: 'OFF'
+      GGML_AVX: 'ON'
+      GGML_AVX2: 'ON'
+      GGML_FMA: 'ON'
+      GGML_F16C: 'ON'
+      GGML_AVX512: 'OFF'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install frontend dependencies
@@ -62,13 +73,13 @@ jobs:
           releaseBody: 'Krovi Windows installer. Local-first quick-access shelf. See the README and the network audit for the privacy details.'
           releaseDraft: false
           prerelease: false
-          args: --features net,native
+          args: --features net,native,whisper
 
       # workflow_dispatch has no tag, so no Release is created — surface the
       # built installers as a downloadable workflow artifact instead.
       - name: Upload installer artifacts (workflow_dispatch only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: krovi-windows-installers
           path: |

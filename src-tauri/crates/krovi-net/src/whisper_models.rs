@@ -238,10 +238,7 @@ fn https_host(url: &str) -> Result<String, &'static str> {
         Some(p) if p.eq_ignore_ascii_case("https://") => &url[8..],
         _ => return Err("not an https URL"),
     };
-    let authority = rest
-        .split(|c: char| c == '/' || c == '?' || c == '#')
-        .next()
-        .unwrap_or("");
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
     if authority.is_empty() {
         return Err("missing host");
     }
@@ -274,7 +271,7 @@ fn https_host(url: &str) -> Result<String, &'static str> {
 /// any redirect hop): https, default port, no credentials, and an allowed host
 /// (`huggingface.co`, `*.huggingface.co`, `*.hf.co`).
 pub fn is_allowed_download_url(url: &str) -> bool {
-    https_host(url).map_or(false, |h| is_allowed_host(&h))
+    https_host(url).is_ok_and(|h| is_allowed_host(&h))
 }
 
 /// Like [`is_allowed_download_url`] but with a reason. Only the (validated,
@@ -299,7 +296,7 @@ pub(crate) fn check_url(url: &str) -> Result<(), ModelError> {
 pub(crate) fn resolve_redirect(current: &str, location: &str) -> Result<String, ModelError> {
     let is_https = location
         .get(..8)
-        .map_or(false, |p| p.eq_ignore_ascii_case("https://"));
+        .is_some_and(|p| p.eq_ignore_ascii_case("https://"));
     let candidate = if is_https {
         location.to_string()
     } else if location.starts_with("//") {
@@ -309,7 +306,7 @@ pub(crate) fn resolve_redirect(current: &str, location: &str) -> Result<String, 
         // a plain `host[:443]`.
         let after_scheme = current.get(8..).unwrap_or("");
         let end = after_scheme
-            .find(|c: char| c == '/' || c == '?' || c == '#')
+            .find(['/', '?', '#'])
             .unwrap_or(after_scheme.len());
         format!("{}{location}", current.get(..8 + end).unwrap_or(""))
     } else {
