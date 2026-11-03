@@ -5,9 +5,9 @@
 //! crate and is unit-tested there; this file only holds state, persists the non-secret settings
 //! and turns crate events into Tauri events.
 //!
-//! Commands: explain_summarize, explain_engines, explain_get_settings, explain_set_settings,
-//! explain_set_key, explain_eleven_voices, explain_test_voice, explain_speak,
-//! explain_stop_speaking, explain_open_keys_page.
+//! Commands: explain_summarize, explain_cancel_summarize, explain_engines, explain_get_settings,
+//! explain_set_settings, explain_set_key, explain_eleven_voices, explain_test_voice,
+//! explain_speak, explain_stop_speaking, explain_open_keys_page.
 //! Event: `explain-speak` (a `SpeakEvent`: speaking | notice | done | failed | stopped).
 //!
 //! Network: none, except ElevenLabs when (and only when) the user saved a key and asks for it:
@@ -16,6 +16,7 @@
 //! and is never returned to the webview, logged or written to disk.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use krovi_explain::eleven::{self, ErrorKind};
@@ -23,7 +24,7 @@ use krovi_explain::secrets;
 use krovi_explain::settings;
 use krovi_explain::speak::{self, Engine, SpeakEvent, SpeakInfo, SpeakRequest, SpeakSink, Speaker};
 use krovi_explain::win;
-use krovi_explain::{summarize, Settings, Summary, SummaryLength, VoiceEngine};
+use krovi_explain::{summarize_cancellable, Settings, Summary, SummaryLength, VoiceEngine};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
 
@@ -34,6 +35,8 @@ pub struct ExplainState {
     settings: Mutex<Settings>,
     path: Mutex<Option<PathBuf>>,
     speaker: Speaker,
+    /// Cancel flag of the summary being worked out, if any (see `explain_summarize`).
+    summarize_cancel: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 struct TauriSink(tauri::AppHandle);
@@ -56,6 +59,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         settings: Mutex::new(loaded),
         path: Mutex::new(path),
         speaker: Speaker::new(),
+        summarize_cancel: Mutex::new(None),
     });
 
     // Stop talking when the app quits.
@@ -97,13 +101,45 @@ fn eleven_key() -> Result<Option<String>, String> {
 // Summary (on-device)
 // ---------------------------------------------------------------------------------------
 
+/// Works the summary out on a blocking thread (never the UI thread). A newer request raises the
+/// cancel flag of the one still running, so a long text does not pile up behind a stale click.
 #[tauri::command]
-pub async fn explain_summarize(text: String, length: SummaryLength) -> Result<Summary, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        summarize(&text, length).map_err(|e| e.to_string())
+pub async fn explain_summarize(
+    state: State<'_, ExplainState>,
+    text: String,
+    length: SummaryLength,
+) -> Result<Summary, String> {
+    let flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut slot = state.summarize_cancel.lock().map_err(lock_err)?;
+        if let Some(old) = slot.replace(Arc::clone(&flag)) {
+            old.store(true, Ordering::Relaxed);
+        }
+    }
+    let worker = Arc::clone(&flag);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        summarize_cancellable(&text, length, &worker).map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    // Finished (or cancelled): forget our flag unless a newer request has already replaced it.
+    if let Ok(mut slot) = state.summarize_cancel.lock() {
+        if slot.as_ref().is_some_and(|f| Arc::ptr_eq(f, &flag)) {
+            *slot = None;
+        }
+    }
+    result
+}
+
+/// Stop the summary that is being worked out (the Stop button). The pending
+/// `explain_summarize` returns the error "Summary cancelled.".
+#[tauri::command]
+pub fn explain_cancel_summarize(state: State<'_, ExplainState>) {
+    if let Ok(slot) = state.summarize_cancel.lock() {
+        if let Some(flag) = slot.as_ref() {
+            flag.store(true, Ordering::Relaxed);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------

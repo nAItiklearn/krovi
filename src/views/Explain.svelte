@@ -19,9 +19,22 @@
   const PLACEHOLDER = 'Paste a long paragraph, an article, terms and conditions, an email, or a phrase you want shortened...';
   const SAMPLE = 'Hello from Krovi. This is the voice that will read your summary.';
 
+  const RESULT_TITLES: Record<ex.SummaryLength, string> = {
+    short: 'Summary',
+    detailed: 'Summary',
+    'key-points': 'Key points',
+    'action-items': 'Action items',
+    decisions: 'Decisions',
+    dates: 'Dates and deadlines',
+    questions: 'Open questions',
+  };
+
   let text = $state('');
-  let length = $state<ex.SummaryLength>('medium');
+  let length = $state<ex.SummaryLength>('detailed');
   let summary = $state<ex.Summary | null>(null);
+  // The summary being worked out can be stopped; a newer request supersedes an older one.
+  let runCtl: AbortController | null = null;
+  let runSeq = 0;
   let summarizedText = $state('');
   let busy = $state(false);
   let showSkeleton = $state(false);
@@ -58,7 +71,12 @@
   const counts = $derived(ex.countText(text));
   const readEst = $derived(counts.words > 0 ? ex.formatDuration((counts.words / 238) * 60) : '');
   const stale = $derived(summary !== null && text !== summarizedText);
+  const tooLong = $derived(counts.chars > ex.MAX_CHARS);
   const lengthOptions = ex.LENGTHS.map((l) => ({ id: l.id, label: l.label }));
+  const extracting = $derived(summary !== null && ex.isExtractMode(summary.length));
+  const bulleted = $derived(summary !== null && !summary.alreadyShort && (summary.length === 'key-points' || extracting));
+  const resultTitle = $derived(RESULT_TITLES[summary?.length ?? length]);
+  const coverage = $derived(summary ? ex.coverageLabel(summary) : '');
 
   const latestClip = $derived($clips.find((c) => c.kind === 'Text' && c.content.trim().length > 0) ?? null);
 
@@ -85,24 +103,50 @@
       return;
     }
     if (isReading) void ex.stopSpeaking();
+    runCtl?.abort(); // a newer request supersedes the one still running
+    const ctl = new AbortController();
+    runCtl = ctl;
+    const seq = ++runSeq;
     busy = true;
     error = null;
     const t = setTimeout(() => (showSkeleton = true), 160);
     try {
-      const s = await ex.summarize(src, length);
+      const s = await ex.summarize(src, length, ctl.signal);
+      if (seq !== runSeq) return; // stopped or superseded while it was running
       summary = s;
       summarizedText = src;
       ex.clearSpeakMessages();
-      announce = s.alreadyShort ? 'That text is already short.' : `Summary ready: ${s.items.length} ${s.items.length === 1 ? 'sentence' : 'sentences'}.`;
+      const n = s.items.length;
+      announce = s.alreadyShort
+        ? 'That text is already short.'
+        : ex.isExtractMode(s.length)
+          ? n
+            ? `${RESULT_TITLES[s.length]}: ${n} found.`
+            : (s.note ?? 'Nothing found.')
+          : `Summary ready: ${n} ${n === 1 ? 'sentence' : 'sentences'}.`;
     } catch (e) {
+      if (seq !== runSeq || ex.isCancelled(e)) return;
       summary = null;
       error = ex.errorText(e);
       announce = error;
     } finally {
       clearTimeout(t);
-      busy = false;
-      showSkeleton = false;
+      if (seq === runSeq) {
+        busy = false;
+        showSkeleton = false;
+        runCtl = null;
+      }
     }
+  }
+
+  /** Stop button: abandon the summary being worked out (the previous result, if any, stays). */
+  function cancelRun() {
+    runCtl?.abort();
+    runCtl = null;
+    runSeq++;
+    busy = false;
+    showSkeleton = false;
+    announce = 'Stopped.';
   }
 
   function setText(next: string, auto = true) {
@@ -131,6 +175,7 @@
 
   function clearAll() {
     if (isReading) void ex.stopSpeaking();
+    if (busy) cancelRun();
     text = '';
     summary = null;
     summarizedText = '';
@@ -173,7 +218,7 @@
   // ---------------------------------------------------------------- reading aloud
 
   async function toggleRead() {
-    if (!summary) return;
+    if (!summary?.text) return;
     if (isReading || $speaking.status === 'speaking') {
       await ex.stopSpeaking();
       return;
@@ -379,7 +424,7 @@
       .then((e) => {
         engines = e;
         settings = e.settings;
-        length = e.settings.summaryLength;
+        length = ex.normalizeLength(e.settings.summaryLength);
         const bad = e.windows.error ?? e.elevenlabs.error;
         enginesError = bad;
       })
@@ -415,6 +460,9 @@
         <span id="ex-count" class="count faint" aria-live="off">
           {#if counts.chars}
             {ex.formatNumber(counts.chars)} characters &middot; {ex.formatNumber(counts.words)} words &middot; about {readEst} to read
+            {#if tooLong}
+              <b class="over">&middot; over the {ex.formatNumber(ex.MAX_CHARS)} character limit, paste a smaller part</b>
+            {/if}
           {:else}
             Nothing pasted yet
           {/if}
@@ -429,20 +477,33 @@
         {#if text}
           <button class="btn sm ghost" onclick={clearAll}>Clear</button>
         {/if}
-        <button class="btn primary" onclick={run} disabled={!text.trim() || busy} title="Summarize (Ctrl+Enter)">
-          <Icon name={busy ? 'loader' : 'sparkles'} size={14} /> Summarize
-        </button>
+        {#if busy && showSkeleton}
+          <button class="btn" onclick={cancelRun} title="Stop working on this text">
+            <Icon name="square" size={13} /> Stop
+          </button>
+        {:else}
+          <button class="btn primary" onclick={run} disabled={!text.trim() || busy} title="Summarize (Ctrl+Enter)">
+            <Icon name={busy ? 'loader' : 'sparkles'} size={14} /> {ex.isExtractMode(length) ? 'Find' : 'Summarize'}
+          </button>
+        {/if}
       </div>
     </section>
 
-    <!-- ============================ length + stats ============================ -->
+    <!-- ============================ what to produce + stats ============================ -->
     <div class="controls">
-      <Segmented label="Summary length" options={lengthOptions} bind:value={length} onchange={onLength} />
+      <Segmented label="What to produce" size="sm" options={lengthOptions} bind:value={length} onchange={onLength} />
       <span class="grow"></span>
       {#if summary && !summary.alreadyShort}
-        <span class="tag" title="Words before and after">{ex.formatNumber(summary.stats.words)} &rarr; {ex.formatNumber(summary.stats.summaryWords)} words</span>
-        {#if saved}
-          <span class="tag accent"><Icon name="clock" size={11} /> {saved}</span>
+        {#if extracting}
+          <span class="tag" title="Sentences found">{summary.items.length} found</span>
+        {:else}
+          <span class="tag" title="Words before and after">{ex.formatNumber(summary.stats.words)} &rarr; {ex.formatNumber(summary.stats.summaryWords)} words</span>
+          {#if saved}
+            <span class="tag accent"><Icon name="clock" size={11} /> {saved}</span>
+          {/if}
+        {/if}
+        {#if coverage}
+          <span class="tag" title="How much of the text this is based on">{coverage}</span>
         {/if}
       {/if}
     </div>
@@ -450,13 +511,13 @@
     <!-- ============================ the result ============================ -->
     <section class="card result" aria-labelledby="ex-res" aria-busy={busy}>
       <div class="rhead">
-        <h2 id="ex-res" class="eyebrow">Summary</h2>
+        <h2 id="ex-res" class="eyebrow">{resultTitle}</h2>
         {#if stale}
           <span class="tag" role="status">Text changed. Press Summarize to update.</span>
         {/if}
         <span class="grow"></span>
-        {#if summary}
-          <button class="btn sm icon ghost" onclick={copy} aria-label="Copy the summary" title="Copy"><Icon name="copy" size={14} /></button>
+        {#if summary?.text}
+          <button class="btn sm icon ghost" onclick={copy} aria-label="Copy the result" title="Copy"><Icon name="copy" size={14} /></button>
           <button class="btn sm" onclick={saveNote}><Icon name="notes" size={13} /> Save as note</button>
         {/if}
       </div>
@@ -472,7 +533,9 @@
           <div class="problem" role="alert"><Icon name="alert" size={15} /> <span>{error}</span></div>
         {:else if summary && parts}
           <div in:swap>
-            <p class="out" class:points={summary.length === 'points' && !summary.alreadyShort}>{parts.before}{#if parts.mid}{#key parts.before.length}<mark bind:this={markEl}>{parts.mid}</mark>{/key}{/if}{parts.after}</p>
+            {#if summary.text}
+              <p class="out" class:points={bulleted}>{parts.before}{#if parts.mid}{#key parts.before.length}<mark bind:this={markEl}>{parts.mid}</mark>{/key}{/if}{parts.after}</p>
+            {/if}
             {#if summary.note}
               <p class="note faint"><Icon name="info" size={13} /> {summary.note}</p>
             {/if}
@@ -482,7 +545,7 @@
         {/if}
       </div>
 
-      {#if summary}
+      {#if summary?.text}
         <footer class="rfoot">
           <button
             class="speak"
@@ -789,8 +852,13 @@
   .controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px 8px;
     flex: none;
+  }
+  .over {
+    color: var(--danger);
+    font-weight: 600;
   }
 
   /* ---- result ---- */

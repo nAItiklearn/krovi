@@ -81,11 +81,39 @@ pub fn sentences(input: &str) -> Vec<String> {
         .collect()
 }
 
-/// Number of words (whitespace separated tokens that contain a letter or digit).
+/// Writing systems that put no spaces between words. `1` = Han ideographs and Japanese kana
+/// (about two characters per word), `2` = Thai / Lao / Myanmar / Khmer (about four), `0` = every
+/// other character. Without this a whole Chinese paragraph counts as ONE word.
+pub fn spaceless_class(c: char) -> u8 {
+    match c as u32 {
+        0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xFF66..=0xFF9F => {
+            1
+        }
+        0x0E00..=0x0EFF | 0x1000..=0x109F | 0x1780..=0x17FF => 2,
+        _ => 0,
+    }
+}
+
+/// Number of words: whitespace separated tokens that contain a letter or digit, where a run of
+/// space-less script counts as one word per ~2 characters (Han / kana) or ~4 (Thai and friends).
 pub fn word_count(text: &str) -> usize {
-    text.split_whitespace()
-        .filter(|t| t.chars().any(|c| c.is_alphanumeric()))
-        .count()
+    let mut n = 0usize;
+    for tok in text.split_whitespace() {
+        let (mut han, mut thai, mut other) = (0usize, 0usize, false);
+        for c in tok.chars() {
+            match spaceless_class(c) {
+                1 => han += 1,
+                2 => thai += 1,
+                _ => {
+                    if c.is_alphanumeric() {
+                        other = true;
+                    }
+                }
+            }
+        }
+        n += usize::from(other) + han.div_ceil(2) + thai.div_ceil(4);
+    }
+    n
 }
 
 /// Collapse every run of whitespace to one space and trim.
@@ -108,9 +136,15 @@ pub fn collapse_ws(text: &str) -> String {
 
 /// Lower-case content terms of `text` for scoring: stop words and one-letter tokens removed,
 /// light suffix stemming so "agreements" and "agreement" meet.
+///
+/// Space-less scripts (Chinese, Japanese, Thai, ...) have no word boundaries to split on, so a
+/// run of them becomes overlapping character bigrams (trigrams for Thai and friends): the usual
+/// dictionary-free way to compare such sentences.
 pub fn content_terms(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut word = String::new();
+    let mut run: Vec<char> = Vec::new();
+    let mut run_class = 0u8;
     let flush = |word: &mut String, out: &mut Vec<String>| {
         if !word.is_empty() {
             let w = std::mem::take(word);
@@ -120,6 +154,18 @@ pub fn content_terms(text: &str) -> Vec<String> {
         }
     };
     for c in text.chars() {
+        let class = spaceless_class(c);
+        if class != 0 {
+            flush(&mut word, &mut out);
+            if class != run_class {
+                flush_run(&mut run, run_class, &mut out);
+                run_class = class;
+            }
+            run.push(c);
+            continue;
+        }
+        flush_run(&mut run, run_class, &mut out);
+        run_class = 0;
         if c.is_alphanumeric() {
             for l in c.to_lowercase() {
                 word.push(l);
@@ -131,7 +177,25 @@ pub fn content_terms(text: &str) -> Vec<String> {
         }
     }
     flush(&mut word, &mut out);
+    flush_run(&mut run, run_class, &mut out);
     out
+}
+
+/// Emit the terms of one run of space-less script (see [`content_terms`]).
+fn flush_run(run: &mut Vec<char>, class: u8, out: &mut Vec<String>) {
+    if run.is_empty() {
+        return;
+    }
+    let n = if class == 2 { 3 } else { 2 };
+    if run.len() < n {
+        // a short run is one term: a single ideograph is often a whole word
+        out.push(run.iter().collect());
+    } else {
+        for w in run.windows(n) {
+            out.push(w.iter().collect());
+        }
+    }
+    run.clear();
 }
 
 /// A very small stemmer: enough to merge plurals and common verb endings. Not linguistically
@@ -233,7 +297,9 @@ pub fn display_clean(s: &str) -> String {
     // A pure table separator row ("| --- | :---: |") carries nothing: drop it.
     let trimmed = t.trim().to_string();
     if trimmed.starts_with('|')
-        && trimmed.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ' | '\t'))
+        && trimmed
+            .chars()
+            .all(|c| matches!(c, '|' | '-' | ':' | ' ' | '\t'))
         && trimmed.contains('-')
     {
         return String::new();
@@ -410,7 +476,7 @@ fn is_heading_line(lines: &[Line], k: usize) -> bool {
         return false;
     }
     let first = t.chars().next().unwrap_or(' ');
-    if !(first.is_uppercase() || first.is_ascii_digit()) {
+    if !heading_starter(first) {
         return false;
     }
     let last = t.chars().last().unwrap_or(' ');
@@ -428,6 +494,13 @@ fn is_heading_line(lines: &[Line], k: usize) -> bool {
             | '\u{2019}'
             | ')'
             | ']'
+            | '\u{3002}'
+            | '\u{ff01}'
+            | '\u{ff1f}'
+            | '\u{ff0c}'
+            | '\u{3001}'
+            | '\u{ff1a}'
+            | '\u{ff1b}'
     ) {
         return false;
     }
@@ -435,13 +508,14 @@ fn is_heading_line(lines: &[Line], k: usize) -> bool {
         None => true,
         Some(next) => {
             bullet_marker_len(next.text) > 0
-                || next
-                    .text
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_uppercase() || c.is_ascii_digit())
+                || next.text.chars().next().is_some_and(heading_starter)
         }
     }
+}
+
+/// A heading starts with a capital, a digit, or a Han / kana character (those have no case).
+fn heading_starter(c: char) -> bool {
+    c.is_uppercase() || c.is_ascii_digit() || spaceless_class(c) == 1
 }
 
 /// Byte length of a Markdown ATX heading marker ("##" plus the required space), or 0.
@@ -613,7 +687,13 @@ fn block_units(block: &Block, para: usize) -> Vec<Unit> {
 fn is_terminator(c: char) -> bool {
     matches!(
         c,
-        '.' | '!' | '?' | '\u{2026}' | '\u{3002}' | '\u{ff01}' | '\u{ff1f}' | '\u{0964}'
+        '.' | '!'
+            | '?'
+            | '\u{2026}'
+            | '\u{3002}'
+            | '\u{ff01}'
+            | '\u{ff1f}'
+            | '\u{0964}'
             | '\u{0965}'
     )
 }
@@ -898,6 +978,897 @@ fn split_ranges(s: &str) -> Vec<(usize, usize)> {
         push(start, n - 1);
     }
     out
+}
+
+// ---------------------------------------------------------------------------------------
+// Cue detection: action items, decisions, dates, open questions
+//
+// Plain word-sequence matching on a lower-cased token stream. No model, no regex engine, and the
+// TypeScript port (src/lib/explain.ts) follows the same rules step for step.
+// ---------------------------------------------------------------------------------------
+
+/// One word of a sentence: lower-cased, with its byte span in the sentence. Dots, dashes, colons,
+/// slashes and apostrophes BETWEEN alphanumerics stay inside the token (`2026-11-03`, `10:30`,
+/// `follow-up`, `don't`, `p.m`).
+#[derive(Debug, Clone)]
+pub struct Tok {
+    pub lc: String,
+    pub start: usize,
+    pub end: usize,
+    /// Starts with a capital letter (or follows an `@`): a name, a title or a sentence start.
+    pub cap: bool,
+}
+
+pub fn tokens(s: &str) -> Vec<Tok> {
+    let chars: Vec<(usize, char)> = s.char_indices().collect();
+    let n = chars.len();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < n {
+        if !chars[i].1.is_alphanumeric() {
+            i += 1;
+            continue;
+        }
+        let st = i;
+        let mut j = i + 1;
+        while j < n {
+            let c = chars[j].1;
+            if c.is_alphanumeric() {
+                j += 1;
+            } else if matches!(c, '-' | '/' | ':' | '.' | '\'' | '\u{2019}')
+                && j + 1 < n
+                && chars[j + 1].1.is_alphanumeric()
+            {
+                j += 1;
+            } else {
+                break;
+            }
+        }
+        let start = chars[st].0;
+        let end = if j < n { chars[j].0 } else { s.len() };
+        let raw = &s[start..end];
+        let lc: String = raw
+            .chars()
+            .flat_map(|c| c.to_lowercase())
+            .map(|c| if c == '\u{2019}' { '\'' } else { c })
+            .collect();
+        let first = raw.chars().next().unwrap_or(' ');
+        let after_at = st > 0 && chars[st - 1].1 == '@';
+        out.push(Tok {
+            lc,
+            start,
+            end,
+            cap: first.is_uppercase() || after_at,
+        });
+        i = j;
+    }
+    out
+}
+
+fn is_seq(t: &[Tok], i: usize, words: &[&str]) -> bool {
+    i + words.len() <= t.len() && words.iter().enumerate().all(|(k, w)| t[i + k].lc == *w)
+}
+
+fn tok_at(t: &[Tok], i: usize) -> &str {
+    t.get(i).map_or("", |x| x.lc.as_str())
+}
+
+fn phrase_of(s: &str, t: &[Tok], a: usize, b: usize) -> String {
+    s[t[a].start..t[b - 1].end].to_string()
+}
+
+fn all_digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// `true` when the sentence ends in a question mark (closing quotes / brackets ignored).
+pub fn ends_with_question(s: &str) -> bool {
+    let t = s.trim_end().trim_end_matches(|c: char| {
+        matches!(
+            c,
+            '"' | '\'' | '\u{201d}' | '\u{2019}' | ')' | ']' | '}' | '\u{00bb}' | '\u{300d}'
+        )
+    });
+    t.ends_with('?') || t.ends_with('\u{ff1f}')
+}
+
+// ---- dates -------------------------------------------------------------------------------
+
+fn month_of(w: &str) -> Option<u8> {
+    const M: &[(&str, u8)] = &[
+        ("january", 1),
+        ("jan", 1),
+        ("february", 2),
+        ("feb", 2),
+        ("march", 3),
+        ("mar", 3),
+        ("april", 4),
+        ("apr", 4),
+        ("may", 5),
+        ("june", 6),
+        ("jun", 6),
+        ("july", 7),
+        ("jul", 7),
+        ("august", 8),
+        ("aug", 8),
+        ("september", 9),
+        ("sept", 9),
+        ("sep", 9),
+        ("october", 10),
+        ("oct", 10),
+        ("november", 11),
+        ("nov", 11),
+        ("december", 12),
+        ("dec", 12),
+    ];
+    M.iter().find(|(n, _)| *n == w).map(|&(_, m)| m)
+}
+
+/// "3", "03", "3rd", "21st" -> the day of the month.
+fn day_of(w: &str) -> Option<u32> {
+    let digits = w.trim_end_matches(|c: char| c.is_ascii_alphabetic());
+    let suffix = &w[digits.len()..];
+    if digits.len() > 2 || !all_digits(digits) {
+        return None;
+    }
+    if !suffix.is_empty() && !matches!(suffix, "st" | "nd" | "rd" | "th") {
+        return None;
+    }
+    let d: u32 = digits.parse().ok()?;
+    (1..=31).contains(&d).then_some(d)
+}
+
+fn year_of(w: &str) -> Option<u32> {
+    if w.len() != 4 || !all_digits(w) {
+        return None;
+    }
+    let y: u32 = w.parse().ok()?;
+    (1900..=2100).contains(&y).then_some(y)
+}
+
+fn is_weekday(w: &str, prev: &str) -> bool {
+    match w {
+        "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"
+        | "tue" | "tues" | "thu" | "thur" | "thurs" | "fri" => true,
+        // "sun", "sat", "wed" and "mon" are also ordinary words: only after a preposition
+        "mon" | "wed" | "sat" | "sun" => matches!(
+            prev,
+            "by" | "on" | "next" | "this" | "last" | "every" | "until" | "before"
+        ),
+        _ => false,
+    }
+}
+
+/// `2026-11-03`, `3/11/2026`, `11.03.26`: three numeric parts that can be a calendar date.
+fn is_numeric_date(w: &str) -> bool {
+    let parts: Vec<&str> = w.split(['-', '/', '.']).collect();
+    if parts.len() != 3 || !parts.iter().all(|p| p.len() <= 4 && all_digits(p)) {
+        return false;
+    }
+    let l: Vec<usize> = parts.iter().map(|p| p.len()).collect();
+    let n: Vec<u32> = parts.iter().map(|p| p.parse().unwrap_or(0)).collect();
+    let month = |v: u32| (1..=12).contains(&v);
+    let day = |v: u32| (1..=31).contains(&v);
+    if l[0] == 4 && l[1] <= 2 && l[2] <= 2 {
+        return month(n[1]) && day(n[2]);
+    }
+    if l[0] <= 2 && l[1] <= 2 && (l[2] == 4 || l[2] == 2) {
+        return (month(n[0]) && day(n[1])) || (day(n[0]) && month(n[1]));
+    }
+    false
+}
+
+/// `3pm`, `10:30`, `10:30am` -> (has am/pm, has a colon). `None` for anything else.
+fn clock(w: &str) -> Option<(bool, bool)> {
+    let (body, mer) = match w.strip_suffix("am").or_else(|| w.strip_suffix("pm")) {
+        Some(b) => (b, true),
+        None => (w, false),
+    };
+    let (h, m) = match body.split_once(':') {
+        Some((h, m)) => (h, Some(m)),
+        None => (body, None),
+    };
+    if h.len() > 2 || !all_digits(h) {
+        return None;
+    }
+    let hv: u32 = h.parse().ok()?;
+    if let Some(m) = m {
+        if m.len() != 2 || !all_digits(m) || m.parse::<u32>().ok()? > 59 {
+            return None;
+        }
+    }
+    let colon = m.is_some();
+    if !mer && !colon {
+        return None;
+    }
+    let ok = if mer {
+        (1..=12).contains(&hv)
+    } else {
+        hv <= 23
+    };
+    ok.then_some((mer, colon))
+}
+
+fn is_quarter(w: &str) -> bool {
+    let b = w.as_bytes();
+    (b.len() == 2 && b[0] == b'q' && (b'1'..=b'4').contains(&b[1]))
+        || (w.starts_with("fy") && matches!(w.len(), 4 | 6) && all_digits(&w[2..]))
+}
+
+/// Words that open a date phrase ("by Friday", "in Q3", "until March").
+const DATE_PREFIX: &[&str] = &[
+    "by", "on", "at", "in", "next", "this", "last", "every", "until", "till", "before", "after",
+    "from", "since", "through", "due", "around",
+];
+const COUNT_WORDS: &[&str] = &[
+    "a", "an", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "twelve", "fifteen", "twenty", "thirty", "sixty", "ninety",
+];
+const TIME_UNITS: &[&str] = &[
+    "minute", "minutes", "min", "mins", "hour", "hours", "hr", "hrs", "day", "days", "week",
+    "weeks", "month", "months", "year", "years", "quarter", "quarters",
+];
+const PERIOD_UNITS: &[&str] = &[
+    "week",
+    "weekend",
+    "month",
+    "quarter",
+    "year",
+    "day",
+    "morning",
+    "afternoon",
+    "evening",
+    "night",
+    "fortnight",
+    "sprint",
+];
+const REL_WORDS: &[&str] = &[
+    "next",
+    "this",
+    "last",
+    "every",
+    "coming",
+    "previous",
+    "following",
+    "upcoming",
+];
+const SINGLE_REL: &[&str] = &[
+    "today",
+    "tonight",
+    "tomorrow",
+    "yesterday",
+    "eod",
+    "eow",
+    "eom",
+    "eoq",
+    "eoy",
+    "cob",
+    "noon",
+    "midnight",
+];
+const TIMEZONES: &[&str] = &[
+    "utc", "gmt", "est", "edt", "cst", "cdt", "mst", "mdt", "pst", "pdt", "cet", "cest", "ist",
+    "bst", "jst", "et", "pt",
+];
+const ORDINAL_Q: &[&str] = &[
+    "first", "second", "third", "fourth", "1st", "2nd", "3rd", "4th",
+];
+
+/// End (exclusive) of a date / time phrase that starts at token `i`, if one does.
+fn date_span(t: &[Tok], i: usize) -> Option<usize> {
+    let w = t[i].lc.as_str();
+    let at = |k: usize| tok_at(t, k);
+    let prev = if i > 0 { t[i - 1].lc.as_str() } else { "" };
+    let meridiem = |k: usize| matches!(at(k), "am" | "pm" | "a.m" | "p.m");
+
+    if is_numeric_date(w) {
+        return Some(i + 1);
+    }
+    // clock times: 3pm, 10:30, 10:30 am, 3 pm, 15:30 UTC
+    if let Some((has_mer, _)) = clock(w) {
+        let mut e = i + 1;
+        if !has_mer && meridiem(e) {
+            e += 1;
+        }
+        if TIMEZONES.contains(&at(e)) {
+            e += 1;
+        }
+        return Some(e);
+    }
+    if all_digits(w)
+        && w.len() <= 2
+        && (1..=12).contains(&w.parse::<u32>().unwrap_or(0))
+        && meridiem(i + 1)
+    {
+        let mut e = i + 2;
+        if TIMEZONES.contains(&at(e)) {
+            e += 1;
+        }
+        return Some(e);
+    }
+    if SINGLE_REL.contains(&w) || is_weekday(w, prev) {
+        return Some(i + 1);
+    }
+    // Q3, Q3 2026, H1, FY26, "third quarter 2026"
+    if is_quarter(w) {
+        return Some(i + 1 + usize::from(year_of(at(i + 1)).is_some()));
+    }
+    if ORDINAL_Q.contains(&w) && at(i + 1) == "quarter" {
+        return Some(i + 2 + usize::from(year_of(at(i + 2)).is_some()));
+    }
+    // day first: 3 Nov 2026, 3rd of November
+    if day_of(w).is_some() {
+        let mut e = i + 1;
+        if at(e) == "of" {
+            e += 1;
+        }
+        if month_of(at(e)).is_some() {
+            e += 1;
+            return Some(e + usize::from(year_of(at(e)).is_some()));
+        }
+    }
+    // month first: Nov 3, November 2026, in March. "may" and "march" are also ordinary words.
+    if month_of(w).is_some() {
+        if day_of(at(i + 1)).is_some() {
+            let e = i + 2;
+            return Some(e + usize::from(year_of(at(e)).is_some()));
+        }
+        if year_of(at(i + 1)).is_some() {
+            return Some(i + 2);
+        }
+        let ambiguous = matches!(w, "may" | "march");
+        if !ambiguous
+            || matches!(
+                prev,
+                "in" | "by"
+                    | "until"
+                    | "before"
+                    | "after"
+                    | "since"
+                    | "during"
+                    | "from"
+                    | "early"
+                    | "mid"
+                    | "late"
+                    | "end"
+                    | "of"
+            )
+        {
+            return Some(i + 1);
+        }
+        return None;
+    }
+    if REL_WORDS.contains(&w) && PERIOD_UNITS.contains(&at(i + 1)) {
+        return Some(i + 2);
+    }
+    // in / within / after N units
+    if matches!(w, "in" | "within" | "after") {
+        let c = at(i + 1);
+        if (all_digits(c) || COUNT_WORDS.contains(&c)) && TIME_UNITS.contains(&at(i + 2)) {
+            return Some(i + 3);
+        }
+    }
+    // end of the day / week / month / March
+    if matches!(w, "end" | "start" | "beginning" | "middle") && at(i + 1) == "of" {
+        let mut e = i + 2;
+        if at(e) == "the" {
+            e += 1;
+        }
+        if at(e) == "business" && at(e + 1) == "day" {
+            return Some(e + 2);
+        }
+        if matches!(
+            at(e),
+            "day" | "week" | "month" | "quarter" | "year" | "sprint"
+        ) || month_of(at(e)).is_some()
+        {
+            return Some(e + 1);
+        }
+    }
+    if matches!(w, "deadline" | "deadlines") {
+        return Some(i + 1);
+    }
+    if w == "due" && at(i + 1) == "date" {
+        return Some(i + 2);
+    }
+    // a bare year after a preposition: "in 2026"
+    if year_of(w).is_some()
+        && matches!(
+            prev,
+            "in" | "since"
+                | "by"
+                | "until"
+                | "before"
+                | "after"
+                | "during"
+                | "from"
+                | "through"
+                | "of"
+                | "fy"
+        )
+    {
+        return Some(i + 1);
+    }
+    None
+}
+
+/// Every date / deadline / time phrase in `s`, in order ("by Friday", "Q3 2026", "at 3 pm").
+/// At most four are returned.
+pub fn find_dates(s: &str) -> Vec<String> {
+    let t = tokens(s);
+    let n = t.len();
+    let mut out: Vec<String> = Vec::new();
+    let mut last_end = 0usize;
+    let mut i = 0usize;
+    while i < n && out.len() < 4 {
+        let Some(e) = date_span(&t, i) else {
+            i += 1;
+            continue;
+        };
+        let mut st = i;
+        // pull in one leading preposition / qualifier: "by Friday", "no later than 5pm"
+        if st >= last_end + 3 && is_seq(&t, st - 3, &["no", "later", "than"]) {
+            st -= 3;
+        } else if st > last_end && DATE_PREFIX.contains(&t[st - 1].lc.as_str()) {
+            st -= 1;
+        } else if st >= last_end + 2
+            && t[st - 1].lc == "the"
+            && DATE_PREFIX.contains(&t[st - 2].lc.as_str())
+        {
+            st -= 2;
+        }
+        let p = phrase_of(s, &t, st, e);
+        if !out.contains(&p) {
+            out.push(p);
+        }
+        last_end = e;
+        i = e;
+    }
+    out
+}
+
+// ---- action items, decisions, open questions ---------------------------------------------
+
+/// Sentence-initial words that look like names because they are capitalised.
+const NON_NAME: &[&str] = &[
+    "the",
+    "a",
+    "an",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "there",
+    "here",
+    "he",
+    "she",
+    "they",
+    "we",
+    "i",
+    "you",
+    "who",
+    "what",
+    "when",
+    "where",
+    "why",
+    "how",
+    "which",
+    "if",
+    "as",
+    "in",
+    "on",
+    "at",
+    "for",
+    "to",
+    "by",
+    "with",
+    "from",
+    "after",
+    "before",
+    "during",
+    "however",
+    "also",
+    "but",
+    "and",
+    "or",
+    "so",
+    "then",
+    "today",
+    "tomorrow",
+    "yesterday",
+    "tonight",
+    "next",
+    "last",
+    "every",
+    "all",
+    "some",
+    "many",
+    "most",
+    "our",
+    "their",
+    "my",
+    "your",
+    "his",
+    "her",
+    "no",
+    "not",
+    "once",
+    "while",
+    "although",
+    "because",
+    "since",
+    "please",
+    "note",
+    "todo",
+    "action",
+    "attendees",
+    "agenda",
+    "notes",
+    "update",
+    "summary",
+    "decision",
+    "question",
+    "open",
+    "owner",
+    "status",
+];
+
+fn is_name(t: &Tok) -> bool {
+    t.cap
+        && t.lc.chars().count() >= 2
+        && t.lc.chars().all(|c| c.is_alphabetic())
+        && !NON_NAME.contains(&t.lc.as_str())
+        && month_of(&t.lc).is_none()
+        && !is_weekday(&t.lc, "")
+}
+
+/// Verbs that open an instruction ("Send the report."). Safe to read as imperatives anywhere.
+const IMPERATIVES: &[&str] = &[
+    "send",
+    "email",
+    "call",
+    "update",
+    "review",
+    "schedule",
+    "prepare",
+    "create",
+    "write",
+    "fix",
+    "confirm",
+    "book",
+    "submit",
+    "share",
+    "finalize",
+    "finalise",
+    "draft",
+    "contact",
+    "follow",
+    "add",
+    "remove",
+    "arrange",
+    "complete",
+    "finish",
+    "deploy",
+    "investigate",
+    "ping",
+    "organize",
+    "organise",
+    "buy",
+    "pay",
+    "sign",
+    "reply",
+    "approve",
+    "notify",
+    "remind",
+    "clean",
+    "publish",
+    "renew",
+    "cancel",
+    "collect",
+    "gather",
+    "print",
+    "upload",
+    "download",
+    "install",
+    "ask",
+    "tell",
+    "verify",
+    "migrate",
+    "refactor",
+    "document",
+    "assign",
+    "escalate",
+    "merge",
+];
+/// More verbs that are only trusted as instructions at the start of a list item ("Order pizza").
+const IMPERATIVES_LIST: &[&str] = &[
+    "plan",
+    "order",
+    "test",
+    "set",
+    "file",
+    "move",
+    "record",
+    "report",
+    "get",
+    "make",
+    "take",
+    "put",
+    "bring",
+    "pick",
+    "clear",
+    "close",
+    "open",
+    "check",
+    "run",
+    "start",
+    "stop",
+    "build",
+    "learn",
+    "practice",
+    "try",
+    "find",
+    "look",
+    "think",
+    "decide",
+    "discuss",
+    "list",
+    "track",
+    "wrap",
+    "ship",
+    "launch",
+    "polish",
+    "read",
+    "reach",
+    "turn",
+    "walk",
+    "water",
+    "feed",
+    "wash",
+    "pack",
+    "return",
+    "drop",
+    "grab",
+    "fill",
+    "choose",
+    "compare",
+    "research",
+    "negotiate",
+    "hire",
+    "interview",
+    "train",
+    "invite",
+    "thank",
+    "congratulate",
+];
+const NOT_AFTER_IMPERATIVE: &[&str] = &[
+    "is", "are", "was", "were", "has", "have", "had", "will", "can", "would", "could", "should",
+    "may", "might", "of", "to", "and", "or", "does", "did",
+];
+
+fn is_verb(w: &str, list_item: bool) -> bool {
+    IMPERATIVES.contains(&w) || (list_item && IMPERATIVES_LIST.contains(&w))
+}
+
+/// Length of a leading checkbox marker (`[ ]`, `[x]`, `☐`, `☑`) plus its whitespace, or 0.
+pub fn checkbox_len(s: &str) -> usize {
+    for m in [
+        "[ ]", "[x]", "[X]", "[]", "\u{2610}", "\u{2611}", "\u{2612}",
+    ] {
+        if let Some(rest) = s.strip_prefix(m) {
+            return s.len() - rest.trim_start().len();
+        }
+    }
+    0
+}
+
+/// Is this sentence an action item? `(strength 1..=3, the phrase that matched)`.
+/// `list_item` is true for bullets, where a bare verb opens an instruction ("Buy milk").
+pub fn action_cue(s: &str, list_item: bool) -> Option<(u8, String)> {
+    let trimmed = s.trim_start();
+    let cb = checkbox_len(trimmed);
+    if cb > 0 {
+        return Some((3, "checkbox".to_string()));
+    }
+    let t = tokens(s);
+    if t.is_empty() {
+        return None;
+    }
+    let n = t.len();
+    let q = ends_with_question(s);
+    // a request: "Can you send the notes?"
+    const REQUEST: &[&[&str]] = &[
+        &["can", "you"],
+        &["could", "you"],
+        &["would", "you"],
+        &["can", "someone"],
+        &["could", "someone"],
+    ];
+    for i in 0..n {
+        for p in REQUEST {
+            if is_seq(&t, i, p) {
+                return Some((2, phrase_of(s, &t, i, i + p.len())));
+            }
+        }
+    }
+    if q {
+        return None;
+    }
+    // an owner: "Dana to send the plan", "Dana: send the plan"
+    if is_name(&t[0]) && n >= 3 && t[1].lc == "to" && is_verb(&t[2].lc, true) {
+        return Some((3, phrase_of(s, &t, 0, 3)));
+    }
+    if is_name(&t[0]) && n >= 2 && s[t[0].end..].starts_with(':') && is_verb(&t[1].lc, true) {
+        return Some((3, phrase_of(s, &t, 0, 2)));
+    }
+    const STRONG: &[&[&str]] = &[
+        &["todo"],
+        &["to-do"],
+        &["action", "item"],
+        &["action", "items"],
+        &["follow", "up"],
+        &["follow-up"],
+        &["next", "step"],
+        &["next", "steps"],
+        &["need", "to"],
+        &["needs", "to"],
+        &["has", "to"],
+        &["have", "to"],
+        &["must"],
+        &["required", "to"],
+        &["responsible", "for"],
+        &["make", "sure"],
+        &["remember", "to"],
+        &["don't", "forget"],
+        &["be", "sure", "to"],
+        &["please"],
+        &["kindly"],
+        &["i'll"],
+        &["we'll"],
+        &["let's"],
+    ];
+    for i in 0..n {
+        for p in STRONG {
+            if is_seq(&t, i, p) {
+                return Some((2, phrase_of(s, &t, i, i + p.len())));
+            }
+        }
+    }
+    // will / shall / should / going to: only with a person doing it ("I will", "Dana will"),
+    // otherwise "the park will stay open" would be an action item
+    for i in 1..n {
+        let w = t[i].lc.as_str();
+        let span = match w {
+            "will" | "shall" | "should" => 1,
+            "going" | "ought" if tok_at(&t, i + 1) == "to" => 2,
+            _ => 0,
+        };
+        if span > 0 {
+            let p = t[i - 1].lc.as_str();
+            if matches!(p, "i" | "we" | "you") || is_name(&t[i - 1]) {
+                return Some((1, phrase_of(s, &t, i - 1, i + span)));
+            }
+        }
+    }
+    // an instruction: "Send the report by Friday."
+    let first = t[0].lc.as_str();
+    if is_verb(first, list_item)
+        && n >= 2
+        && !NOT_AFTER_IMPERATIVE.contains(&t[1].lc.as_str())
+        && !s[t[0].end..].starts_with(':')
+    {
+        return Some((if list_item { 2 } else { 1 }, phrase_of(s, &t, 0, 1)));
+    }
+    None
+}
+
+/// Is this sentence a decision? The phrase that matched ("decided", "agreed", ...).
+pub fn decision_cue(s: &str) -> Option<String> {
+    if ends_with_question(s) {
+        return None;
+    }
+    let low = s.to_lowercase();
+    const OPEN: &[&str] = &[
+        "to be decided",
+        "yet to decide",
+        "yet to be decided",
+        "not yet decided",
+        "not decided",
+        "undecided",
+        "no decision",
+        "tbd",
+        "if we decide",
+        "whether to",
+    ];
+    if OPEN.iter().any(|g| low.contains(g)) {
+        return None;
+    }
+    let t = tokens(s);
+    const PHRASES: &[&[&str]] = &[
+        &["signed", "off"],
+        &["will", "go", "with"],
+        &["we'll", "go", "with"],
+        &["going", "with"],
+        &["will", "proceed", "with"],
+    ];
+    for i in 0..t.len() {
+        let w = t[i].lc.as_str();
+        let mut len = match w {
+            "decided" | "agreed" | "approved" | "resolved" | "settled" | "chose" | "chosen"
+            | "voted" | "adopted" | "finalized" | "finalised" | "endorsed" | "ratified"
+            | "rejected" | "vetoed" | "opted" | "decision" | "decisions" => 1,
+            _ => 0,
+        };
+        if len == 0 {
+            if let Some(p) = PHRASES.iter().find(|p| is_seq(&t, i, p)) {
+                len = p.len();
+            }
+        }
+        if len == 0 {
+            continue;
+        }
+        if matches!(w, "decision" | "decisions")
+            && matches!(
+                tok_at(&t, i + 1),
+                "tree" | "trees" | "making" | "maker" | "makers" | "support" | "boundary"
+            )
+        {
+            continue;
+        }
+        // "if we agree", "once approved", "unless decided": a condition, not a decision
+        let from = i.saturating_sub(3);
+        if t[from..i].iter().any(|p| {
+            matches!(
+                p.lc.as_str(),
+                "if" | "whether" | "unless" | "once" | "until"
+            )
+        }) {
+            continue;
+        }
+        return Some(phrase_of(s, &t, i, i + len));
+    }
+    None
+}
+
+/// Is this sentence an open question or unresolved point? `"?"` or the phrase that matched.
+pub fn question_cue(s: &str) -> Option<String> {
+    if ends_with_question(s) {
+        return Some("?".to_string());
+    }
+    let t = tokens(s);
+    const PHRASES: &[&[&str]] = &[
+        &["tbd"],
+        &["tbc"],
+        &["unclear"],
+        &["unresolved"],
+        &["undecided"],
+        &["undetermined"],
+        &["unsure"],
+        &["open", "question"],
+        &["open", "questions"],
+        &["open", "issue"],
+        &["open", "issues"],
+        &["to", "be", "decided"],
+        &["to", "be", "determined"],
+        &["to", "be", "confirmed"],
+        &["not", "sure"],
+        &["not", "yet", "decided"],
+        &["need", "to", "decide"],
+        &["needs", "to", "be", "decided"],
+        &["remains", "to", "be", "seen"],
+        &["up", "in", "the", "air"],
+        &["i", "wonder"],
+        &["wondering", "whether"],
+        &["wondering", "if"],
+    ];
+    for i in 0..t.len() {
+        if let Some(p) = PHRASES.iter().find(|p| is_seq(&t, i, p)) {
+            return Some(phrase_of(s, &t, i, i + p.len()));
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1572,12 +2543,163 @@ mod tests {
     }
 
     #[test]
+    fn spaceless_scripts_are_counted_by_character_groups() {
+        // 7 kana / ideographs -> 4 "words"; used to be 1 for the whole sentence
+        assert_eq!(
+            word_count("\u{4eca}\u{65e5}\u{306f}\u{6674}\u{308c}\u{3067}\u{3059}\u{3002}"),
+            4
+        );
+        assert_eq!(word_count("Hello\u{4e16}\u{754c} ok"), 3);
+        // ten Thai code points -> 3
+        assert_eq!(
+            word_count("\u{e2a}\u{e27}\u{e31}\u{e2a}\u{e14}\u{e35}\u{e04}\u{e23}\u{e31}\u{e1a}"),
+            3
+        );
+        assert_eq!(word_count("\u{3002}\u{3001}"), 0);
+    }
+
+    #[test]
+    fn spaceless_scripts_become_bigram_terms() {
+        let t = content_terms("\u{4eca}\u{5929}\u{5929}\u{6c14}\u{5f88}\u{597d}");
+        assert_eq!(t.len(), 5, "{t:?}");
+        assert!(t.contains(&"\u{5929}\u{6c14}".to_string()));
+        // a latin word next to them is still a normal term
+        let mixed = content_terms("Krovi \u{5f88}\u{597d}");
+        assert!(
+            mixed.contains(&"krovi".to_string()) && mixed.contains(&"\u{5f88}\u{597d}".to_string())
+        );
+    }
+
+    #[test]
+    fn cjk_headings_are_recognised() {
+        let u = split_units("\u{5173}\u{4e8e}\u{6211}\u{4eec}\n\n\u{6211}\u{4eec}\u{662f}\u{4e00}\u{4e2a}\u{5c0f}\u{56e2}\u{961f}\u{3002}");
+        assert_eq!(u[0].kind, UnitKind::Heading, "{u:?}");
+    }
+
+    fn dates(s: &str) -> Vec<String> {
+        find_dates(s)
+    }
+
+    #[test]
+    fn date_phrases_are_found_with_their_preposition() {
+        assert_eq!(dates("Send the report by Friday."), ["by Friday"]);
+        assert_eq!(dates("Launch is in Q3 2026."), ["in Q3 2026"]);
+        assert_eq!(
+            dates("Call at 15:30 on 3 Nov 2026."),
+            ["at 15:30", "on 3 Nov 2026"]
+        );
+        assert_eq!(
+            dates("Meet next Monday at 10am."),
+            ["next Monday", "at 10am"]
+        );
+        assert_eq!(dates("Reply within 30 days please."), ["within 30 days"]);
+        assert_eq!(dates("In March we ship."), ["In March"]);
+        assert_eq!(dates("Ready by EOD tomorrow."), ["by EOD", "tomorrow"]);
+        assert_eq!(
+            dates("Done by the end of the month."),
+            ["by the end of the month"]
+        );
+        assert_eq!(dates("The final call is on 2026-04-10."), ["on 2026-04-10"]);
+        assert_eq!(dates("Doors open at 3 pm EST."), ["at 3 pm EST"]);
+        assert_eq!(
+            dates("Launch April 14, 2026 at the venue."),
+            ["April 14, 2026"]
+        );
+    }
+
+    #[test]
+    fn ordinary_words_are_not_dates() {
+        assert!(dates("I may be late and the march was long.").is_empty());
+        assert!(dates("We sat in the sun and ate 12 apples.").is_empty());
+        assert!(dates("Version 3.5.1 has 1.5 million users.").is_empty());
+        assert!(dates("The ratio was 4 to 1.").is_empty());
+    }
+
+    #[test]
+    fn action_cues() {
+        let a = |s: &str, bullet: bool| action_cue(s, bullet).map(|x| x.1);
+        assert_eq!(
+            a("Dana to send the revised plan by Friday.", false).as_deref(),
+            Some("Dana to send")
+        );
+        assert_eq!(
+            a("Priya needs to confirm the date.", false).as_deref(),
+            Some("needs to")
+        );
+        assert_eq!(
+            a("[ ] Omar will update the page.", true).as_deref(),
+            Some("checkbox")
+        );
+        assert_eq!(a("Buy milk", true).as_deref(), Some("Buy"));
+        assert_eq!(a("Send the report to Sam.", false).as_deref(), Some("Send"));
+        assert_eq!(
+            a("Dana will send the draft on Monday.", false).as_deref(),
+            Some("Dana will")
+        );
+        assert_eq!(
+            a("I will check the logs tonight.", false).as_deref(),
+            Some("I will")
+        );
+        assert_eq!(
+            a("Can you send the notes?", false).as_deref(),
+            Some("Can you")
+        );
+        assert_eq!(a("TODO fix the build", true).as_deref(), Some("TODO"));
+        // description, not instruction
+        assert!(a("The park will stay open until 10 p.m.", false).is_none());
+        assert!(a("Review of the data shows growth.", false).is_none());
+        assert!(a("Who will own the rota?", false).is_none());
+        assert!(a("Access to Europe is easy.", false).is_none());
+    }
+
+    #[test]
+    fn decision_cues() {
+        assert_eq!(
+            decision_cue("We decided to move the launch.").as_deref(),
+            Some("decided")
+        );
+        assert_eq!(
+            decision_cue("The board approved the budget.").as_deref(),
+            Some("approved")
+        );
+        assert_eq!(
+            decision_cue("We'll go with option B.").as_deref(),
+            Some("We'll go with")
+        );
+        assert!(decision_cue("The date is still to be decided.").is_none());
+        assert!(decision_cue("Did we agree on the date?").is_none());
+        assert!(decision_cue("Once approved, we ship.").is_none());
+        assert!(decision_cue("A decision tree splits the data.").is_none());
+    }
+
+    #[test]
+    fn question_cues() {
+        assert_eq!(question_cue("Who owns the rota?").as_deref(), Some("?"));
+        assert_eq!(question_cue("He asked \"why?\"").as_deref(), Some("?"));
+        assert_eq!(
+            question_cue("The budget is still TBD.").as_deref(),
+            Some("TBD")
+        );
+        assert_eq!(
+            question_cue("It is unclear whether it can wait.").as_deref(),
+            Some("unclear")
+        );
+        assert!(question_cue("Everything is settled.").is_none());
+    }
+
+    #[test]
     fn display_clean_strips_markdown_noise() {
         assert_eq!(display_clean("**Bold** point."), "Bold point.");
         assert_eq!(display_clean("run `cargo test` now"), "run cargo test now");
         assert_eq!(display_clean("| --- | --- |"), "");
-        assert_eq!(display_clean("| Template | Examples |"), "Template \u{b7} Examples");
-        assert_eq!(display_clean("file_name.rs is kept"), "file_name.rs is kept");
+        assert_eq!(
+            display_clean("| Template | Examples |"),
+            "Template \u{b7} Examples"
+        );
+        assert_eq!(
+            display_clean("file_name.rs is kept"),
+            "file_name.rs is kept"
+        );
         assert_eq!(display_clean("#### Heading line"), "Heading line");
     }
 }

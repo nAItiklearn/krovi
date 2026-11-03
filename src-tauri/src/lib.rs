@@ -117,6 +117,7 @@ pub fn run() {
             // [/reminders]
             // [explain] — owner: explain
             explain::explain_summarize,
+            explain::explain_cancel_summarize,
             explain::explain_engines,
             explain::explain_get_settings,
             explain::explain_set_settings,

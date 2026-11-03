@@ -150,7 +150,7 @@ mod tests {
         };
         let json = serde_json::to_string(&s).unwrap();
         assert!(
-            json.contains("\"summaryLength\":\"points\"")
+            json.contains("\"summaryLength\":\"key-points\"")
                 && json.contains("\"voiceEngine\":\"elevenlabs\""),
             "{json}"
         );
