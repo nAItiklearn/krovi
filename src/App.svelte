@@ -36,6 +36,7 @@
   import { createVoiceRouter, showFeedbackOnly, type Chip } from './components/voiceRouter';
   import { planResults } from './components/voiceModel';
   import { wireCircle } from './lib/circle';
+  import { startAgent } from './lib/agent';
 
   const demo = mode() === 'demo';
   // Theme attributes go on <html> during component init, i.e. before the first paint.
@@ -109,6 +110,8 @@
       openTool('circle');
       emitIntent('expand');
     });
+    // Agent Mode: listen for agent-timer / agent-task even while its view is closed
+    void startAgent();
     const offVoice = onVoiceCommand(routeVoice);
     const offResult = onVoiceResult(onResult);
     // surface voice failures instead of leaving the user wondering

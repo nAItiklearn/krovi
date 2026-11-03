@@ -200,6 +200,7 @@ export type ToolId =
   | 'screentime'
   | 'transfer'
   | 'explain'
+  | 'agent'
   | 'clean'
   | 'circle'
   | 'settings';

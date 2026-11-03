@@ -28,6 +28,7 @@
   import Explain from '../views/Explain.svelte';
   import CleanView from '../views/CleanView.svelte';
   import CircleView from '../views/CircleView.svelte';
+  import AgentPanel from './AgentPanel.svelte';
 
   // The panel body: rail + header + the active tool. `show` flips true once the Island shape is
   // ~60% open; everything marked .enter then rises in on a stagger (and leaves first on collapse).
@@ -50,6 +51,7 @@
     screentime: ScreenTime,
     clean: CleanView,
     circle: CircleView,
+    agent: AgentPanel,
     settings: Settings,
   };
 

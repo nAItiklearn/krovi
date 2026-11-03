@@ -28,6 +28,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'clocks', label: 'World Clocks', icon: 'clocks', hint: 'Time zones at a glance', keywords: ['time', 'timezone'] },
   { id: 'convert', label: 'Convert', icon: 'convert', hint: 'Units and currency', keywords: ['unit', 'currency', 'exchange'] },
   { id: 'screentime', label: 'Screen Time', icon: 'screentime', hint: 'Where your day went', keywords: ['apps', 'usage', 'focus'] },
+  { id: 'agent', label: 'Agent', icon: 'sparkles', hint: 'Tell Krovi what to do', keywords: ['agent', 'do', 'open', 'search', 'youtube', 'google', 'launch', 'remind', 'email', 'draft', 'command'] },
   { id: 'circle', label: 'Circle to Ask', icon: 'search', hint: 'Read any part of the screen', keywords: ['circle', 'ocr', 'screen', 'text', 'region', 'ask', 'screenshot', 'awareness'] },
   { id: 'clean', label: 'Clean My OS', icon: 'sparkles', hint: 'Clear junk to the Recycle Bin', keywords: ['clean', 'junk', 'temp', 'cache', 'storage', 'recycle bin', 'free space', 'disk'] },
   { id: 'settings', label: 'Settings', icon: 'settings', hint: 'Shortcut, theme, behaviour', keywords: ['preferences', 'options', 'hotkey'] },

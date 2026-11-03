@@ -9,6 +9,7 @@
 //!
 //! Each agent edits only its own `[block]` in the handler list below.
 
+mod agent;
 mod circle;
 mod clean;
 mod commands;
@@ -38,10 +39,21 @@ pub fn run() {
             dictation::setup(app)?;
             clean::setup(app)?;
             circle::setup(app)?;
+            agent::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            // [agent] — Agent Mode: intent -> plan -> permission -> execute
+            agent::agent_warm,
+            agent::agent_plan,
+            agent::agent_run,
+            agent::agent_tasks,
+            agent::agent_cancel,
+            agent::agent_integrations,
+            agent::agent_mcp_list,
+            agent::agent_mcp_save,
+            agent::agent_mcp_remove,
             // [circle] — Circle to Ask + temporary visible screen awareness (D-021)
             circle::circle_start,
             circle::circle_cancel,
