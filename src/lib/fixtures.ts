@@ -35,13 +35,6 @@ export const clipboardFixture: ClipEntry[] = [
   { id: 1, kind: 'Text', content: 'Meeting moved to 3pm Thursday', pinned: false, created_at: NOW - 8 * HOUR },
 ];
 
-export const pasteStackFixture: string[] = [
-  'INV-2026-0042',
-  'naitik@example.com',
-  'https://krovi.tech',
-  'The quick brown fox jumps over the lazy dog.',
-];
-
 export const notesFixture: Note[] = [
   { id: 3, body: 'Launch checklist\n- [x] core tests green\n- [x] website live\n- [ ] package installer', created_at: NOW - 2 * DAY, updated_at: NOW - 6 * MIN },
   { id: 2, body: 'Call the framer back about the 30x40 prints.', created_at: NOW - 1 * DAY, updated_at: NOW - 3 * HOUR },

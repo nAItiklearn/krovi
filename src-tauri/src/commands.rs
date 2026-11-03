@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use krovi_core::{ClipboardHistory, Notes, PasteStack, TodoList};
+use krovi_core::{ClipboardHistory, Notes, TodoList};
 use krovi_net::{Cached, FxReply, Place, PlaceDto, Rates, WeatherData, WeatherReply};
 use krovi_store::wire::{calendar_dtos, clip_dtos, parse_clip_kind, CalendarDto};
 use krovi_store::{screen_time_records, stored_shelves};
@@ -174,37 +174,6 @@ pub fn remove_clip(app: AppHandle, state: State<AppState>, id: u64) -> CmdResult
     crate::live::prune_clip_images(&app);
     crate::live::emit_clipboard(&app, &dtos, None);
     Ok(dtos)
-}
-
-// ---------------------------------------------------------------------------
-// Paste stack (SPEC O2) — session-scoped by design (not persisted).
-// ---------------------------------------------------------------------------
-
-fn paste_vec(p: &PasteStack) -> Vec<String> {
-    p.slots().into_iter().map(|(_, v)| v.to_string()).collect()
-}
-
-#[tauri::command]
-pub fn load_paste_stack(state: State<AppState>) -> CmdResult<Vec<String>> {
-    let p = state.paste.lock().map_err(lock_err)?;
-    Ok(paste_vec(&p))
-}
-
-#[tauri::command]
-pub fn push_paste(state: State<AppState>, value: String) -> CmdResult<Vec<String>> {
-    if value.is_empty() {
-        return Err("nothing to push".into());
-    }
-    let mut p = state.paste.lock().map_err(lock_err)?;
-    p.push(value);
-    Ok(paste_vec(&p))
-}
-
-#[tauri::command]
-pub fn pop_paste(state: State<AppState>) -> CmdResult<Vec<String>> {
-    let mut p = state.paste.lock().map_err(lock_err)?;
-    p.pop();
-    Ok(paste_vec(&p))
 }
 
 // ---------------------------------------------------------------------------

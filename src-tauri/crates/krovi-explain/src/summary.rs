@@ -25,15 +25,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::text::{self, Unit, UnitKind};
 
-/// Longest input the summariser accepts (characters, counted as bytes). ~400k is a long book
-/// chapter; the work is roughly linear in the number of sentences past the candidate cap.
+/// Longest input the summariser accepts (characters). ~400k is a long book chapter; the work
+/// is roughly linear in the number of sentences past the candidate cap.
 pub const MAX_CHARS: usize = 400_000;
 /// Sentences beyond this many are pre-filtered by centrality before the O(n^2) graph step.
 const MAX_CANDIDATES: usize = 1_200;
 /// Average adult silent reading speed, words per minute.
 pub const READ_WPM: f64 = 238.0;
-/// Below this many words there is nothing worth cutting.
-const SHORT_INPUT_WORDS: usize = 45;
+/// Below this many words (or with fewer than two sentences) there is nothing worth cutting.
+/// Two real sentences are still compressible to one; a single paragraph-shaped sentence is not.
+const SHORT_INPUT_WORDS: usize = 25;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -112,7 +113,7 @@ pub fn summarize(input: &str, length: SummaryLength) -> Result<Summary, SummaryE
     if input.trim().is_empty() {
         return Err(SummaryError::Empty);
     }
-    if input.len() > MAX_CHARS {
+    if input.chars().count() > MAX_CHARS {
         return Err(SummaryError::TooLong {
             chars: input.chars().count(),
             max: MAX_CHARS,
@@ -139,11 +140,11 @@ pub fn summarize(input: &str, length: SummaryLength) -> Result<Summary, SummaryE
         .copied()
         .filter(|&i| text::word_count(&units[i].text) >= min_words)
         .collect();
-    if cands.len() < 3 {
+    if cands.len() < 2 {
         cands = prose.clone();
     }
 
-    let too_short = words_total < SHORT_INPUT_WORDS || cands.len() < 3;
+    let too_short = words_total < SHORT_INPUT_WORDS || cands.len() < 2;
     if too_short {
         let chosen: Vec<usize> = prose.clone();
         return Ok(finish(
@@ -341,18 +342,26 @@ fn plan(
     cands: usize,
 ) -> (usize, usize, usize, f32) {
     let w = words as f32;
+    // Word budgets scale down with the input: a 60-word e-mail must actually be cut, so the
+    // floor that keeps long-document summaries substantial never exceeds half the input.
+    let floor = |f: usize| ((w * 0.5) as usize).min(f).max(15);
     let (mut k, k_min, budget, lambda) = match length {
-        SummaryLength::Short => (if prose >= 5 { 2 } else { 1 }, 1, 70usize, 0.85f32),
+        SummaryLength::Short => (
+            if prose >= 5 { 2 } else { 1 },
+            1,
+            ((w * 0.45) as usize).clamp(15, 70),
+            0.85f32,
+        ),
         SummaryLength::Medium => (
             ((prose as f32 * 0.2).round() as usize).clamp(3, 7),
             3,
-            ((w * 0.2) as usize).clamp(90, 240),
+            ((w * 0.2) as usize).clamp(floor(90), 240),
             0.70,
         ),
         SummaryLength::Points => (
             ((prose as f32 * 0.15).round() as usize).clamp(3, 8),
             3,
-            ((w * 0.15) as usize).clamp(70, 200),
+            ((w * 0.15) as usize).clamp(floor(70), 200),
             0.65,
         ),
     };
@@ -372,9 +381,13 @@ fn finish(
 ) -> Summary {
     let items: Vec<SummaryItem> = chosen
         .iter()
-        .map(|&i| SummaryItem {
-            index: i,
-            text: text::collapse_ws(&units[i].text),
+        .filter_map(|&i| {
+            let clean = text::display_clean(&units[i].text);
+            if clean.is_empty() {
+                None // a table separator row carries nothing to show
+            } else {
+                Some(SummaryItem { index: i, text: clean })
+            }
         })
         .collect();
     let text = if length == SummaryLength::Points && !already_short {
@@ -542,6 +555,15 @@ fn cue_prior(sentence: &str) -> f32 {
         "is required",
         "are required",
         "in no event",
+        // Hindi / Hinglish cue phrases (lowercase matching; Devanagari has no case)
+        "निष्कर्ष",
+        "सारांश",
+        "मुख्य बात",
+        "इसका मतलब",
+        "इसलिए",
+        "matlab",
+        "yaani",
+        "isliye",
     ];
     const DOWN: &[&str] = &[
         "for example",
@@ -552,6 +574,7 @@ fn cue_prior(sentence: &str) -> f32 {
         "image:",
         "caption:",
         "source:",
+        "जैसे",
     ];
     const JUNK: &[&str] = &[
         "subscribe",
@@ -768,6 +791,88 @@ mod tests {
         assert_eq!(s.stats.saved_secs, 0.0);
         let one = summarize("Itis", SummaryLength::Points).unwrap();
         assert!(one.already_short);
+    }
+
+    /// The old 45-word floor made Medium return the input's first sentences nearly verbatim;
+    /// a 60-word e-mail must now actually be cut.
+    #[test]
+    fn a_short_email_is_actually_compressed() {
+        let input = "The vendor pushed the delivery date again. \
+                     They now claim the parts ship on Friday, but they said that last week too. \
+                     If anything is still broken, tell me by Thursday noon. \
+                     I will be travelling and slow to answer after that.";
+        let words = text::word_count(input);
+        assert!(words >= 40 && words <= 70, "{words}");
+        let s = summarize(input, SummaryLength::Medium).unwrap();
+        assert!(!s.already_short);
+        assert!(
+            s.items.len() < 4,
+            "medium must drop at least one sentence: {:?}",
+            s.items
+        );
+        assert!(s.stats.ratio <= 0.8);
+        let short = summarize(input, SummaryLength::Short).unwrap();
+        assert!(!short.already_short);
+        assert_eq!(short.items.len(), 1);
+        assert!(
+            short.stats.ratio <= 0.5,
+            "short must cut hard, got {} of {words}",
+            short.stats.summary_words
+        );
+    }
+
+    /// Two long sentences used to hit the "< 3 sentences" echo path and come back verbatim.
+    #[test]
+    fn a_two_sentence_input_is_summarized_not_echoed() {
+        let input = "The rollout plan looked safe on paper because every step had an owner and a rollback path. \
+                     In practice the database migration locked the orders table for two hours and nobody could check out.";
+        let s = summarize(input, SummaryLength::Medium).unwrap();
+        assert!(!s.already_short, "{:?}", s.items);
+        assert_eq!(s.items.len(), 1);
+        assert!(s.stats.ratio < 0.9);
+    }
+
+    /// Devanagari uses danda, not full stops; without it every Hindi text was one unit and
+    /// came back "already short".
+    #[test]
+    fn hindi_text_is_summarized() {
+        let input = "क्रोवी एक हल्का विंडोज़ ऐप है। यह शेल्फ पर छोटे विजेट रखता है। \
+                     क्लिपबोर्ड, टाइमर और नोट्स सब एक जगह मिलते हैं। \
+                     सब कुछ आपके कंप्यूटर पर ही चलता है। \
+                     कोई भी डेटा क्लाउड पर नहीं जाता। \
+                     आवाज़ से नोट बनाना भी संभव है। \
+                     राइट-क्लिक से कुछ भी शेल्फ पर भेजें।";
+        let s = summarize(input, SummaryLength::Medium).unwrap();
+        assert!(!s.already_short, "{:?}", s.items);
+        assert!(s.stats.ratio < 0.85, "ratio {}", s.stats.ratio);
+        assert!(s.items.len() >= 2);
+    }
+
+    /// Markdown pasted into the box used to come out with raw **, #### and table pipes.
+    #[test]
+    fn markdown_noise_is_cleaned_from_output() {
+        let input = "#### Krovi tools\n\n\
+                     The **clipboard** shelf keeps the last forty clips. `Ctrl+Shift+V` opens the stack. \
+                     Timers live on the shelf and finish with a sound. \
+                     The pomodoro ring counts focus sessions per day. \
+                     Notes support checklists and voice input. \
+                     The calculator remembers the last expression. \n\n\
+                     | Tool | Status |\n| --- | --- |\n| Clipboard | ready |\n\n\
+                     Everything runs locally on your machine. No account is needed for any of it.";
+        let s = summarize(input, SummaryLength::Medium).unwrap();
+        assert!(
+            !s.text.contains('*') && !s.text.contains('#') && !s.text.contains('`'),
+            "{}",
+            s.text
+        );
+        assert!(!s.text.contains("---"), "{}", s.text);
+        assert!(!s.text.contains('|'), "{}", s.text);
+        for it in &s.items {
+            assert!(
+                !it.text.starts_with(|c: char| c == '|' || c == '-'),
+                "{it:?}"
+            );
+        }
     }
 
     #[test]

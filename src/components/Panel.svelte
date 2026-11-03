@@ -13,7 +13,6 @@
 
   import Home from '../views/Home.svelte';
   import Clipboard from '../views/Clipboard.svelte';
-  import PasteStack from '../views/PasteStack.svelte';
   import Timers from '../views/Timers.svelte';
   import Pomodoro from '../views/Pomodoro.svelte';
   import FileShelf from '../views/FileShelf.svelte';
@@ -36,7 +35,6 @@
   const VIEWS: Record<ToolId, Component> = {
     home: Home,
     clipboard: Clipboard,
-    paste: PasteStack,
     timers: Timers,
     pomodoro: Pomodoro,
     shelf: FileShelf,

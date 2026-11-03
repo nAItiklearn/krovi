@@ -179,7 +179,6 @@ export interface CalendarEvent {
 export type ToolId =
   | 'home'
   | 'clipboard'
-  | 'paste'
   | 'timers'
   | 'pomodoro'
   | 'shelf'

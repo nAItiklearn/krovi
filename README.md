@@ -59,12 +59,11 @@ with a full changelog entry for
 | **Checklists in Notes** | tick-boxes inline between paragraphs |
 | **Six themes + idle companion** | Graphite, Porcelain, Mochi, Arcade, Terracotta, Tide — or follow Windows; the pill rests as a pair of eyes that wake when you touch it |
 
-## All 15 tools
+## All 16 tools
 
 | | |
 |---|---|
 | **Clipboard history** | searchable, pin-to-top, type filters, capped ring |
-| **Paste stack** | 9 explicit numbered slots (push/pop) |
 | **Timers & stopwatch** | multiple countdowns + laps |
 | **Pomodoro** | work/break cycles on the timer engine |
 | **File shelf** | park files on named shelves, drag out |

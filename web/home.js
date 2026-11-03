@@ -1,6 +1,6 @@
 /* Krovi website — home page interactions.
    laptop stage (lazy, scaled live demo) · simulated live clipboard / media / stats ·
-   paste stack · pomodoro · calendar · tool explorer · voice demo · command palette ·
+   pomodoro · calendar · tool explorer · voice demo · command palette ·
    privacy request counter · world clocks.
    Everything is local simulation or DOM work: this file makes no network requests. */
 (function () {
@@ -193,47 +193,6 @@
     }
     render();
     if (!reduceMotion) whileVisible(box, tick, 2000);
-  }
-
-  /* ================= paste stack ================= */
-  function initPaste() {
-    var box = $("[data-paste]");
-    if (!box) return;
-    var list = $("[data-paste-list]", box), count = $("[data-paste-count]", box), toast = $("[data-paste-toast]", box);
-    var snips = ["jane@example.com", "+91 98765 43210", "221B Baker Street, London", "Invoice #2041", "Thanks, speak soon!", "https://krovi.tech", "ORD-88213", "Sort code 04-00-04", "Meeting link: meet.example/standup", "Q3 budget.xlsx"];
-    var stack = [], next = 0, lastPushed = false;
-    function seed() { stack = []; next = 0; push(true); push(true); push(true); lastPushed = false; }
-    function render(enter) {
-      list.textContent = "";
-      for (var i = 0; i < 9; i++) {
-        var li = el("li", stack[i] ? (i === 0 ? "top" : "") : "empty");
-        li.appendChild(el("span", "n", String(i + 1)));
-        li.appendChild(el("span", "t", stack[i] || "empty"));
-        if (enter && i === 0 && stack[0]) li.classList.add("enter");
-        list.appendChild(li);
-      }
-      count.textContent = stack.length + " / 9";
-    }
-    function push(silent) {
-      var s = snips[next++ % snips.length];
-      stack.unshift(s);
-      if (stack.length > 9) stack.length = 9;
-      lastPushed = true;
-      if (!silent) { render(true); toast.innerHTML = "Pushed <b></b> to slot 1."; $("b", toast).textContent = s; }
-    }
-    function pop() {
-      if (!stack.length) { toast.textContent = "The stack is empty. Push something first."; return; }
-      var first = list.firstChild;
-      var s = stack.shift();
-      toast.innerHTML = "Pasted <b></b> and removed it from the stack.";
-      $("b", toast).textContent = s;
-      if (first && !reduceMotion) { first.classList.add("leave"); setTimeout(function () { render(false); }, 260); }
-      else render(false);
-    }
-    $("[data-paste-push]", box).addEventListener("click", function () { push(false); });
-    $("[data-paste-pop]", box).addEventListener("click", pop);
-    $("[data-paste-reset]", box).addEventListener("click", function () { seed(); render(false); toast.textContent = "Reset. Push a few snippets, then pop them back in reverse."; });
-    seed(); render(false);
   }
 
   /* ================= pomodoro ================= */
@@ -575,7 +534,6 @@
     initClipboardSim();
     initMediaSim();
     initStatsSim();
-    initPaste();
     initPomodoro();
     initCalendar();
     initExplorer();

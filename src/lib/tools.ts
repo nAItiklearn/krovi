@@ -16,7 +16,6 @@ export interface ToolDef {
 export const TOOLS: ToolDef[] = [
   { id: 'home', label: 'Home', icon: 'home', hint: 'Everything at a glance', keywords: ['dashboard', 'overview'] },
   { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', hint: 'Searchable copy history', keywords: ['copy', 'history', 'paste'] },
-  { id: 'paste', label: 'Paste Stack', icon: 'paste', hint: 'Numbered paste slots', keywords: ['queue', 'slots', 'stack'] },
   { id: 'timers', label: 'Timers', icon: 'timers', hint: 'Countdowns and stopwatch', keywords: ['countdown', 'stopwatch', 'alarm'] },
   { id: 'pomodoro', label: 'Pomodoro', icon: 'pomodoro', hint: 'Focus and break cycles', keywords: ['focus', 'work', 'break'] },
   { id: 'shelf', label: 'File Shelf', icon: 'shelf', hint: 'Park files within reach', keywords: ['files', 'drop', 'tray'] },

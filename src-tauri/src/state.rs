@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use krovi_core::{
-    Calendar, ClipboardHistory, FileShelf, Notes, PasteStack, Pomodoro, ScreenTime, TodoList,
+    Calendar, ClipboardHistory, FileShelf, Notes, Pomodoro, ScreenTime, TodoList,
 };
 use krovi_store::{MemStore, Store};
 use krovi_sys::{ClipGate, MediaState, MediaWorker, Sampler, SystemStats};
@@ -45,7 +45,6 @@ pub struct AppState {
     pub clipboard: Mutex<ClipboardHistory>,
     pub notes: Mutex<Notes>,
     pub tasks: Mutex<TodoList>,
-    pub paste: Mutex<PasteStack>,
     pub shelf: Mutex<FileShelf>,
     pub screen: Mutex<ScreenTime>,
     pub calendar: Mutex<Calendar>,
@@ -64,7 +63,6 @@ impl AppState {
             clipboard: Mutex::new(ClipboardHistory::default()),
             notes: Mutex::new(Notes::new()),
             tasks: Mutex::new(TodoList::new()),
-            paste: Mutex::new(PasteStack::new()),
             shelf: Mutex::new(FileShelf::new()),
             screen: Mutex::new(ScreenTime::new()),
             calendar: Mutex::new(Calendar::new()),

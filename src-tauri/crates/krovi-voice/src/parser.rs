@@ -17,7 +17,6 @@ pub(crate) const TOOL_PHRASES: &[(ToolId, &[&str])] = &[
         ToolId::Clipboard,
         &["clipboard", "clipboard history", "copy history", "clips"],
     ),
-    (ToolId::Paste, &["paste stack", "paste", "paste slots"]),
     (
         ToolId::Timers,
         &["timers", "timer", "stopwatch", "countdown", "countdowns"],
@@ -941,7 +940,6 @@ mod tests {
             ("take me to settings", open(Settings)),
             ("launch the calculator", open(Calculator)),
             ("open calculator app", open(Calculator)),
-            ("bring up the paste stack", open(Paste)),
             ("open world clocks", open(Clocks)),
             ("open screen time", open(Screentime)),
             ("open the file shelf", open(Shelf)),

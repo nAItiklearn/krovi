@@ -226,7 +226,7 @@
             <div class="lane lane-mid" data-lane data-shift="5"><div class="track"></div></div>
             <div class="lane lane-front" data-lane data-shift="0"><div class="track">
               <i class="tile k1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clipboard"/></svg></i>
-              <i class="tile k3"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paste"/></svg></i>
+              <i class="tile k3"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-settings"/></svg></i>
               <i class="tile k2"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-timers"/></svg></i>
               <i class="tile k5"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pomodoro"/></svg></i>
               <i class="tile k4"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-shelf"/></svg></i>
@@ -249,7 +249,7 @@
             <h2 id="chain-title">Fifteen tools. Zero tabs.</h2>
             <p class="lede">Clipboard, timers, notes, weather, a lane to your phone: the small things you open ten times a day, kept in the one place that is already on top of your screen.</p>
             <ul class="sr-only" aria-label="The fifteen tools">
-              <li>Clipboard</li><li>Paste Stack</li><li>Timers</li><li>Pomodoro</li><li>File Shelf</li><li>Quick Transfer</li><li>Media</li><li>Calendar</li><li>Weather</li><li>Notes</li><li>Explain</li><li>World Clocks</li><li>Convert</li><li>Calculator</li><li>Screen Time</li>
+              <li>Clipboard</li><li>Timers</li><li>Pomodoro</li><li>File Shelf</li><li>Quick Transfer</li><li>Media</li><li>Calendar</li><li>Weather</li><li>Notes</li><li>Explain</li><li>World Clocks</li><li>Convert</li><li>Calculator</li><li>Screen Time</li>
             </ul>
           </div>
           <aside class="chain-callout" aria-label="Krovi in numbers">
@@ -360,32 +360,6 @@
         <p class="lede">Each one does one job well, answers instantly, and gets out of the way. Try them below. They&rsquo;re live.</p>
       </div>
 
-      <!-- Paste stack -->
-      <div class="row">
-        <div class="row-copy reveal">
-          <span class="eyebrow">Clipboard &amp; paste stack</span>
-          <h3>Two clipboards for two kinds of work.</h3>
-          <p>History quietly remembers everything you copied. The <strong>paste stack</strong> is the opposite: a deliberate, numbered workbench of nine slots that you push to and pop from, last in, first out. Fill a form, template a reply, shuttle a dozen values between apps.</p>
-          <ul class="ticks">
-            <li>Nine numbered slots, slot 1 on top. Past nine, the oldest drops off</li>
-            <li>You decide what goes in. It never fills itself</li>
-            <li>Kept apart from history, so neither clutters the other</li>
-            <li>Pinned history items are never evicted</li>
-          </ul>
-          <a class="link-arrow" href="/docs#tool-paste">Paste stack in the docs <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-        </div>
-        <div class="glass reveal d1" data-paste>
-          <div class="glass-title"><span>Paste stack</span><span data-paste-count>0 / 9</span></div>
-          <ol class="stack" data-paste-list aria-label="Paste stack slots"></ol>
-          <div class="glass-actions">
-            <button type="button" class="chip-btn" data-paste-push>Push a snippet</button>
-            <button type="button" class="chip-btn" data-paste-pop>Pop &amp; paste</button>
-            <button type="button" class="chip-btn" data-paste-reset>Reset</button>
-          </div>
-          <p class="toast" data-paste-toast role="status" aria-live="polite">Push a few snippets, then pop them back in reverse.</p>
-        </div>
-      </div>
-
       <!-- Focus -->
       <div class="row flip">
         <div class="row-copy reveal">
@@ -454,7 +428,7 @@
     <div class="wrap">
       <div class="section-head reveal">
         <span class="eyebrow">Every tool</span>
-        <h2 id="tools-title">Fifteen tools. One shelf.</h2>
+        <h2 id="tools-title">Sixteen tools. One shelf.</h2>
         <p class="lede">Pick a tool. Each is glanceable first and powerful second, and every one works offline except weather, live exchange rates and the optional ElevenLabs voice.</p>
       </div>
 
@@ -462,7 +436,6 @@
         <div class="ex-list" role="tablist" aria-orientation="vertical" aria-label="Krovi tools">
           <button type="button" class="ex-tab" role="tab" id="ex-t-home" aria-controls="ex-p-home" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-home"/></svg>Home</button>
           <button type="button" class="ex-tab" role="tab" id="ex-t-clipboard" aria-controls="ex-p-clipboard" aria-selected="false" tabindex="-1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clipboard"/></svg>Clipboard</button>
-          <button type="button" class="ex-tab" role="tab" id="ex-t-paste" aria-controls="ex-p-paste" aria-selected="false" tabindex="-1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paste"/></svg>Paste Stack</button>
           <button type="button" class="ex-tab" role="tab" id="ex-t-timers" aria-controls="ex-p-timers" aria-selected="false" tabindex="-1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-timers"/></svg>Timers</button>
           <button type="button" class="ex-tab" role="tab" id="ex-t-pomodoro" aria-controls="ex-p-pomodoro" aria-selected="false" tabindex="-1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pomodoro"/></svg>Pomodoro</button>
           <button type="button" class="ex-tab" role="tab" id="ex-t-shelf" aria-controls="ex-p-shelf" aria-selected="false" tabindex="-1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-shelf"/></svg>File Shelf</button>
@@ -504,18 +477,6 @@
                 <div class="xr"><span class="k">Text</span><span class="t">cargo test --workspace</span><span class="m">1h</span></div>
               </div></div>
             <div class="ex-copy"><h3>Clipboard</h3><div class="tags"><span>Live</span><span>Local only</span><span>200 unpinned clips</span></div><p>Searchable history of text, links and images. Pin what you reuse, filter by type, and re-copy an item to promote it rather than duplicate it. Copies from password managers are never stored.</p><a class="link-arrow" href="/docs#tool-clipboard">Clipboard in the docs <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow"/></svg></a></div>
-          </div>
-          <!-- Paste stack -->
-          <div class="ex-panel" role="tabpanel" id="ex-p-paste" aria-labelledby="ex-t-paste" tabindex="0" hidden>
-            <div class="xw"><div class="xw-bar"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#i-paste"/></svg>Paste Stack<small>5 / 9 slots</small></div>
-              <div class="xw-body">
-                <div class="xr sel"><span class="k">1</span><span class="t">jane@example.com</span></div>
-                <div class="xr"><span class="k">2</span><span class="t">+91 98765 43210</span></div>
-                <div class="xr"><span class="k">3</span><span class="t">221B Baker Street, London</span></div>
-                <div class="xr"><span class="k">4</span><span class="t">Invoice #2041</span></div>
-                <div class="xr"><span class="k">5</span><span class="t">Thanks, speak soon!</span></div>
-              </div></div>
-            <div class="ex-copy"><h3>Paste Stack</h3><div class="tags"><span>Nine slots</span><span>Push / pop</span></div><p>Numbered slots 1 to 9 that you push to and pop from, last in, first out. Ideal for filling a form or moving a handful of values between apps.</p><a class="link-arrow" href="/docs#tool-paste">Paste Stack in the docs <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow"/></svg></a></div>
           </div>
           <!-- Timers -->
           <div class="ex-panel" role="tabpanel" id="ex-p-timers" aria-labelledby="ex-t-timers" tabindex="0" hidden>
@@ -775,7 +736,6 @@
           <ul class="pal-list" id="pal-list" role="listbox" aria-label="Tools" data-pal-list>
             <li class="pal-item" role="option" data-name="Home" data-hint="Everything at a glance"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-home"/></svg>Home<span class="hint">Everything at a glance</span></li>
             <li class="pal-item" role="option" data-name="Clipboard" data-hint="Searchable copy history"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clipboard"/></svg>Clipboard<span class="hint">Searchable copy history</span></li>
-            <li class="pal-item" role="option" data-name="Paste Stack" data-hint="Numbered paste slots 1–9"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paste"/></svg>Paste Stack<span class="hint">Numbered paste slots 1–9</span></li>
             <li class="pal-item" role="option" data-name="Timers" data-hint="Countdowns &amp; stopwatch"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-timers"/></svg>Timers<span class="hint">Countdowns &amp; stopwatch</span></li>
             <li class="pal-item" role="option" data-name="Pomodoro" data-hint="Work / break focus cycles"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pomodoro"/></svg>Pomodoro<span class="hint">Work / break focus cycles</span></li>
             <li class="pal-item" role="option" data-name="File Shelf" data-hint="Park files within reach"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-shelf"/></svg>File Shelf<span class="hint">Park files within reach</span></li>

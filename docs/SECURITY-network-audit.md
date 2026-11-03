@@ -1,6 +1,7 @@
 ﻿# Krovi — Network / Privacy Audit
 
-_Last updated: 2026-11-01. This document is the evidence behind Krovi's "verifiable
+_Last updated: 2026-11-02 (added "Planned (not yet implemented)" pre-declaration section, below;
+the current-build record is unchanged). This document is the evidence behind Krovi's "verifiable
 privacy" claim: a literal account of every place the app can open a network socket, what
 triggers it, what is sent, and how to turn it off. It is maintained in-repo so the claim is
 checkable against the source — and should be re-run against each released build._
@@ -11,6 +12,11 @@ The Krovi **desktop app** makes **no telemetry, analytics, or account calls**. O
 live network endpoints exist in the code, both **keyless** public APIs, plus a **manual-only**
 update check. The **website** (`web/`) makes **zero** network requests (no trackers, no CDN,
 no fonts-from-CDN) — it only contains `<a href>` links to the public GitHub repo.
+
+_Planned features (Whisper model download, BYOK AI, circle-and-ask) are **not implemented and
+not shipped**; they appear nowhere in the exhaustive table below. They are pre-described in the
+separate [Planned (not yet implemented)](#planned-not-yet-implemented) section at the bottom of
+this document, so their future network surface is declared before any code lands._
 
 ## Method
 
@@ -236,3 +242,71 @@ Run: `osactions flow` over four real WAVs (synthesized speech through SAPI) - "o
 * A launched app's own network use (above). Windows Search may index OneDrive-synced files, which is Windows' own sync, not Krovi.
 * The index only knows what Windows has indexed: on the test PC freshly created files in Downloads and Documents had still not
   appeared in the index after 9 minutes (the indexer was idle), so "find" finds files that Windows Search already knows.
+
+---
+
+# Planned (not yet implemented)
+
+**Nothing in this section exists in the code or the shipped app today.** The exhaustive table
+above describes the current build and remains the audit of record; this section only declares,
+in advance, the intended network surface of planned features so that they can be diffed against
+it when they land. When a feature below actually ships, it must be **moved into the exhaustive
+table** with verified call sites — being listed here is not evidence and must never be cited as
+a claim of implementation. *(Paste stack: this feature was removed (D-015) and never appears in
+this document's network record.)*
+
+## 1. Opt-in Whisper model download
+
+The speech-to-text runtime (Whisper via whisper.cpp) runs **entirely on-device**; inference makes
+no network call and **no audio ever leaves the machine**. Because models are large, the one
+network-adjacent step will be fetching a model file, and it will be strictly opt-in:
+
+| Property | Intended behaviour |
+|---|---|
+| Trigger | **User action only** (explicit "download model" button in settings). No prefetch, no background download, no automatic selection. |
+| Endpoint | **HTTPS from one pinned host** — the model is fetched from a fixed, allow-listed repository host, not from arbitrary URLs. No other endpoint is contacted for this purpose. |
+| Integrity | The model file's **SHA-256 digest is pinned at build time**; the downloaded file is hash-checked before it is accepted. A mismatch deletes the partial file and refuses to use it (no silent fallback to the server's copy of the hash). |
+| Storage | Written to a local model directory; **user-deletable** at any time from settings. Deleting the model leaves no residual network activity and the feature degrades to "no model installed" (STT unavailable, no attempt to re-download on its own). |
+| Runtime | The inference DLL is **built from pinned whisper.cpp revision b5454 on CI** as part of the release build — it is **not** downloaded ad hoc at runtime, so the app never fetches shared-library code from the network. |
+
+## 2. BYOK AI (Gemini primary, Groq alternative)
+
+* **Zero network calls without the user's own API key.** There is no bundled key, no demo key,
+  no trial key, and no endpoint that works key-less. With no key configured the feature is
+  inert — the code path makes no request and no "anonymous" fallback exists.
+* The key is stored in the **Windows Credential Manager** via the OS credential API.
+  It is never written to config files, the SQLite store, logs, or the repository, and never
+  shipped inside the app.
+* **Exactly what leaves the device:** the **prompt text / user-selected text** that the user
+  submitted, addressed directly to the chosen provider (Gemini, or Groq as the alternative).
+  **Never** microphone audio, recorded voice data, ambient screen content, clipboard history,
+  or file contents — **unless** the user explicitly invokes circle-and-ask for that one
+  interaction, in which case only the screen contents circled for that single ask are included
+  (see §3). Every other request is text-only.
+* **User-triggered only** — a request is sent when the user asks a question or invokes the
+  command. No pre-emptive calls, no proactive suggestions, no keep-alive or polling of the
+  provider.
+* **No Krovi relay.** Requests go from the app straight to the provider's public API endpoint.
+  Krovi runs **no server** in this path, sees neither requests nor responses, and cannot
+  observe, log, or bill them.
+* **No cost to Krovi.** It is the user's own key and the user's own account/quota with the
+  provider; Krovi never proxies, meters, or pays for provider usage.
+
+## 3. Circle-and-ask (off by default)
+
+* **Explicit per-use hotkey only.** Capture begins when the user presses the circle-and-ask
+  shortcut and ends when the annotated region is submitted. There is **no passive or background
+  screen capture of any kind — ever**, and no continuously running capture loop that waits for
+  a hotkey to harvest frames.
+* **Visible indicator** (distinct on-screen affordance, e.g. a border/dimming overlay) is shown
+  **for the entire time** the region is being selected/captured, from hotkey press until the
+  capture ends. There is never an invisible capture.
+* **What is sent:** **only the screen rectangle the user explicitly circled**, for that one
+  interaction, to the user's own vision provider (same BYOK path and rules as §2 — direct to
+  the provider, no Krovi relay, stored in Credential Manager only). If no key is configured,
+  circle-and-ask makes **no network request**.
+* **No storage by default.** The captured region is held in memory for the single request and
+  then discarded; nothing is written to disk and it is not added to clipboard history. If the
+  user later opts into saving annotations, that will be an explicit, separate setting.
+* **Everything is off by default**: the hotkey feature is disabled until the user turns it on,
+  and it additionally requires the BYOK vision key to exist before it can do anything.

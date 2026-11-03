@@ -1,6 +1,6 @@
 ---
 name: core-engine
-description: Pure-Rust logic core for Krovi (clipboard history, paste stack, timers/stopwatch/Pomodoro, file shelf, notes, to-do, screen-time aggregation) plus SQLite persistence. Test-first. Use for any work inside the krovi-core / krovi-store crates.
+description: Pure-Rust logic core for Krovi (clipboard history, timers/stopwatch/Pomodoro, file shelf, notes, to-do, screen-time aggregation) plus SQLite persistence. Test-first. Use for any work inside the krovi-core / krovi-store crates.
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

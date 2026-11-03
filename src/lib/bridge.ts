@@ -147,9 +147,6 @@ export const bridge = {
   async loadClipboard(): Promise<ClipEntry[]> {
     return isTauri() ? invoke<ClipEntry[]>('load_clipboard') : clone(fx.clipboardFixture);
   },
-  async loadPasteStack(): Promise<string[]> {
-    return isTauri() ? invoke<string[]>('load_paste_stack') : clone(fx.pasteStackFixture);
-  },
   async loadNotes(): Promise<Note[]> {
     return isTauri() ? invoke<Note[]>('load_notes') : clone(fx.notesFixture);
   },

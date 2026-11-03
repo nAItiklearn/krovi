@@ -225,6 +225,54 @@ pub fn speakable(text: &str) -> String {
     words.join(" ")
 }
 
+/// Markdown noise removed for display: emphasis and code markers, leading heading hashes,
+/// table separator rows dropped, table pipes turned into separators. The original text and
+/// every offset into it are untouched; this is only what a summary shows.
+pub fn display_clean(s: &str) -> String {
+    let mut t = collapse_ws(s);
+    // A pure table separator row ("| --- | :---: |") carries nothing: drop it.
+    let trimmed = t.trim().to_string();
+    if trimmed.starts_with('|')
+        && trimmed.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ' | '\t'))
+        && trimmed.contains('-')
+    {
+        return String::new();
+    }
+    // A content table row reads better without its outer pipes.
+    if trimmed.starts_with('|') && trimmed.ends_with('|') && trimmed.chars().count() > 1 {
+        let inner = trimmed[..trimmed.len() - 1].trim_start_matches('|').trim();
+        t = inner.replace(" | ", " \u{b7} ");
+    }
+    // Leading heading hashes (a heading that slipped through as prose).
+    loop {
+        let cut = atx_marker_len(&t);
+        if cut > 0 {
+            t = t[cut..].to_string();
+        } else {
+            break;
+        }
+    }
+    // Emphasis and code markers. Interior underscores survive (file_name.rs stays whole,
+    // 5*3 stays math); a marker at a word edge is emphasis and goes.
+    let chars: Vec<char> = t.chars().collect();
+    let mut out = String::with_capacity(t.len());
+    for (i, &c) in chars.iter().enumerate() {
+        match c {
+            '`' => {}
+            '*' | '_' => {
+                let prev = if i == 0 { None } else { Some(chars[i - 1]) };
+                let next = chars.get(i + 1).copied();
+                let at_edge = |x: Option<char>| x.is_none_or(|p| !p.is_alphanumeric());
+                if !at_edge(prev) && !at_edge(next) {
+                    out.push(c);
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    collapse_ws(&out)
+}
+
 /// UTF-16 length of `s[..byte_idx]` - the unit the web UI slices strings in.
 pub fn utf16_offset(s: &str, byte_idx: usize) -> usize {
     let idx = byte_idx.min(s.len());
@@ -285,6 +333,31 @@ fn blocks<'a>(lines: &[Line<'a>]) -> Vec<Block<'a>> {
             let skipped = line.text.len() - rest.len();
             out.push(Block {
                 kind: UnitKind::Bullet,
+                lines: vec![Line {
+                    start: line.start + skipped,
+                    text: rest,
+                    indent: line.indent,
+                }],
+            });
+            continue;
+        }
+        // Markdown table rows are their own units; re-flowing them with neighbouring
+        // prose would glue several rows into one "sentence".
+        if line.text.starts_with('|') {
+            out.push(Block {
+                kind: UnitKind::Sentence,
+                lines: vec![*line],
+            });
+            continue;
+        }
+        // Markdown ATX headings ("## Title") are headings wherever they appear, not only at
+        // paragraph starts; a `#`-line would otherwise be reflowed into the next sentence.
+        let atx = atx_marker_len(line.text);
+        if atx > 0 {
+            let rest = line.text[atx..].trim_start();
+            let skipped = line.text.len() - rest.len();
+            out.push(Block {
+                kind: UnitKind::Heading,
                 lines: vec![Line {
                     start: line.start + skipped,
                     text: rest,
@@ -369,6 +442,19 @@ fn is_heading_line(lines: &[Line], k: usize) -> bool {
                     .is_some_and(|c| c.is_uppercase() || c.is_ascii_digit())
         }
     }
+}
+
+/// Byte length of a Markdown ATX heading marker ("##" plus the required space), or 0.
+/// "##Title" (no space) is not a heading, matching CommonMark.
+fn atx_marker_len(s: &str) -> usize {
+    let hashes = s.chars().take_while(|&c| c == '#').count();
+    if (1..=6).contains(&hashes) {
+        let rest = &s[hashes..];
+        if rest.starts_with(|c: char| c.is_whitespace()) {
+            return s.len() - rest.trim_start().len();
+        }
+    }
+    0
 }
 
 /// Byte length of a leading list marker plus its whitespace ("- ", "* ", "• ", "12. ", "(a) ",
@@ -527,11 +613,17 @@ fn block_units(block: &Block, para: usize) -> Vec<Unit> {
 fn is_terminator(c: char) -> bool {
     matches!(
         c,
-        '.' | '!' | '?' | '\u{2026}' | '\u{3002}' | '\u{ff01}' | '\u{ff1f}'
+        '.' | '!' | '?' | '\u{2026}' | '\u{3002}' | '\u{ff01}' | '\u{ff1f}' | '\u{0964}'
+            | '\u{0965}'
     )
 }
 fn is_cjk_terminator(c: char) -> bool {
     matches!(c, '\u{3002}' | '\u{ff01}' | '\u{ff1f}')
+}
+/// Devanagari danda (`\u{0964}`) and double danda (`\u{0965}`): unconditional sentence ends,
+/// like the CJK full stop. No case or abbreviation logic applies to them.
+fn is_danda(c: char) -> bool {
+    matches!(c, '\u{0964}' | '\u{0965}')
 }
 fn is_closer(c: char) -> bool {
     matches!(
@@ -773,7 +865,7 @@ fn split_ranges(s: &str) -> Vec<(usize, usize)> {
             start = n;
             break;
         }
-        if is_cjk_terminator(chars[j].1) {
+        if is_cjk_terminator(chars[j].1) || is_danda(chars[j].1) {
             let mut m = k + 1;
             while m < n && chars[m].1.is_whitespace() {
                 m += 1;
@@ -809,11 +901,11 @@ fn split_ranges(s: &str) -> Vec<(usize, usize)> {
 }
 
 // ---------------------------------------------------------------------------------------
-// Stop words (English)
+// Stop words (English, plus Hindi / Hinglish function words)
 // ---------------------------------------------------------------------------------------
 
 pub fn is_stopword(w: &str) -> bool {
-    STOP.binary_search(&w).is_ok()
+    STOP.binary_search(&w).is_ok() || STOP_MULTI.binary_search(&w).is_ok()
 }
 
 /// Sorted for binary search.
@@ -1022,6 +1114,145 @@ const STOP: &[&str] = &[
     "yourself",
     "yourselves",
     "youve",
+];
+
+/// Hindi (Devanagari) and Hinglish (Roman) function words, so Devanagari and mixed
+/// Hindi/English text get real term weighting instead of treating every particle as a
+/// content word. Sorted for binary search. Content words are deliberately absent.
+const STOP_MULTI: &[&str] = &[
+    "apna",
+    "apne",
+    "apni",
+    "aur",
+    "bhi",
+    "hai",
+    "hain",
+    "hua",
+    "hui",
+    "isliye",
+    "jab",
+    "ka",
+    "kar",
+    "karna",
+    "karo",
+    "ke",
+    "ki",
+    "ko",
+    "kya",
+    "lekin",
+    "liye",
+    "matlab",
+    "mein",
+    "nahi",
+    "nhi",
+    "par",
+    "se",
+    "tak",
+    "tha",
+    "thi",
+    "ya",
+    "yaani",
+    "yeh",
+    "अंदर",
+    "अपना",
+    "अपनी",
+    "अपने",
+    "अभी",
+    "आदि",
+    "इन",
+    "इनका",
+    "इस",
+    "इसका",
+    "इसकी",
+    "इसके",
+    "इसमें",
+    "इसे",
+    "उन",
+    "उनका",
+    "उनकी",
+    "उनके",
+    "उस",
+    "उसका",
+    "उसकी",
+    "उसके",
+    "उसमें",
+    "उसे",
+    "एक",
+    "ऐसा",
+    "ऐसी",
+    "ऐसे",
+    "और",
+    "कभी",
+    "करता",
+    "करते",
+    "करना",
+    "का",
+    "काफी",
+    "कि",
+    "किया",
+    "किस",
+    "किसी",
+    "की",
+    "के",
+    "केवल",
+    "खुद",
+    "गए",
+    "गया",
+    "जब",
+    "जहाँ",
+    "जा",
+    "जितना",
+    "जिस",
+    "जिसे",
+    "जो",
+    "तक",
+    "तब",
+    "तरह",
+    "तो",
+    "था",
+    "थी",
+    "थे",
+    "दिया",
+    "दूसरा",
+    "दूसरी",
+    "दूसरे",
+    "न",
+    "नहीं",
+    "ना",
+    "पर",
+    "पहले",
+    "पूरा",
+    "पे",
+    "फिर",
+    "बहुत",
+    "बाद",
+    "बिल्कुल",
+    "भर",
+    "भी",
+    "मगर",
+    "में",
+    "सकता",
+    "सकते",
+    "सब",
+    "सभी",
+    "साथ",
+    "से",
+    "हम",
+    "हमारा",
+    "हमारी",
+    "हमारे",
+    "ही",
+    "हुआ",
+    "हुई",
+    "हुए",
+    "है",
+    "हैं",
+    "हो",
+    "होता",
+    "होती",
+    "होते",
+    "होना",
+    "होने",
 ];
 
 #[cfg(test)]
@@ -1303,5 +1534,50 @@ mod tests {
         assert_eq!(bullet_marker_len("2024 was good"), 0);
         assert_eq!(bullet_marker_len("1234. too many digits"), 0);
         assert_eq!(bullet_marker_len("plain"), 0);
+    }
+
+    #[test]
+    fn multi_stopword_list_is_sorted_for_binary_search() {
+        let mut sorted = STOP_MULTI.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(sorted, STOP_MULTI, "STOP_MULTI must stay sorted");
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            STOP_MULTI.len(),
+            "STOP_MULTI must not contain duplicates"
+        );
+    }
+
+    #[test]
+    fn hindi_danda_splits_sentences() {
+        let t = texts("\u{92f}\u{939} \u{92a}\u{939}\u{932}\u{940} \u{935}\u{93e}\u{915}\u{94d}\u{92f} \u{939}\u{948}\u{964} \u{92f}\u{939} \u{926}\u{942}\u{938}\u{930}\u{93e} \u{935}\u{93e}\u{915}\u{94d}\u{92f} \u{939}\u{948}\u{964} \u{914}\u{930} \u{92f}\u{939} \u{924}\u{940}\u{938}\u{930}\u{93e} \u{939}\u{948}\u{964}");
+        assert_eq!(t.len(), 3, "{t:?}");
+    }
+
+    #[test]
+    fn atx_headings_are_heading_units() {
+        let input = "#### Krovi tools\n\nThe shelf holds widgets. Timers live here too.";
+        let u = split_units(input);
+        assert_eq!(u[0].kind, UnitKind::Heading);
+        assert_eq!(u[0].text, "Krovi tools");
+        assert_eq!(&input[u[0].start..u[0].end], "Krovi tools");
+        assert_eq!(u[1].kind, UnitKind::Sentence);
+    }
+
+    #[test]
+    fn hash_without_space_is_not_a_heading() {
+        let u = split_units("#tag trends on social media. Sometimes twice.");
+        assert_eq!(u[0].kind, UnitKind::Sentence);
+    }
+
+    #[test]
+    fn display_clean_strips_markdown_noise() {
+        assert_eq!(display_clean("**Bold** point."), "Bold point.");
+        assert_eq!(display_clean("run `cargo test` now"), "run cargo test now");
+        assert_eq!(display_clean("| --- | --- |"), "");
+        assert_eq!(display_clean("| Template | Examples |"), "Template \u{b7} Examples");
+        assert_eq!(display_clean("file_name.rs is kept"), "file_name.rs is kept");
+        assert_eq!(display_clean("#### Heading line"), "Heading line");
     }
 }

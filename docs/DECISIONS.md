@@ -481,3 +481,75 @@ thread (`reminders.rs`) rings it at its time with a real Windows toast, whatever
 through "alarms only", needs `scenario="reminder"/"alarm"`, which `tauri-plugin-notification` does not expose on Windows (a direct dependency on
 `tauri-winrt-notification` would). Verified: toast delivery, exact-time firing (8-25 ms late), persistence, missed/stale/grouped, snooze,
 dismiss, voice path, migration of a real v2 database. Not verified live: the toast *buttons* and the on-screen *banner* (both need Do Not Disturb off).
+
+## D-015 · 2026-11-02 · Remove Paste Stack (supersedes O2 in D-006)
+
+**Decision.** Delete the Paste Stack feature entirely. Clipboard history with good search is the one
+place to find and re-use a copy; a second, numbered stack is an overlapping workflow and exactly the
+feature bloat SPEC §2 rules out.
+
+**Dependency check (done before deleting).** The only consumers were: `krovi-core::paste_stack`
+(+ its 5 tests), the three Tauri commands `load_paste_stack` / `push_paste` / `pop_paste` and the
+`AppState.paste` field, the `ToolId::Paste` voice-grammar variant and its phrase/test, the
+`PasteStack.svelte` view plus the tool registry, bridge, fixture and voice-help entries, and the
+marketing/docs/README pages. Nothing else read the stack; clipboard history, the parser, the store
+and the panel are independent. The stack was session-only and never persisted, so there is no data
+migration and no saved user content to lose.
+
+**Removed.** Core module + tests (91 → 86), app commands/state, `ToolId::Paste` (`ALL` 17 → 16 and
+the frontend `ToolId` union), the Svelte view and registry entries, the spoken phrases "paste stack"
+/ "paste" / "paste slots", and every website/docs/README claim. Historical entries (D-006, old
+PROGRESS lines) stay as history; this entry supersedes them.
+
+**Consequence.** Krovi now ships **16 tools**. A spoken "open paste stack" is no longer understood.
+If a genuine repetitive-paste workflow appears later, the right shape is multi-select on clipboard
+history or a paste queue *inside* Clipboard — not a second tool.
+
+**Rejected alternatives.** Keep it hidden behind a setting (still two models to maintain and explain);
+merge it into Clipboard now (not requested, and would re-add the same duplication under a new name).
+
+## D-016 · 2026-11-02 · Whisper replaces SAPI; speech-to-action stays in scope
+**Decision.** Windows SAPI 5 is English-only and weak on names; planned replacement is **whisper.cpp
+running fully on-device** (no cloud STT, ever — AGENTS.md bans cloud STT and Krovi's privacy posture
+depends on it). Whisper handles Hindi, English and natural Hinglish code-switching (both languages in
+one utterance) without a mode switch.
+
+**Stable seam (why this is a swap, not a rewrite).** Whisper only has to produce **text** into the
+existing path: voice `session::Raw` → `krovi-voice::parser` → `src/components/voiceRouter.ts`. The
+parser, router and UI already execute real commands from recognized text; nothing downstream needs
+rewriting for English.
+
+**Build order (whenever it is picked up).**
+1. whisper.cpp DLL via `libloading` + cpal/WASAPI capture + Silero VAD, **behind the existing
+   `sapi.rs` API** so callers (and the session/thread shape of D-012/D-013) are unchanged.
+2. Multilingual transcript cleanup + language-matched replies, routed through the user's own BYOK key
+   (never a Krovi-side key; the audit doc must record this addition to the network surface).
+3. Re-point the parser/router to Whisper text and add Hindi/Hinglish command intents.
+4. Re-derive the confidence gating (D-014's ≥0.75 launch gate and the dictation noise gate) from
+   Whisper's `no_speech_prob` / `avg_logprob` instead of SAPI confidence — the thresholds do not carry over
+   and must be re-measured, not assumed.
+
+**Explicit (honesty).** English speech-to-action **already works on SAPI** (closed grammar, real OS
+actions, D-012/D-014) and must not regress while the replacement is built. Hindi/Hinglish command
+parsing is **new work, not already built**; nothing in the shipped parser understands it today.
+
+**Alternatives rejected.** Cloud STT (violates the verifiable-privacy invariant; hard ban). Keeping
+SAPI for commands + Whisper for notes (two engines, two failure modes, two tuning regimes, and the
+command path is exactly the part that stays English-only under it).
+
+## D-017 · 2026-11-02 · Companion personality system + eye customization (proposal, not shipped)
+**Status: proposal.** Nothing here is built; this entry records scope agreed with the maintainer so
+the eventual build is not re-litigated.
+
+- **Name:** the companion gets one primary name plus two alternates, chosen so the set is **original**
+  and not a competitor's character or likeness (clean-room, D-002; §11.9's "no Apple/Apollo assets"
+  rule extends to AI-generated mascot likeness).
+- **Scope:** the current 6 eye styles + 4 personality timing profiles (D-personalization) stay; add
+  new styles and personalities, plus eye color/size/opacity as theme-style tokens (`--eye-*`
+  vocabulary), and **event-driven expressions tied only to real app events** — clipboard copy, timer
+  finished, error toast. Nothing else qualifies as an event.
+- **Explicitly not in scope:** general code understanding or inferred mood; no passive/background
+  screen reading of any kind (hard project ban).
+- **Cost bar carried over from D-personalization:** CSS transform/opacity only, no continuous rAF
+  loop, paused when hidden/fullscreen/`prefers-reduced-motion`; the RAM/CPU delta must be measured
+  vs. companion-off before it ships, against the PERF.md bar.

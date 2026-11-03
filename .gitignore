@@ -54,3 +54,6 @@ qa/**/lighthouse*/
 qa/polish/reference/
 qa/polish/clips/raw/
 qa/polish/clips/out/
+
+# --- Whisper dev assets (engine DLL + model weights; never commit, tens-hundreds of MB) ---
+src-tauri/testdata/whisper/

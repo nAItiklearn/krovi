@@ -35,7 +35,6 @@ impl Mode {
 pub enum ToolId {
     Home,
     Clipboard,
-    Paste,
     Timers,
     Pomodoro,
     Shelf,
@@ -55,10 +54,9 @@ pub enum ToolId {
 }
 
 impl ToolId {
-    pub const ALL: [ToolId; 17] = [
+    pub const ALL: [ToolId; 16] = [
         ToolId::Home,
         ToolId::Clipboard,
-        ToolId::Paste,
         ToolId::Timers,
         ToolId::Pomodoro,
         ToolId::Shelf,
@@ -79,7 +77,6 @@ impl ToolId {
         match self {
             ToolId::Home => "home",
             ToolId::Clipboard => "clipboard",
-            ToolId::Paste => "paste",
             ToolId::Timers => "timers",
             ToolId::Pomodoro => "pomodoro",
             ToolId::Shelf => "shelf",
@@ -724,7 +721,6 @@ mod tests {
             [
                 "home",
                 "clipboard",
-                "paste",
                 "timers",
                 "pomodoro",
                 "shelf",
