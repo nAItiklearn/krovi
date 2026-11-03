@@ -22,6 +22,38 @@
   import { PRIVACY_FACTS, getVoiceSettings, setVoiceSettings, type VoiceSettings } from '../lib/voice';
   import { CONTEXT_MODES } from '../components/voiceModel';
   import { delayLabel, delayToPos, posToDelay } from '../components/settingsModel';
+  import Segmented from '../components/Segmented.svelte';
+  import {
+    DESKTOP_ONLY,
+    DESKTOP_ONLY_LONG,
+    DICTATION_LANGUAGES,
+    DICTATION_STYLES,
+    DOWNLOAD_NOTE,
+    REPLACE_MAX_SPOKEN,
+    REPLACE_MAX_WRITTEN,
+    VOCAB_MAX_TERM,
+    addVocabularyTerm,
+    cancelDownload,
+    cleanReplacements,
+    deleteModel,
+    dictationInfo,
+    downloadModel,
+    formatMB,
+    listInputDevices,
+    loadDictation,
+    meterLevel,
+    progressFraction,
+    removeAt,
+    saveDictationSettings,
+    shortLicense,
+    startMicTest,
+    type DictationSettings,
+    type DictationStyle,
+    type InputDevice,
+    type MicTest,
+    type Replacement,
+    type TalkMode,
+  } from '../lib/dictation';
 
   let cfg = $state<ShellConfig | null>(null);
   let status = $state<'loading' | 'ready' | 'error'>('loading');
@@ -101,6 +133,16 @@
     return MODS.filter(([k]) => e[k]).map(([, n]) => n);
   }
 
+  /** One key press while recording: the modifiers held so far, and either the finished chord or why it can't be one. */
+  function chordFrom(e: KeyboardEvent): { mods: string[]; chord?: string; error?: string } {
+    const mods = modsOf(e);
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return { mods };
+    const key = keyName(e.code);
+    if (!key) return { mods, error: 'That key can’t be used in a shortcut.' };
+    if (!mods.length) return { mods, error: 'Include at least one modifier (Ctrl, Alt, Shift or Win).' };
+    return { mods, chord: [...mods, key].join('+') };
+  }
+
   function startRecording() {
     recording = true;
     draftKeys = [];
@@ -114,23 +156,203 @@
       recording = false;
       return;
     }
-    const mods = modsOf(e);
-    draftKeys = mods;
-    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
-    const key = keyName(e.code);
-    if (!key) {
-      error = 'That key can’t be used in a shortcut.';
-      return;
-    }
-    if (!mods.length) {
-      error = 'Include at least one modifier (Ctrl, Alt, Shift or Win).';
-      return;
-    }
+    const c = chordFrom(e);
+    draftKeys = c.mods;
+    if (c.error) error = c.error;
+    if (!c.chord) return;
     recording = false;
-    await patch({ shortcut: [...mods, key].join('+') });
+    await patch({ shortcut: c.chord });
   }
 
-  const shortcutParts = $derived((cfg?.shortcut ?? '').split('+').filter(Boolean));
+  // ---------------------------------------------------------------- dictation (local Whisper)
+  const di = $derived($dictationInfo);
+  const ds = $derived(di.settings);
+  /** Browser demo: every control is shown but off, and says why. Nothing is recorded or recognised. */
+  const dOff = $derived(!di.available);
+  type DictArea = 'top' | 'model' | 'mic' | 'text';
+  let dStatus = $state<'loading' | 'ready' | 'error'>('loading');
+  let dError = $state('');
+  let dErrArea = $state<DictArea>('top');
+  let dRecording = $state(false);
+  let dDraft = $state<string[]>([]);
+  let devices = $state<InputDevice[]>([]);
+  let devicesLoaded = $state(false);
+  let testing = $state(false);
+  let micBusy = $state(false);
+  let micLevel = $state(0);
+  let micError = $state('');
+  let micTest: MicTest | null = null;
+  let confirmDelete = $state<string | null>(null);
+  let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+  let vocabDraft = $state('');
+  let rows = $state<Replacement[]>([]);
+  let rowsFrom = '';
+
+  const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  async function loadDict() {
+    dStatus = 'loading';
+    try {
+      await loadDictation();
+      dStatus = 'ready';
+      void loadDevices();
+    } catch {
+      dStatus = 'error';
+    }
+  }
+  async function loadDevices() {
+    try {
+      devices = await listInputDevices();
+    } catch (e) {
+      micError = errText(e);
+    } finally {
+      devicesLoaded = true;
+    }
+  }
+  onMount(() => {
+    void loadDict();
+    return () => {
+      if (confirmTimer) clearTimeout(confirmTimer);
+      void micTest?.stop(); // the microphone must never stay open after leaving Settings
+    };
+  });
+
+  // The replacement rows are editable drafts; follow the saved list only when it changes underneath us.
+  $effect(() => {
+    const saved = JSON.stringify(ds.options.replacements);
+    if (saved !== rowsFrom) {
+      rowsFrom = saved;
+      rows = ds.options.replacements.map((r) => ({ ...r }));
+    }
+  });
+
+  /** Save the whole settings object; roll back and show the backend's own words (under `area`) if it refuses. */
+  async function saveDict(next: DictationSettings, area: DictArea = 'top') {
+    const prev = ds;
+    dError = '';
+    dErrArea = area;
+    dictationInfo.update((i) => ({ ...i, settings: next }));
+    try {
+      await saveDictationSettings(next);
+    } catch (e) {
+      dictationInfo.update((i) => ({ ...i, settings: prev }));
+      dError = errText(e);
+    }
+  }
+  const setOpt = (change: Partial<DictationSettings['options']>) =>
+    saveDict({ ...ds, options: { ...ds.options, ...change } }, 'text');
+
+  function startDictRecording() {
+    dRecording = true;
+    dDraft = [];
+    dError = '';
+  }
+  async function onDictKey(e: KeyboardEvent) {
+    if (!dRecording) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      dRecording = false;
+      return;
+    }
+    const c = chordFrom(e);
+    dDraft = c.mods;
+    if (c.error) {
+      dError = c.error;
+      dErrArea = 'top';
+    }
+    if (!c.chord) return;
+    dRecording = false;
+    await saveDict({ ...ds, shortcut: c.chord });
+  }
+
+  // models
+  const installedModels = $derived(di.models.filter((m) => m.status.state === 'installed'));
+  const pickable = $derived(installedModels.some((m) => m.id === ds.model) ? ds.model : (installedModels[0]?.id ?? ''));
+  const modelReady = $derived(installedModels.some((m) => m.id === ds.model));
+  const chosenModel = $derived(di.models.find((m) => m.id === ds.model));
+  const langHint = $derived(
+    chosenModel && !chosenModel.multilingual && ds.language !== 'auto' && ds.language !== 'en'
+      ? 'The selected model hears English only. Pick a multilingual model for this language.'
+      : 'Auto-detect listens for the language as you speak.',
+  );
+  const styleHint = $derived(DICTATION_STYLES.find((s) => s.id === ds.options.style)?.hint ?? '');
+  function onModelKey(e: KeyboardEvent) {
+    const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d || !installedModels.length || dOff) return;
+    e.preventDefault();
+    const i = Math.max(0, installedModels.findIndex((m) => m.id === ds.model));
+    const next = installedModels[(i + d + installedModels.length) % installedModels.length];
+    void saveDict({ ...ds, model: next.id }, 'model');
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.pickm[aria-checked="true"]')?.focus());
+  }
+  function askDelete(id: string) {
+    if (confirmDelete !== id) {
+      confirmDelete = id;
+      if (confirmTimer) clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => (confirmDelete = null), 2800);
+      return;
+    }
+    confirmDelete = null;
+    deleteModel(id).catch((e) => {
+      dError = errText(e);
+      dErrArea = 'model';
+    });
+  }
+
+  // microphone
+  const deviceMissing = $derived(devicesLoaded && ds.device !== null && !devices.some((d) => d.id === ds.device));
+  async function stopTest() {
+    const t = micTest;
+    micTest = null;
+    testing = false;
+    micLevel = 0;
+    await t?.stop();
+  }
+  async function toggleTest() {
+    if (testing) return stopTest();
+    micError = '';
+    micBusy = true;
+    try {
+      const t = await startMicTest(
+        ds.device,
+        (rms) => (micLevel = meterLevel(rms)),
+        () => {
+          micTest = null;
+          testing = false;
+          micLevel = 0;
+        },
+      );
+      micTest = t;
+      testing = true;
+    } catch (e) {
+      micError = errText(e);
+    } finally {
+      micBusy = false;
+    }
+  }
+  async function pickDevice(id: string) {
+    await stopTest();
+    await saveDict({ ...ds, device: id || null }, 'mic');
+  }
+
+  // vocabulary and replacements
+  function addTerm() {
+    const next = addVocabularyTerm(ds.vocabulary, vocabDraft);
+    vocabDraft = '';
+    if (next !== ds.vocabulary) void saveDict({ ...ds, vocabulary: next }, 'text');
+  }
+  function commitRows() {
+    const clean = cleanReplacements(rows);
+    const json = JSON.stringify(clean);
+    if (json === JSON.stringify(ds.options.replacements)) return; // only a blank draft row changed
+    rowsFrom = json; // our own save: keep the draft rows the user is still typing into
+    void setOpt({ replacements: clean });
+  }
+  function dropRow(i: number) {
+    rows = removeAt(rows, i);
+    commitRows();
+  }
 
   // ---------------------------------------------------------------- theme picker
   const darkTheme = themeById(SYSTEM_DARK);
@@ -223,24 +445,7 @@
         <div class="group card">
           <div class="field">
             <div class="lab"><strong>Open shortcut</strong><span class="faint">Show or hide Krovi from anywhere.</span></div>
-            <button
-              class="rec"
-              class:on={recording}
-              onclick={startRecording}
-              onkeydown={onRecordKey}
-              onblur={() => (recording = false)}
-              aria-label={recording ? 'Press the new shortcut, or Escape to cancel' : `Shortcut ${cfg.shortcut}. Click to change`}>
-              {#if recording}
-                {#if draftKeys.length}
-                  {#each draftKeys as k (k)}<kbd>{k}</kbd>{/each}<span class="faint">+ key</span>
-                {:else}
-                  <span class="faint">Press a shortcut</span>
-                {/if}
-              {:else}
-                {#each shortcutParts as k (k)}<kbd>{k}</kbd>{/each}
-                <Icon name="pencil" size={13} />
-              {/if}
-            </button>
+            {@render recorder({ value: cfg.shortcut, on: recording, draft: draftKeys, start: startRecording, key: onRecordKey, stop: () => (recording = false), name: 'Shortcut' })}
           </div>
           {#if error}<p class="err" role="alert"><Icon name="alert" size={13} /> {error}</p>{/if}
 
@@ -459,6 +664,195 @@
     </section>
 
     <section>
+      <h2>Dictation</h2>
+      {#if dStatus === 'loading'}
+        {#each Array(3) as _, i (i)}<div class="skel" style="height:52px;margin-bottom:10px;border-radius:14px"></div>{/each}
+      {:else if dStatus === 'error'}
+        <State tone="error" title={'Couldn’t read dictation settings'} text="The dictation module did not answer. Try again in a moment." action={{ label: 'Try again', run: loadDict }} />
+      {:else}
+        <div class="group card">
+          {#if dOff}
+            <div class="field demo">
+              <div class="lab"><strong>{DESKTOP_ONLY}</strong><span class="faint">{DESKTOP_ONLY_LONG}</span></div>
+              <span class="shield"><Icon name="micOff" size={18} /></span>
+            </div>
+          {/if}
+          <div class="dgroup" class:muted={dOff} inert={dOff}>
+            <div class="field">
+              <div class="lab">
+                <strong>Dictate anywhere</strong>
+                <span class="faint">Hold a shortcut, speak, and Krovi types what you said into the app you’re using.</span>
+              </div>
+              <Toggle label="Dictate anywhere" checked={ds.enabled} onchange={(v) => saveDict({ ...ds, enabled: v })} />
+            </div>
+            {#if ds.enabled && !modelReady}
+              <p class="hint"><Icon name="download" size={13} /> Download a speech model below to start dictating.</p>
+            {/if}
+            <div class="field">
+              <div class="lab"><strong>Shortcut</strong><span class="faint">Works from any app, even while Krovi is tucked away.</span></div>
+              {@render recorder({ value: ds.shortcut, on: dRecording, draft: dDraft, start: startDictRecording, key: onDictKey, stop: () => (dRecording = false), name: 'Dictation shortcut' })}
+            </div>
+            <div class="field">
+              <div class="lab">
+                <strong>How it works</strong>
+                <span class="faint">{ds.mode === 'hold' ? 'Hold the shortcut while you speak. Let go and it types.' : 'Press once to start talking, again to stop and type.'}</span>
+              </div>
+              <Segmented
+                label="How the dictation shortcut works"
+                size="sm"
+                value={ds.mode}
+                options={[
+                  { id: 'hold', label: 'Hold' },
+                  { id: 'toggle', label: 'Toggle' },
+                ]}
+                onchange={(v: TalkMode) => saveDict({ ...ds, mode: v })} />
+            </div>
+            {@render derr('top')}
+
+            <div class="field col">
+              <div class="lab">
+                <strong>Speech model</strong>
+                <span class="faint">Bigger models are more accurate but take more disk space and a little longer.</span>
+              </div>
+              <div class="models" role="radiogroup" aria-label="Speech model" tabindex="-1" onkeydown={onModelKey}>
+                {#each di.models as m (m.id)}
+                  {@const st = m.status.state}
+                  {@const pct = Math.round(progressFraction(di.progress) * 100)}
+                  <div class="model">
+                    <button
+                      type="button"
+                      class="pickm"
+                      role="radio"
+                      aria-checked={ds.model === m.id}
+                      tabindex={pickable === m.id ? 0 : -1}
+                      disabled={st !== 'installed'}
+                      title={st === 'installed' ? 'Use this model' : 'Download it to use it'}
+                      onclick={() => saveDict({ ...ds, model: m.id }, 'model')}>
+                      <span class="rd" aria-hidden="true"></span>
+                      <span class="mt">
+                        <strong>{m.displayName}</strong>
+                        <span class="faint">{formatMB(m.sizeBytes)} · {m.multilingual ? 'Multilingual' : 'English only'} · <span title={m.license}>{shortLicense(m.license)} licence</span></span>
+                      </span>
+                    </button>
+                    <div class="macts">
+                      {#if di.downloading === m.id}
+                        <span class="bar" role="progressbar" aria-label="Downloading {m.displayName}" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+                          <i style:transform="scaleX({progressFraction(di.progress)})"></i>
+                        </span>
+                        <span class="pct">{pct}%</span>
+                        <button class="btn sm" type="button" onclick={() => void cancelDownload()}>Cancel</button>
+                      {:else if st === 'installed'}
+                        <span class="tag"><Icon name="check" size={11} /> Installed</span>
+                        <button
+                          class="btn sm ghost icon danger"
+                          class:armed={confirmDelete === m.id}
+                          type="button"
+                          aria-label={confirmDelete === m.id ? `Click again to delete ${m.displayName}` : `Delete ${m.displayName}`}
+                          title={confirmDelete === m.id ? 'Click again to delete' : 'Delete from this PC'}
+                          onclick={() => askDelete(m.id)}>
+                          <Icon name="trash" size={13} />
+                        </button>
+                      {:else}
+                        {#if st === 'partial'}<span class="tag">Incomplete</span>{/if}
+                        <button class="btn sm" type="button" disabled={di.downloading !== null} onclick={() => void downloadModel(m.id)}>
+                          <Icon name="download" size={13} /> {st === 'partial' ? 'Download again' : 'Download'}
+                        </button>
+                      {/if}
+                    </div>
+                    {#if di.modelError?.id === m.id}
+                      <p class="err inrow" role="alert"><Icon name="alert" size={13} /> {di.modelError.message}</p>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+              <p class="note faint"><Icon name="lock" size={12} /> {DOWNLOAD_NOTE}</p>
+              {@render derr('model')}
+            </div>
+
+            <div class="field">
+              <div class="lab"><strong>Language</strong><span class="faint">{langHint}</span></div>
+              <select class="input sel" aria-label="Dictation language" value={ds.language} onchange={(e) => saveDict({ ...ds, language: e.currentTarget.value }, 'text')}>
+                {#each DICTATION_LANGUAGES as l (l.id)}<option value={l.id}>{l.label}</option>{/each}
+              </select>
+            </div>
+
+            <div class="field col">
+              <div class="mrow">
+                <div class="lab"><strong>Microphone</strong><span class="faint">It’s only on while you dictate or test it. Sound is never saved.</span></div>
+                <select class="input sel mic" aria-label="Microphone" value={ds.device ?? ''} onchange={(e) => void pickDevice(e.currentTarget.value)}>
+                  <option value="">Windows default</option>
+                  {#if deviceMissing && ds.device}<option value={ds.device}>Saved microphone (not connected)</option>{/if}
+                  {#each devices as d (d.id)}<option value={d.id}>{d.name}{d.isDefault ? ' (default)' : ''}</option>{/each}
+                </select>
+              </div>
+              <div class="test">
+                <button class="btn sm" class:on={testing} type="button" disabled={micBusy} onclick={() => void toggleTest()}>
+                  <Icon name={testing ? 'close' : 'mic'} size={13} /> {testing ? 'Stop test' : 'Test microphone'}
+                </button>
+                <span class="level" role="meter" aria-label="Microphone level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(micLevel * 100)}>
+                  <i style:transform="scaleX({micLevel})"></i>
+                </span>
+                {#if testing}<span class="faint tst">Say something.</span>{/if}
+              </div>
+              {#if micError}<p class="err inrow" role="alert"><Icon name="alert" size={13} /> {micError}</p>{/if}
+              {@render derr('mic')}
+            </div>
+
+            <div class="field">
+              <div class="lab"><strong>Writing style</strong><span class="faint">{styleHint}</span></div>
+              <select class="input sel" aria-label="Writing style" value={ds.options.style} onchange={(e) => setOpt({ style: e.currentTarget.value as DictationStyle })}>
+                {#each DICTATION_STYLES as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
+              </select>
+            </div>
+            <div class="field">
+              <div class="lab"><strong>Remove filler words</strong><span class="faint">Leaves out “um”, “uh” and the like.</span></div>
+              <Toggle label="Remove filler words" checked={ds.options.remove_fillers} onchange={(v) => setOpt({ remove_fillers: v })} />
+            </div>
+
+            <div class="field col">
+              <div class="lab"><strong>Vocabulary</strong><span class="faint">Names and terms to listen for: people, products, jargon.</span></div>
+              {#if ds.vocabulary.length}
+                <ul class="chips" aria-label="Your vocabulary">
+                  {#each ds.vocabulary as t, i (`${i}:${t}`)}
+                    <li class="vchip">
+                      <span>{t}</span>
+                      <button type="button" class="x" aria-label="Remove {t}" onclick={() => saveDict({ ...ds, vocabulary: removeAt(ds.vocabulary, i) }, 'text')}>
+                        <Icon name="close" size={11} />
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+              <form
+                class="addrow"
+                onsubmit={(e) => {
+                  e.preventDefault();
+                  addTerm();
+                }}>
+                <input class="input" type="text" maxlength={VOCAB_MAX_TERM} placeholder="Add a name or term" aria-label="New vocabulary term" bind:value={vocabDraft} />
+                <button class="btn sm" type="submit" disabled={!vocabDraft.trim()}><Icon name="plus" size={13} /> Add</button>
+              </form>
+            </div>
+
+            <div class="field col">
+              <div class="lab"><strong>Replacements</strong><span class="faint">When you say the first, Krovi writes the second. Good for names, emails and short phrases.</span></div>
+              {#each rows as r, i (i)}
+                <div class="rrow">
+                  <input class="input" type="text" maxlength={REPLACE_MAX_SPOKEN} placeholder="When I say" aria-label="Spoken phrase {i + 1}" bind:value={r.spoken} onchange={commitRows} />
+                  <span class="arr faint" aria-hidden="true">→</span>
+                  <input class="input" type="text" maxlength={REPLACE_MAX_WRITTEN} placeholder="Write" aria-label="Written text {i + 1}" bind:value={r.written} onchange={commitRows} />
+                  <button class="btn sm ghost icon danger" type="button" aria-label="Remove replacement {i + 1}" onclick={() => dropRow(i)}><Icon name="trash" size={13} /></button>
+                </div>
+              {/each}
+              <div><button class="btn sm" type="button" onclick={() => (rows = [...rows, { spoken: '', written: '' }])}><Icon name="plus" size={13} /> Add replacement</button></div>
+              {@render derr('text')}
+            </div>
+          </div>
+        </div>
+      {/if}
+    </section>
+
+    <section>
       <h2>Privacy</h2>
       <div class="group card">
         <div class="field">
@@ -495,6 +889,32 @@
   </div>
   </div>
 </div>
+
+{#snippet recorder(r: { value: string; on: boolean; draft: string[]; start: () => void; key: (e: KeyboardEvent) => void; stop: () => void; name: string })}
+  <button
+    class="rec"
+    class:on={r.on}
+    type="button"
+    onclick={r.start}
+    onkeydown={r.key}
+    onblur={r.stop}
+    aria-label={r.on ? 'Press the new shortcut, or Escape to cancel' : `${r.name} ${r.value}. Click to change`}>
+    {#if r.on}
+      {#if r.draft.length}
+        {#each r.draft as k (k)}<kbd>{k}</kbd>{/each}<span class="faint">+ key</span>
+      {:else}
+        <span class="faint">Press a shortcut</span>
+      {/if}
+    {:else}
+      {#each r.value.split('+').filter(Boolean) as k (k)}<kbd>{k}</kbd>{/each}
+      <Icon name="pencil" size={13} />
+    {/if}
+  </button>
+{/snippet}
+
+{#snippet derr(area: DictArea)}
+  {#if dError && dErrArea === area}<p class="err" class:inrow={area !== 'top'} role="alert"><Icon name="alert" size={13} /> {dError}</p>{/if}
+{/snippet}
 
 {#snippet face(sw: readonly [string, string, string])}
   <span class="half" style:--sw-bg={sw[0]} style:--sw-fg={sw[1]} style:--sw-ac={sw[2]} aria-hidden="true">
@@ -868,11 +1288,13 @@
     transform: scale(0);
     transition: transform 0.45s var(--spring-bouncy);
   }
-  .mode[aria-checked='true'] .rd {
+  .mode[aria-checked='true'] .rd,
+  .pickm[aria-checked='true'] .rd {
     background: var(--invert-bg);
     border-color: transparent;
   }
-  .mode[aria-checked='true'] .rd::after {
+  .mode[aria-checked='true'] .rd::after,
+  .pickm[aria-checked='true'] .rd::after {
     transform: scale(1);
   }
   .mt {
@@ -924,5 +1346,216 @@
     flex: none;
     margin-top: 2px;
     color: var(--text);
+  }
+
+  /* dictation */
+  .demo .lab span {
+    max-width: 52ch;
+  }
+  .demo + .dgroup {
+    border-top: 1px solid var(--line);
+  }
+  .dgroup .err + .field,
+  .dgroup .hint + .field {
+    border-top: 1px solid var(--line);
+  }
+  .hint {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: -2px 16px 10px;
+    font-size: var(--t-xs);
+    color: var(--text-2);
+  }
+  .err.inrow {
+    margin: 0;
+  }
+  .note {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: var(--t-xs);
+    line-height: 1.5;
+  }
+  .note :global(.ic) {
+    flex: none;
+    margin-top: 3px;
+  }
+
+  /* model list: one row per speech model */
+  .models {
+    display: grid;
+    border: 1px solid var(--line);
+    border-radius: var(--r-3);
+    background: var(--surface-1);
+    overflow: hidden;
+  }
+  .model {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 12px;
+    padding: 9px 12px;
+  }
+  .model + .model {
+    border-top: 1px solid var(--line);
+  }
+  .model .err {
+    grid-column: 1 / -1;
+  }
+  .pickm {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding: 2px 0;
+    text-align: left;
+    border-radius: var(--r-2);
+    color: var(--text-2);
+    transition: color var(--dur-1);
+  }
+  .pickm:hover:not(:disabled),
+  .pickm[aria-checked='true'] {
+    color: var(--text);
+  }
+  .pickm:disabled {
+    cursor: default;
+  }
+  .pickm:disabled .rd {
+    opacity: 0.45;
+  }
+  .pickm:focus-visible {
+    box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1.5px var(--accent);
+  }
+  .macts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bar {
+    position: relative;
+    width: 96px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .bar i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--invert-bg);
+    transform-origin: left center;
+    transition: transform 0.25s var(--ease-out);
+  }
+  .pct {
+    min-width: 34px;
+    text-align: right;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* microphone + live level meter (transform only) */
+  .mrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .sel.mic {
+    max-width: 230px;
+    text-overflow: ellipsis;
+  }
+  .test {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .level {
+    position: relative;
+    flex: 1;
+    max-width: 220px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .level i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 90ms linear;
+  }
+  .tst {
+    font-size: var(--t-xs);
+  }
+
+  /* vocabulary chips and replacement rows */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .vchip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    height: 28px;
+    padding: 0 4px 0 11px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface-1);
+    color: var(--text-2);
+    font-size: var(--t-xs);
+    font-weight: 600;
+  }
+  .vchip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .x {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: var(--text-3);
+    transition:
+      background var(--dur-1),
+      color var(--dur-1);
+  }
+  .x:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+  .x:focus-visible {
+    box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1.5px var(--accent);
+  }
+  .addrow {
+    display: flex;
+    gap: 8px;
+  }
+  .addrow .input {
+    flex: 1;
+  }
+  .rrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+  .arr {
+    font-size: var(--t-sm);
   }
 </style>
