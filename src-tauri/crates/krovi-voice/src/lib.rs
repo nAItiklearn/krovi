@@ -51,13 +51,45 @@ pub mod dictate;
 #[cfg(all(windows, feature = "native"))]
 pub mod os;
 #[cfg(all(windows, feature = "native"))]
-pub mod typing;
-#[cfg(all(windows, feature = "native"))]
 mod sapi;
 /// Local Whisper speech-to-text (whisper.cpp). Compiled only with the `whisper` feature,
 /// which the app enables; it needs a C++ toolchain, so plain `cargo test` skips it.
 #[cfg(feature = "whisper")]
 pub mod stt;
+
+/// Builds without the `whisper` feature (no C++ toolchain) keep the same API, so the app still
+/// compiles; loading a model then fails with a plain sentence instead of transcribing.
+#[cfg(not(feature = "whisper"))]
+pub mod stt {
+    use std::path::Path;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    pub use crate::speech::{SttOptions, Transcriber, Transcript};
+
+    pub struct Engine {
+        _private: (),
+    }
+
+    impl Engine {
+        pub fn load(_model: &Path) -> Result<Self, String> {
+            Err("This build of Krovi has no local speech engine (Whisper).".into())
+        }
+    }
+
+    impl Transcriber for Engine {
+        fn transcribe(
+            &self,
+            _audio: &[f32],
+            _opts: &SttOptions,
+            _cancel: Arc<AtomicBool>,
+        ) -> Result<Transcript, String> {
+            Err("This build of Krovi has no local speech engine (Whisper).".into())
+        }
+    }
+}
+#[cfg(all(windows, feature = "native"))]
+pub mod typing;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};

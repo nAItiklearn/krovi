@@ -350,7 +350,12 @@ mod tests {
     #[test]
     fn assemble_drops_blank_lines_and_joins_with_newlines() {
         let out = assemble(
-            vec![line("First line"), line("   "), line(""), line("Second line ")],
+            vec![
+                line("First line"),
+                line("   "),
+                line(""),
+                line("Second line "),
+            ],
             Some("en-US".into()),
         );
         assert_eq!(out.text, "First line\nSecond line");
@@ -364,7 +369,9 @@ mod tests {
         let m = OcrError::NoLanguage.to_string();
         assert!(m.contains("No OCR language"));
         assert!(m.contains("Optical character recognition"));
-        assert!(OcrError::TooLarge { max: 10_000 }.to_string().contains("10000"));
+        assert!(OcrError::TooLarge { max: 10_000 }
+            .to_string()
+            .contains("10000"));
         assert!(OcrError::Failed("boom".into()).to_string().contains("boom"));
     }
 
@@ -393,7 +400,11 @@ mod tests {
         // flat white, so there is nothing to read
         let img = Image::new(320, 120, vec![0xFF; 320 * 120 * 4]).unwrap();
         let out = recognize(&img).expect("recognition of a blank image should succeed");
-        assert!(out.text.trim().is_empty(), "read {:?} from nothing", out.text);
+        assert!(
+            out.text.trim().is_empty(),
+            "read {:?} from nothing",
+            out.text
+        );
         assert!(out.lines.is_empty());
         assert!(out.language.is_some());
     }
@@ -440,7 +451,8 @@ mod tests {
             let _ = TextOutW(dc, 16, 16, &utf16);
             let _ = GdiFlush();
 
-            let mut bgra = std::slice::from_raw_parts(bits as *const u8, (w * h * 4) as usize).to_vec();
+            let mut bgra =
+                std::slice::from_raw_parts(bits as *const u8, (w * h * 4) as usize).to_vec();
             crate::capture::force_opaque(&mut bgra);
 
             SelectObject(dc, old_font);
@@ -472,7 +484,11 @@ mod tests {
         let out = recognize(&img).expect("recognition should succeed");
         let text = out.text.to_lowercase();
         assert!(text.contains("hello"), "read {:?}", out.text);
-        assert!(text.contains("krovi") || text.contains("2026"), "read {:?}", out.text);
+        assert!(
+            text.contains("krovi") || text.contains("2026"),
+            "read {:?}",
+            out.text
+        );
         assert_eq!(out.lines.len(), 1, "{:?}", out.lines);
         let l = &out.lines[0];
         // the box sits where the text was drawn: left/top margin 16 px, about one 40 px line tall

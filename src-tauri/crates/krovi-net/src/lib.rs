@@ -69,13 +69,13 @@ pub use currency::{convert, fetch_rates, parse_rates, rates_url, Rates, DEFAULT_
 pub use geocode::{clean_query, geocode_url, parse_places, search_places, Place};
 pub use reply::{fx_reply, needs_city, weather_reply, FxReply, PlaceDto, WeatherReply};
 pub use resolve::{resolve, Cached, Resolved};
-pub use weather::{
-    fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
-    DayPoint, HourPoint, WeatherData,
-};
 pub use vision::{
     ask as ask_ai, Answer as AiAnswer, ErrorKind as AiErrorKind, Provider as AiProvider,
     VisionError,
+};
+pub use weather::{
+    fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
+    DayPoint, HourPoint, WeatherData,
 };
 pub use whisper_models::{
     catalog as whisper_catalog, delete_model, download_model, find_model, model_status,

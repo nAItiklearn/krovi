@@ -110,8 +110,7 @@ pub struct AlarmBook {
 fn valid_key(k: &str) -> bool {
     !k.is_empty()
         && k.len() <= MAX_KEY
-        && k
-            .chars()
+        && k.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '-' | '_' | '.'))
 }
 
@@ -282,7 +281,8 @@ mod tests {
     #[test]
     fn cancelling_unfired_removes_it() {
         let mut b = AlarmBook::new();
-        b.sync(&[spec("timer:1", 10_000), spec("timer:2", 20_000)], 0).unwrap();
+        b.sync(&[spec("timer:1", 10_000), spec("timer:2", 20_000)], 0)
+            .unwrap();
         b.sync(&[spec("timer:2", 20_000)], 1_000).unwrap();
         assert_eq!(b.pending(), 1);
         assert_eq!(b.next_due(), Some(20_000));
@@ -335,7 +335,9 @@ mod tests {
         let mut long = spec("long", 1);
         long.label = "x".repeat(MAX_LABEL + 1);
         assert_eq!(b.sync(&[long], 0), Err(AlarmError::BadLabel));
-        let many: Vec<_> = (0..=MAX_ALARMS).map(|i| spec(&format!("k{i}"), 1)).collect();
+        let many: Vec<_> = (0..=MAX_ALARMS)
+            .map(|i| spec(&format!("k{i}"), 1))
+            .collect();
         assert_eq!(b.sync(&many, 0), Err(AlarmError::TooMany));
         assert_eq!(b.pending(), 1);
     }
@@ -358,7 +360,8 @@ mod tests {
         assert_eq!(b, back);
         // after a "restart", the fired one stays quiet, the other still rings
         let mut back = back;
-        back.sync(&[spec("t", 1_000), spec("u", 5_000)], 2_000).unwrap();
+        back.sync(&[spec("t", 1_000), spec("u", 5_000)], 2_000)
+            .unwrap();
         let due = back.collect_due(6_000);
         assert_eq!(due.len(), 1);
         assert_eq!(due[0].alarm.key, "u");

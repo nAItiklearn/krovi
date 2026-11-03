@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-pub use crate::speech::{SttOptions, Transcript, Transcriber};
+pub use crate::speech::{SttOptions, Transcriber, Transcript};
 
 pub struct Engine {
     ctx: WhisperContext,

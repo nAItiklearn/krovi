@@ -326,14 +326,7 @@ const NON_SPEECH: &[&str] = &[
 ];
 
 const NON_SPEECH_SUFFIX: &[&str] = &[
-    "music",
-    "noise",
-    "noises",
-    "applause",
-    "laughter",
-    "silence",
-    "sound",
-    "sounds",
+    "music", "noise", "noises", "applause", "laughter", "silence", "sound", "sounds",
 ];
 
 fn is_non_speech_label(s: &str) -> bool {
@@ -355,10 +348,7 @@ fn is_non_speech_label(s: &str) -> bool {
         return true;
     }
     let words: Vec<&str> = label.split(' ').collect();
-    words.len() <= 3
-        && words
-            .last()
-            .is_some_and(|w| NON_SPEECH_SUFFIX.contains(w))
+    words.len() <= 3 && words.last().is_some_and(|w| NON_SPEECH_SUFFIX.contains(w))
 }
 
 fn is_note_glyph(c: char) -> bool {
@@ -490,7 +480,8 @@ fn is_latin_letter(c: char) -> bool {
 
 /// True when any letter is outside the Latin script.
 fn has_non_latin(text: &str) -> bool {
-    text.chars().any(|c| c.is_alphabetic() && !is_latin_letter(c))
+    text.chars()
+        .any(|c| c.is_alphabetic() && !is_latin_letter(c))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -591,8 +582,7 @@ fn end_ok(chars: &[char], e: usize) -> bool {
         return true;
     }
     // possessive: "crovy's" still matches "crovy"
-    if matches!(chars[e], '\'' | '\u{2019}')
-        && matches!(chars.get(e + 1).copied(), Some('s' | 'S'))
+    if matches!(chars[e], '\'' | '\u{2019}') && matches!(chars.get(e + 1).copied(), Some('s' | 'S'))
     {
         return e + 2 >= chars.len() || is_boundary_at(chars, e + 2);
     }
@@ -691,9 +681,8 @@ fn protect_fillers(text: &str) -> String {
         let (core, trail) = w.split_at(core_end);
         let lc = core.to_lowercase();
         let next_is_know = words.get(i + 1).is_some_and(|n| word_lc(n) == "know");
-        let mark = is_hesitation(&lc)
-            || lc == "like"
-            || (lc == "you" && trail.is_empty() && next_is_know);
+        let mark =
+            is_hesitation(&lc) || lc == "like" || (lc == "you" && trail.is_empty() && next_is_know);
         if mark {
             out.push(format!("{core}{FILLER_MARK}{trail}"));
         } else {
@@ -785,10 +774,39 @@ const SCRATCH_BLOCK_BEFORE: &[&str] = &[
 ];
 
 const NUMBER_WORDS: &[&str] = &[
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-    "nineteen", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
-    "hundred", "thousand", "half", "noon", "midnight",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+    "hundred",
+    "thousand",
+    "half",
+    "noon",
+    "midnight",
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -805,8 +823,7 @@ fn classify(tok: &str, sentence_first: bool) -> Class {
         return Class::Other;
     };
     if c.chars().any(|ch| ch.is_ascii_digit())
-        && c
-            .chars()
+        && c.chars()
             .all(|ch| ch.is_ascii_digit() || matches!(ch, ':' | '.' | ','))
     {
         return Class::Number;
@@ -821,7 +838,8 @@ fn classify(tok: &str, sentence_first: bool) -> Class {
     if !sentence_first
         && first.is_uppercase()
         && c != "I"
-        && c.chars().all(|ch| ch.is_alphabetic() || matches!(ch, '-' | '\''))
+        && c.chars()
+            .all(|ch| ch.is_alphabetic() || matches!(ch, '-' | '\''))
     {
         return Class::Name;
     }
@@ -859,7 +877,8 @@ fn correct_line(line: &str) -> String {
         .map(str::to_string)
         .collect();
     for _ in 0..MAX_CORRECTIONS {
-        let next = (0..toks.len()).find_map(|i| try_scratch(&toks, i).or_else(|| try_replace(&toks, i)));
+        let next =
+            (0..toks.len()).find_map(|i| try_scratch(&toks, i).or_else(|| try_replace(&toks, i)));
         match next {
             Some(t) => toks = t,
             None => break,
@@ -957,8 +976,7 @@ fn try_replace(toks: &[String], i: usize) -> Option<Vec<String>> {
         return None;
     }
     let t_idx = i - nb;
-    let at_sentence_start =
-        t_idx == a_start && (a_start == 0 || ends_sentence(&toks[a_start - 1]));
+    let at_sentence_start = t_idx == a_start && (a_start == 0 || ends_sentence(&toks[a_start - 1]));
     let tc = classify(&toks[t_idx], at_sentence_start);
     let bc = classify(&toks[b_start], false);
     if tc == Class::Unit || bc == Class::Unit {
@@ -1142,7 +1160,8 @@ fn split_signoff(paras: &mut Vec<String>) {
         return;
     }
     let phrase_last = phrase[plen - 1];
-    let ptail = &phrase_last[word_core(phrase_last).len() + phrase_last.find(word_core(phrase_last)).unwrap_or(0)..];
+    let ptail = &phrase_last
+        [word_core(phrase_last).len() + phrase_last.find(word_core(phrase_last)).unwrap_or(0)..];
     if !rest.is_empty() {
         if !(ptail.is_empty() || ptail == ",") {
             return;
@@ -1201,7 +1220,10 @@ fn email(text: &str, opts: &DictationOptions) -> String {
     let mut paras: Vec<String> = split_paragraphs(text)
         .iter()
         .map(|p| {
-            apply_replacements(&paragraph_with(p, opts, opts.auto_punctuate), &opts.replacements)
+            apply_replacements(
+                &paragraph_with(p, opts, opts.auto_punctuate),
+                &opts.replacements,
+            )
         })
         .filter(|p| !p.is_empty())
         .collect();
@@ -1278,7 +1300,9 @@ fn note(text: &str, opts: &DictationOptions) -> String {
             continue;
         }
         let item = paragraph_with(body, opts, false);
-        let item = item.trim().trim_end_matches(|c: char| matches!(c, '.' | ',' | ';'));
+        let item = item
+            .trim()
+            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';'));
         if !item.is_empty() {
             lines.push(format!("- {item}"));
         }
@@ -1421,7 +1445,13 @@ fn contract_line(line: &str) -> String {
             .then(|| case_of(core))
             .flatten();
         if let Some((lc, cap)) = first {
-            let put = |s: &str| if cap { capitalise_first(s) } else { s.to_string() };
+            let put = |s: &str| {
+                if cap {
+                    capitalise_first(s)
+                } else {
+                    s.to_string()
+                }
+            };
             if lc == "cannot" {
                 out.push(format!("{lead}{}", put("can't")));
                 i += 1;
@@ -1539,7 +1569,11 @@ fn case_command(lcs: &[String], i: usize) -> Option<CaseStyle> {
 fn build_identifier(style: CaseStyle, parts: &[&str]) -> String {
     let words: Vec<String> = parts
         .iter()
-        .map(|p| p.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+        .map(|p| {
+            p.chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect::<String>()
+        })
         .filter(|w| !w.is_empty())
         .map(|w| w.to_lowercase())
         .collect();
@@ -1548,7 +1582,13 @@ fn build_identifier(style: CaseStyle, parts: &[&str]) -> String {
         CaseStyle::Camel => words
             .iter()
             .enumerate()
-            .map(|(i, w)| if i == 0 { w.clone() } else { capitalise_first(w) })
+            .map(|(i, w)| {
+                if i == 0 {
+                    w.clone()
+                } else {
+                    capitalise_first(w)
+                }
+            })
             .collect(),
     }
 }
@@ -1610,15 +1650,16 @@ fn code(text: &str, opts: &DictationOptions) -> String {
         .filter(|w| !w.is_empty())
         .collect();
     let lcs: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
-    let hesitation =
-        |k: usize| opts.remove_fillers && CODE_HESITATIONS.contains(&lcs[k].as_str());
+    let hesitation = |k: usize| opts.remove_fillers && CODE_HESITATIONS.contains(&lcs[k].as_str());
     let mut toks: Vec<Cd> = Vec::new();
     let mut i = 0;
     while i < words.len() {
         if let Some(style) = case_command(&lcs, i) {
             let mut j = i + 2;
             let mut parts: Vec<&str> = Vec::new();
-            while j < words.len() && match_symbol(&lcs, j).is_none() && case_command(&lcs, j).is_none()
+            while j < words.len()
+                && match_symbol(&lcs, j).is_none()
+                && case_command(&lcs, j).is_none()
             {
                 if !hesitation(j) {
                     parts.push(words[j]);
@@ -1770,7 +1811,10 @@ mod tests {
             plain("thank you for the update"),
             "Thank you for the update."
         );
-        assert_eq!(plain("you are right about that"), "You are right about that.");
+        assert_eq!(
+            plain("you are right about that"),
+            "You are right about that."
+        );
         assert_eq!(plain("hello you"), "Hello you");
         assert_eq!(plain("[BLANK_AUDIO] you"), "");
     }
@@ -1795,11 +1839,11 @@ mod tests {
     #[test]
     fn scratch_that_removes_the_preceding_sentence() {
         assert_eq!(plain("Buy milk. Scratch that. Buy eggs."), "Buy eggs.");
+        assert_eq!(plain("buy milk period scratch that buy eggs"), "Buy eggs");
         assert_eq!(
-            plain("buy milk period scratch that buy eggs"),
-            "Buy eggs"
+            plain("First thing. Second thing. Scratch that."),
+            "First thing."
         );
-        assert_eq!(plain("First thing. Second thing. Scratch that."), "First thing.");
         assert_eq!(plain("Buy milk. Scratch that."), "");
         assert_eq!(plain("send the report scratch that"), "");
         assert_eq!(plain("scratch that"), "");
@@ -1878,7 +1922,10 @@ mod tests {
             "Meet at five no wait six."
         );
         // a genuine question is not a correction
-        assert_eq!(plain("do I wait? No, wait for me"), "Do I wait? No, wait for me.");
+        assert_eq!(
+            plain("do I wait? No, wait for me"),
+            "Do I wait? No, wait for me."
+        );
     }
 
     #[test]
@@ -1898,13 +1945,19 @@ mod tests {
             with_reps("crovy is a great app", r()),
             "Krovi is a great app."
         );
-        assert_eq!(with_reps("CROVY is a great app", r()), "Krovi is a great app.");
+        assert_eq!(
+            with_reps("CROVY is a great app", r()),
+            "Krovi is a great app."
+        );
         assert_eq!(
             with_reps("we built crovy with tauri, really", r()),
             "We built Krovi with Tauri, really."
         );
         // not inside another word
-        assert_eq!(with_reps("crovyland is far away from here", r()), "Crovyland is far away from here.");
+        assert_eq!(
+            with_reps("crovyland is far away from here", r()),
+            "Crovyland is far away from here."
+        );
         // possessive still matches
         assert_eq!(
             with_reps("this is crovy's best release yet", r()),
@@ -1926,17 +1979,18 @@ mod tests {
 
     #[test]
     fn longest_phrase_wins_and_output_is_not_rematched() {
-        let r = vec![rep("next", "NEXT"), rep("next js", "Next.js"), rep("js", "JS")];
+        let r = vec![
+            rep("next", "NEXT"),
+            rep("next js", "Next.js"),
+            rep("js", "JS"),
+        ];
         assert_eq!(
             with_reps("we use next js here", r.clone()),
             "We use Next.js here."
         );
         assert_eq!(with_reps("js is fun to write", r), "JS is fun to write.");
         // a -> b, b -> c must not chain
-        assert_eq!(
-            with_reps("a b", vec![rep("a", "b"), rep("b", "c")]),
-            "b c"
-        );
+        assert_eq!(with_reps("a b", vec![rep("a", "b"), rep("b", "c")]), "b c");
     }
 
     #[test]
@@ -1967,7 +2021,10 @@ mod tests {
             rep("hello", "bad\u{7}text"),
             rep("tauri", "Tauri"),
         ];
-        assert_eq!(with_reps("tauri and hello again", r), "Tauri and hello again.");
+        assert_eq!(
+            with_reps("tauri and hello again", r),
+            "Tauri and hello again."
+        );
     }
 
     #[test]
@@ -1978,9 +2035,15 @@ mod tests {
             ..DictationOptions::default()
         };
         assert_eq!(process("hi crovy", &o(DictationStyle::Message)), "Hi Krovi");
-        assert_eq!(process("crovy dot app", &o(DictationStyle::Code)), "Krovi.app");
         assert_eq!(
-            process("hi crovy new paragraph thanks Sam", &o(DictationStyle::Email)),
+            process("crovy dot app", &o(DictationStyle::Code)),
+            "Krovi.app"
+        );
+        assert_eq!(
+            process(
+                "hi crovy new paragraph thanks Sam",
+                &o(DictationStyle::Email)
+            ),
             "Hi Krovi,\n\nThanks,\nSam"
         );
     }
@@ -1989,7 +2052,10 @@ mod tests {
 
     #[test]
     fn message_drops_the_full_stop_on_one_short_sentence() {
-        assert_eq!(style(DictationStyle::Message, "see you at five"), "See you at five");
+        assert_eq!(
+            style(DictationStyle::Message, "see you at five"),
+            "See you at five"
+        );
         assert_eq!(
             style(DictationStyle::Message, "are you coming tonight"),
             "Are you coming tonight?"
@@ -2038,7 +2104,10 @@ mod tests {
     fn email_leaves_non_greetings_and_non_signoffs_alone() {
         // not a greeting line: too many words before the first mark
         assert_eq!(
-            style(DictationStyle::Email, "hello world this is a test of the thing"),
+            style(
+                DictationStyle::Email,
+                "hello world this is a test of the thing"
+            ),
             "Hello world this is a test of the thing."
         );
         // "thanks for ..." is a sentence, not a sign-off
@@ -2075,12 +2144,18 @@ mod tests {
             "- Milk\n- Eggs"
         );
         assert_eq!(
-            style(DictationStyle::Note, "bullet point call mom, bullet point um buy gifts."),
+            style(
+                DictationStyle::Note,
+                "bullet point call mom, bullet point um buy gifts."
+            ),
             "- Call mom\n- Buy gifts"
         );
         // nouns, not markers
         assert_eq!(
-            style(DictationStyle::Note, "the next item on the agenda is budget"),
+            style(
+                DictationStyle::Note,
+                "the next item on the agenda is budget"
+            ),
             "The next item on the agenda is budget."
         );
         assert_eq!(
@@ -2093,7 +2168,10 @@ mod tests {
     #[test]
     fn code_maps_spoken_symbols() {
         let c = |s: &str| style(DictationStyle::Code, s);
-        assert_eq!(c("foo dot bar open paren x comma y close paren"), "foo.bar(x, y)");
+        assert_eq!(
+            c("foo dot bar open paren x comma y close paren"),
+            "foo.bar(x, y)"
+        );
         assert_eq!(c("x equals 5"), "x = 5");
         assert_eq!(c("a equals equals b"), "a == b");
         assert_eq!(c("my underscore var colon int"), "my_var: int");
@@ -2111,7 +2189,10 @@ mod tests {
         );
         assert_eq!(c("std colon colon fs"), "std::fs");
         assert_eq!(c("arr open bracket 0 close bracket"), "arr[0]");
-        assert_eq!(c("fn main open paren close paren open brace close brace"), "fn main(){}");
+        assert_eq!(
+            c("fn main open paren close paren open brace close brace"),
+            "fn main(){}"
+        );
     }
 
     #[test]
@@ -2123,10 +2204,7 @@ mod tests {
             c("let camel case my value equals snake case other thing"),
             "let myValue = other_thing"
         );
-        assert_eq!(
-            c("camel case foo open paren close paren"),
-            "foo()"
-        );
+        assert_eq!(c("camel case foo open paren close paren"), "foo()");
         // nothing to convert: the words stay
         assert_eq!(c("camel case"), "camel case");
         assert_eq!(c("snake case HTTP request"), "http_request");
@@ -2173,7 +2251,10 @@ mod tests {
         assert_eq!(p("it's been a long week"), "It has been a long week.");
         assert_eq!(p("let's meet at five"), "Let us meet at five.");
         assert_eq!(p("I wanna go"), "I want to go");
-        assert_eq!(p("they don't know and we haven't asked"), "They do not know and we have not asked.");
+        assert_eq!(
+            p("they don't know and we haven't asked"),
+            "They do not know and we have not asked."
+        );
         // possessives and names are not contractions
         assert_eq!(p("John's idea is good"), "John's idea is good.");
         // shouted text is left alone
@@ -2185,7 +2266,10 @@ mod tests {
     #[test]
     fn casual_contracts_a_few_common_phrases() {
         let c = |s: &str| style(DictationStyle::Casual, s);
-        assert_eq!(c("I do not know and we cannot go"), "I don't know and we can't go.");
+        assert_eq!(
+            c("I do not know and we cannot go"),
+            "I don't know and we can't go."
+        );
         assert_eq!(c("I am happy"), "I'm happy");
         assert_eq!(c("it is fine today"), "It's fine today.");
         assert_eq!(c("I will not go"), "I won't go.");
@@ -2193,7 +2277,10 @@ mod tests {
         assert_eq!(c("please do not touch it"), "Please don't touch it.");
         // clause-final forms and ambiguous phrases stay
         assert_eq!(c("yes it is."), "Yes it is.");
-        assert_eq!(c("I have a plan and I am going to the store now"), "I have a plan and I'm going to the store now.");
+        assert_eq!(
+            c("I have a plan and I am going to the store now"),
+            "I have a plan and I'm going to the store now."
+        );
         assert_eq!(c("let us know if you can"), "Let us know if you can.");
     }
 
@@ -2202,10 +2289,7 @@ mod tests {
     #[test]
     fn non_latin_text_passes_through() {
         assert_eq!(plain("मुझे कल मीटिंग में जाना है"), "मुझे कल मीटिंग में जाना है");
-        assert_eq!(
-            plain("  नमस्ते   दुनिया [BLANK_AUDIO] "),
-            "नमस्ते दुनिया"
-        );
+        assert_eq!(plain("  नमस्ते   दुनिया [BLANK_AUDIO] "), "नमस्ते दुनिया");
         assert_eq!(plain("你好 世界"), "你好 世界");
         assert_eq!(plain("مرحبا بالعالم"), "مرحبا بالعالم");
         // mixed script: untouched, no English rules (no "I", no capital, no full stop)
@@ -2240,10 +2324,7 @@ mod tests {
             "Krovi बहुत अच्छा है"
         );
         // a Devanagari word is not matched inside a longer word
-        assert_eq!(
-            with_reps("क्रोवीलैंड", vec![rep("क्रोवी", "Krovi")]),
-            "क्रोवीलैंड"
-        );
+        assert_eq!(with_reps("क्रोवीलैंड", vec![rep("क्रोवी", "Krovi")]), "क्रोवीलैंड");
     }
 
     #[test]
@@ -2277,7 +2358,10 @@ mod tests {
             "It works, you know, mostly."
         );
         // stutters still collapse
-        assert_eq!(process("the the report is ready", &keep), "The report is ready.");
+        assert_eq!(
+            process("the the report is ready", &keep),
+            "The report is ready."
+        );
         // and no marker ever leaks
         assert!(!process("um uh like you know", &keep).contains(FILLER_MARK));
     }
@@ -2288,7 +2372,10 @@ mod tests {
             auto_punctuate: false,
             ..DictationOptions::default()
         };
-        assert_eq!(process("pick up the parcel today", &off), "Pick up the parcel today");
+        assert_eq!(
+            process("pick up the parcel today", &off),
+            "Pick up the parcel today"
+        );
         assert_eq!(
             process("buy milk comma eggs period", &off),
             "Buy milk, eggs."
@@ -2346,8 +2433,12 @@ mod tests {
         let many: Vec<Replacement> = (0..200).map(|i| rep(&format!("w{i}"), "x")).collect();
         assert!(validate_replacements(&many).is_ok());
         let too_many: Vec<Replacement> = (0..201).map(|i| rep(&format!("w{i}"), "x")).collect();
-        assert!(validate_replacements(&too_many).unwrap_err().contains("too many"));
-        assert!(validate_replacements(&[rep("", "x")]).unwrap_err().contains("empty"));
+        assert!(validate_replacements(&too_many)
+            .unwrap_err()
+            .contains("too many"));
+        assert!(validate_replacements(&[rep("", "x")])
+            .unwrap_err()
+            .contains("empty"));
         assert!(validate_replacements(&[rep("   ", "x")]).is_err());
         assert!(validate_replacements(&[rep(&"a".repeat(60), "x")]).is_ok());
         assert!(validate_replacements(&[rep(&"a".repeat(61), "x")]).is_err());
@@ -2375,11 +2466,44 @@ mod tests {
         let long_token = "x".repeat(5000);
         let long_fillers = "um ".repeat(500);
         let inputs = [
-            "[", "(", "♪", "♪♪♪", "]", ")", "[[", "((music))", "scratch that", "delete that",
-            "no wait", "i mean", ", no wait,", "sorry i mean", "new paragraph", "new item",
-            "bullet", "camel case", "snake case", "open paren", "hi", "thanks", "best regards,",
-            "dear", "good morning", "\u{e000}", "\u{e000}um", "., ,", "...", "?!", "ǅ İ ß ΣΑΣ",
-            "don't", "'", "’s", "a'", "I'm", long_token.as_str(), long_fillers.as_str(),
+            "[",
+            "(",
+            "♪",
+            "♪♪♪",
+            "]",
+            ")",
+            "[[",
+            "((music))",
+            "scratch that",
+            "delete that",
+            "no wait",
+            "i mean",
+            ", no wait,",
+            "sorry i mean",
+            "new paragraph",
+            "new item",
+            "bullet",
+            "camel case",
+            "snake case",
+            "open paren",
+            "hi",
+            "thanks",
+            "best regards,",
+            "dear",
+            "good morning",
+            "\u{e000}",
+            "\u{e000}um",
+            "., ,",
+            "...",
+            "?!",
+            "ǅ İ ß ΣΑΣ",
+            "don't",
+            "'",
+            "’s",
+            "a'",
+            "I'm",
+            long_token.as_str(),
+            long_fillers.as_str(),
         ];
         let reps = vec![rep("a", "b"), rep("", "x"), rep("ß", "ss"), rep("’s", "")];
         for st in styles {
@@ -2406,7 +2530,8 @@ mod tests {
             replacements: vec![rep("crovy", "Krovi")],
             ..DictationOptions::default()
         };
-        let s = "hi Sam um crovy is at 330 scratch that no it's at four, no wait, five. thanks John";
+        let s =
+            "hi Sam um crovy is at 330 scratch that no it's at four, no wait, five. thanks John";
         assert_eq!(process(s, &o), process(s, &o));
     }
 

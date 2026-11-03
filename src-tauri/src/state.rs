@@ -1,4 +1,4 @@
-﻿//! Shared application state. Owner: live-data agent (see docs/CONTRACTS.md).
+//! Shared application state. Owner: live-data agent (see docs/CONTRACTS.md).
 //!
 //! `AppState` starts **empty** (no seeded content, ever — a first run is a real empty
 //! state) and is *hydrated* from the SQLite database in `live::setup`, once the app
@@ -12,9 +12,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use krovi_core::{
-    Calendar, ClipboardHistory, FileShelf, Notes, Pomodoro, ScreenTime, TodoList,
-};
+use krovi_core::{Calendar, ClipboardHistory, FileShelf, Notes, Pomodoro, ScreenTime, TodoList};
 use krovi_store::{MemStore, Store};
 use krovi_sys::{ClipGate, MediaState, MediaWorker, Sampler, SystemStats};
 

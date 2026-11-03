@@ -67,11 +67,24 @@ mod tests {
 
     #[test]
     fn time_zones() {
-        for ok in ["", "UTC", "Asia/Kolkata", "America/Argentina/Buenos_Aires", "Etc/GMT+5", "Etc/GMT-14"] {
+        for ok in [
+            "",
+            "UTC",
+            "Asia/Kolkata",
+            "America/Argentina/Buenos_Aires",
+            "Etc/GMT+5",
+            "Etc/GMT-14",
+        ] {
             assert!(valid_tz(ok), "{ok}");
         }
         let long = "A".repeat(MAX_TZ + 1);
-        for bad in ["/etc/passwd", "Asia//Kolkata", "Asia Kolkata", "<script>", long.as_str()] {
+        for bad in [
+            "/etc/passwd",
+            "Asia//Kolkata",
+            "Asia Kolkata",
+            "<script>",
+            long.as_str(),
+        ] {
             assert!(!valid_tz(bad), "{bad}");
         }
     }

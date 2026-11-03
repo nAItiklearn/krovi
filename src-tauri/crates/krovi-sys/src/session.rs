@@ -136,7 +136,11 @@ impl<T> Slot<T> {
 
     /// Drop the held value only if it is still the one stored as `generation`.
     pub fn clear_generation(&mut self, generation: u64) -> bool {
-        if self.held.as_ref().is_some_and(|h| h.generation == generation) {
+        if self
+            .held
+            .as_ref()
+            .is_some_and(|h| h.generation == generation)
+        {
             self.held = None;
             true
         } else {

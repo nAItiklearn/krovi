@@ -110,7 +110,9 @@ mod tests {
     }
 
     fn voiced() -> Vec<f32> {
-        (0..16_000).map(|i| 0.2 * (i as f32 * 0.0864).sin()).collect()
+        (0..16_000)
+            .map(|i| 0.2 * (i as f32 * 0.0864).sin())
+            .collect()
     }
 
     fn run(audio: &[f32], engine: &Fixed) -> Outcome {
@@ -127,7 +129,10 @@ mod tests {
 
     #[test]
     fn silence_is_never_transcribed() {
-        assert_eq!(run(&vec![0.0; 32_000], &Fixed("Thank you.", 0.1)), Outcome::NothingHeard);
+        assert_eq!(
+            run(&vec![0.0; 32_000], &Fixed("Thank you.", 0.1)),
+            Outcome::NothingHeard
+        );
     }
 
     #[test]

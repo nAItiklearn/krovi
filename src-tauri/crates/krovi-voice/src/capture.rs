@@ -22,11 +22,11 @@ use windows::Win32::Media::Audio::{
     AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
     DEVICE_STATE_ACTIVE, WAVEFORMATEX, WAVE_FORMAT_PCM,
 };
+use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
     COINIT_MULTITHREADED, STGM_READ,
 };
-use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
 
 use crate::vad::SAMPLE_RATE;
 
@@ -229,7 +229,10 @@ impl Recorder {
         let res = self
             .worker
             .take()
-            .map(|w| w.join().unwrap_or_else(|_| Err("the recorder crashed".into())))
+            .map(|w| {
+                w.join()
+                    .unwrap_or_else(|_| Err("the recorder crashed".into()))
+            })
             .unwrap_or(Ok(()));
         let raw = std::mem::take(
             &mut *self
@@ -346,8 +349,7 @@ fn pump(
             let chunk: Vec<i16> = if silent || data.is_null() {
                 vec![0; frames as usize]
             } else {
-                unsafe { std::slice::from_raw_parts(data as *const i16, frames as usize) }
-                    .to_vec()
+                unsafe { std::slice::from_raw_parts(data as *const i16, frames as usize) }.to_vec()
             };
             let _ = unsafe { capture.ReleaseBuffer(frames) };
             let sumsq: f64 = chunk

@@ -77,7 +77,10 @@ fn main() {
             let head: String = o.text.chars().take(400).collect();
             println!("--- text (first 400 chars) ---\n{head}\n------------------------------");
             for l in o.lines.iter().take(5) {
-                println!("  line at ({:.0},{:.0}) {}x{}: {}", l.x, l.y, l.w as i32, l.h as i32, l.text);
+                println!(
+                    "  line at ({:.0},{:.0}) {}x{}: {}",
+                    l.x, l.y, l.w as i32, l.h as i32, l.text
+                );
             }
         }
         Err(e) => println!("ocr            : {e}"),

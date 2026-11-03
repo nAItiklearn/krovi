@@ -48,3 +48,27 @@ Rules:
 - No DeepSeek.
 
 Commit: `docs: changelog for v0.3.0`
+
+## T4 — Version bump to 0.3.0
+
+Files: `package.json`, `package-lock.json` (only the top-level `"version"` fields), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (`[package] version`) and `src-tauri/Cargo.lock` (only the `krovi-app` entry's version line).
+Check: `npm run check` passes, and `cargo +stable-x86_64-pc-windows-gnu metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps` runs without error.
+Commit: `chore: version 0.3.0`
+
+## T5 — CI: move off the deprecated Node 20 actions
+
+Files: `.github/workflows/*.yml` only. GitHub warns that actions/checkout@v4, actions/setup-node@v4 and actions/upload-artifact@v4 target Node 20.
+Bump each to the latest major that runs on Node 24. Check each action's README on GitHub for the version. Change nothing else in the workflows.
+Commit: `ci: actions on Node 24`
+
+## T6 — IMPLEMENTATION_STATUS for v0.3
+
+File: `docs/product/IMPLEMENTATION_STATUS.md`. Add a v0.3 section from `git log clean-main..HEAD --oneline` covering:
+- Agent Mode, Talk to Agent, Circle to Ask and screen awareness
+- Clean My OS, Extras and Settings → AI (BYOK)
+- companion themes and Read aloud
+- the security audit (`docs/SECURITY-v03-audit.md`)
+For each item, state plainly what is unit-tested and what is not yet verified on a real desktop. Don't claim anything that wasn't run.
+Commit: `docs: implementation status v0.3`
+
+Order: T1, T2, T3, T4, T5, T6, then stop. Do not touch `src-tauri/src/`, `src-tauri/crates/` or `web/`. Claude is fixing the native build there.

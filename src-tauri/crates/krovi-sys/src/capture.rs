@@ -219,7 +219,9 @@ pub fn bgra_to_rgba(bgra: &[u8]) -> Vec<u8> {
 impl Image {
     /// Wrap a BGRA buffer. `None` when the size is zero or the buffer length is wrong.
     pub fn new(width: u32, height: u32, bgra: Vec<u8>) -> Option<Image> {
-        let want = (width as usize).checked_mul(height as usize)?.checked_mul(4)?;
+        let want = (width as usize)
+            .checked_mul(height as usize)?
+            .checked_mul(4)?;
         if width == 0 || height == 0 || bgra.len() != want {
             return None;
         }
@@ -352,8 +354,7 @@ mod native {
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         GetCursorPos, GetSystemMetrics, SetWindowDisplayAffinity, SM_CXVIRTUALSCREEN,
-        SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WDA_EXCLUDEFROMCAPTURE,
-        WDA_NONE,
+        SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
     };
 
     use super::{force_opaque, Image, Rect};
@@ -412,9 +413,7 @@ mod native {
 
     pub(super) fn primary_monitor() -> Option<Rect> {
         // SAFETY: as above, with the primary-monitor fallback.
-        monitor_rect(unsafe {
-            MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY)
-        })
+        monitor_rect(unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) })
     }
 
     pub(super) fn set_capture_exclusion(hwnd: isize, exclude: bool) -> bool {
@@ -716,7 +715,11 @@ mod tests {
         assert!(vs.w > 0 && vs.h > 0, "{vs:?}");
         let primary = primary_monitor().expect("a primary monitor");
         assert!(primary.w > 0 && primary.h > 0);
-        assert_eq!(primary.intersect(&vs), Some(primary), "primary {primary:?} not inside {vs:?}");
+        assert_eq!(
+            primary.intersect(&vs),
+            Some(primary),
+            "primary {primary:?} not inside {vs:?}"
+        );
         // the monitor nearest to its own centre is itself
         let centre = monitor_at(primary.x + primary.w / 2, primary.y + primary.h / 2);
         assert_eq!(centre, Some(primary));
@@ -782,7 +785,11 @@ mod tests {
 
             assert_eq!((img.width, img.height), (4, 3));
             let row = |y: usize| &img.bgra[y * 16..y * 16 + 4];
-            assert_eq!(row(0), &[0, 0, 255, 255], "source row 1 is red, alpha forced opaque");
+            assert_eq!(
+                row(0),
+                &[0, 0, 255, 255],
+                "source row 1 is red, alpha forced opaque"
+            );
             assert_eq!(row(1), &[255, 0, 0, 255], "source row 2 is blue");
             assert_eq!(row(2), &[255, 0, 0, 255]);
             // and it round-trips to a PNG with red as RGB (255, 0, 0)

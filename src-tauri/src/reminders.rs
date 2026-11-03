@@ -839,11 +839,20 @@ fn alarm_pass(app: &AppHandle, hub: &Hub) -> bool {
     let mut sound_played = false;
     for d in &due {
         if d.silent {
-            log(format!("alarm {:?} was a day overdue: marked, not announced", d.alarm.key));
+            log(format!(
+                "alarm {:?} was a day overdue: marked, not announced",
+                d.alarm.key
+            ));
             continue;
         }
         let (title, body) = alarm_text(d);
-        let toast = match app.notification().builder().title(&title).body(&body).show() {
+        let toast = match app
+            .notification()
+            .builder()
+            .title(&title)
+            .body(&body)
+            .show()
+        {
             Ok(()) => "requested".to_string(),
             Err(e) => format!("error: {e}"),
         };
