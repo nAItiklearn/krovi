@@ -9,8 +9,9 @@
 //!     (play/pause/next/prev), run on a dedicated MTA thread. **Never captures
 //!     audio** — it only reads the metadata Windows already exposes (SPEC C5).
 //!   * [`foreground`] — the foreground window's **process name** for local
-//!     screen-time sampling. **Never** window titles, URLs, or document content
-//!     (SPEC C11).
+//!     screen-time sampling, plus whether the user is present (idle time and a
+//!     locked-desktop check) so away time is not counted. **Never** window titles,
+//!     URLs, document content or input (SPEC C11).
 //!   * [`location`] — a **coarse** latitude/longitude for weather, nothing else
 //!     (SPEC C7).
 //!
@@ -37,7 +38,10 @@ pub use clipboard::{
     change_token, classify_text, files_to_text, is_link, is_sensitive, prepare_text, read_capture,
     write_image_png, write_text, CaptureKind, ClipCapture, ClipGate, ReadOutcome,
 };
-pub use foreground::{day_index, foreground_process, normalize_process, Sampler};
+pub use foreground::{
+    foreground_process, is_present, local_day_index, normalize_process, presence, Credit, Presence,
+    Sampler, IDLE_THRESHOLD_MS, MAX_CREDIT_GAP_MS, SAMPLE_INTERVAL_MS,
+};
 pub use location::{coarsen, current_location, valid_coords};
 pub use media::{
     read_now_playing, send_transport, MediaState, MediaTrack, MediaTracker, MediaWorker,

@@ -69,8 +69,8 @@ export const shelvesFixture: StoredShelf[] = [
   },
 ];
 
-/** Day index = days since the Unix epoch (matches krovi-core ScreenTime). */
-export const today = Math.floor(NOW / DAY);
+/** Day index = LOCAL calendar days since 1970-01-01 (matches krovi-core ScreenTime, which is bucketed by local midnight). */
+export const today = Math.floor((NOW - new Date(NOW).getTimezoneOffset() * MIN) / DAY);
 
 export const screenTimeFixture: ScreenTimeRecord[] = [
   { day: today, app: 'Code.exe', ms: 102 * MIN },

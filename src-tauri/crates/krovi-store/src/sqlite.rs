@@ -13,6 +13,11 @@
 //!   read; all values in Krovi's models fit comfortably in `i64`.
 //! * All writes to a collection run inside a transaction (delete-all + insert),
 //!   giving atomic replace semantics.
+//! * `screen_time` is the exception: the app writes it incrementally with
+//!   [`Store::upsert_screen_time`] (only changed `(day, app)` rows, `ON CONFLICT DO
+//!   UPDATE .. WHERE ms != excluded.ms`) and expires old days with
+//!   [`Store::prune_screen_time`], instead of rewriting the table. The schema is
+//!   unchanged, so no migration is involved.
 //! * Every query is parameterised — user content (clip text, note bodies, file
 //!   names, settings) never touches SQL string interpolation.
 
@@ -432,6 +437,34 @@ impl Store for SqliteStore {
         Ok(())
     }
 
+    fn upsert_screen_time(&mut self, records: &[ScreenTimeRecord]) -> Result<()> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        {
+            // The WHERE makes an unchanged total a true no-op (no row is rewritten).
+            let mut stmt = tx.prepare(
+                "INSERT INTO screen_time (day, app, ms) VALUES (?1, ?2, ?3)
+                 ON CONFLICT(day, app) DO UPDATE SET ms = excluded.ms
+                 WHERE screen_time.ms != excluded.ms",
+            )?;
+            for r in records {
+                stmt.execute(params![r.day as i64, r.app, r.ms as i64])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn prune_screen_time(&mut self, min_day: u32) -> Result<usize> {
+        let n = self.conn.execute(
+            "DELETE FROM screen_time WHERE day < ?1",
+            params![min_day as i64],
+        )?;
+        Ok(n)
+    }
+
     fn load_calendar(&self) -> Result<Vec<CalendarEvent>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, date, title, time, remind, sound, fired_at, snoozed_until, missed
@@ -542,6 +575,73 @@ mod tests {
     fn in_memory_round_trips_everything() {
         let mut s = SqliteStore::open_in_memory().unwrap();
         testkit::exercise(&mut s);
+    }
+
+    #[test]
+    fn in_memory_screen_time_upsert_and_prune_match_the_contract() {
+        let mut s = SqliteStore::open_in_memory().unwrap();
+        testkit::exercise_screen_time_incremental(&mut s);
+    }
+
+    fn st_rec(day: u32, app: &str, ms: u64) -> ScreenTimeRecord {
+        ScreenTimeRecord {
+            day,
+            app: app.into(),
+            ms,
+        }
+    }
+
+    #[test]
+    fn upsert_screen_time_writes_only_the_rows_that_changed() {
+        let mut s = SqliteStore::open_in_memory().unwrap();
+        s.save_screen_time(&testkit::sample_screen_time()).unwrap(); // 3 rows
+
+        // re-sending identical totals rewrites nothing at all
+        let before = s.conn.total_changes();
+        s.upsert_screen_time(&testkit::sample_screen_time())
+            .unwrap();
+        assert_eq!(
+            s.conn.total_changes() - before,
+            0,
+            "unchanged rows are skipped"
+        );
+
+        // one changed total + one new row = exactly two row writes, not a full rewrite
+        let before = s.conn.total_changes();
+        s.upsert_screen_time(&[
+            st_rec(10, "a.exe", 500),  // same as stored: skipped
+            st_rec(10, "b.exe", 1001), // changed
+            st_rec(13, "z.exe", 1),    // new
+        ])
+        .unwrap();
+        assert_eq!(s.conn.total_changes() - before, 2);
+
+        assert_eq!(
+            s.load_screen_time().unwrap(),
+            vec![
+                st_rec(10, "a.exe", 500),
+                st_rec(10, "b.exe", 1001),
+                st_rec(11, "a.exe", 250),
+                st_rec(13, "z.exe", 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn screen_time_upserts_and_prunes_survive_a_reopen() {
+        let path = temp_db_path();
+        {
+            let mut s = SqliteStore::open(&path).unwrap();
+            s.upsert_screen_time(&[st_rec(1, "old.exe", 5), st_rec(100, "a.exe", 7)])
+                .unwrap();
+            s.upsert_screen_time(&[st_rec(100, "a.exe", 9)]).unwrap();
+            assert_eq!(s.prune_screen_time(50).unwrap(), 1);
+        }
+        {
+            let s = SqliteStore::open(&path).unwrap();
+            assert_eq!(s.load_screen_time().unwrap(), vec![st_rec(100, "a.exe", 9)]);
+        }
+        remove_db_files(&path);
     }
 
     #[test]

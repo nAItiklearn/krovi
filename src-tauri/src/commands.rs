@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use krovi_core::{ClipboardHistory, Notes, TodoList};
+use krovi_core::calendar::ZoneOffset;
+use krovi_core::{ClipboardHistory, Notes, ScreenTime, TodoList};
 use krovi_net::{Cached, FxReply, Place, PlaceDto, Rates, WeatherData, WeatherReply};
 use krovi_store::wire::{calendar_dtos, clip_dtos, parse_clip_kind, CalendarDto};
 use krovi_store::{screen_time_records, stored_shelves};
@@ -380,33 +381,83 @@ pub fn load_screen_time(state: State<AppState>) -> CmdResult<Vec<ScreenTimeDto>>
         .collect())
 }
 
-/// Close the previous foreground interval, credit it, and persist the aggregate.
+/// The user's local zone offset (ms east of UTC, DST included) at `utc_ms`, from Windows.
+/// Reuses the reminders scheduler's zone, so screen time and reminders agree on "today".
+fn local_offset_ms(utc_ms: u64) -> i64 {
+    crate::reminders::OsZone.offset_ms_at(utc_ms as i64)
+}
+
+/// Close the previous foreground interval, credit it, and persist what changed.
 /// Driven by the 5 s background tick in `live.rs`; the `foreground_tick` command
 /// below calls the same code so a UI-driven tick can never double count (the
 /// sampler credits only the time since the previous tick, whoever made it).
+///
+/// Days are the user's **local** calendar days (the zone offset at `now`), only time
+/// while the user is present is credited (not locked, input within 5 minutes), and a
+/// gap longer than two sample intervals — sleep/resume — is never credited; see
+/// `krovi_sys::foreground`. Rows go to the database in batches (`persist_screen_time`).
 pub(crate) fn tick_screen_time(state: &AppState, now: u64) -> CmdResult<Option<ScreenTimeDto>> {
-    let process = krovi_sys::foreground_process().map_err(|e| e.to_string())?;
-    let mut sampler = state.sampler.lock().map_err(lock_err)?;
-    match sampler.tick(process, now) {
-        Some((day, app, ms)) => {
-            let mut st = state.screen.lock().map_err(lock_err)?;
-            st.record(day, app.as_str(), ms);
-            let records = screen_time_records(&st);
-            let mut store = state.store.lock().map_err(lock_err)?;
-            store
-                .save_screen_time(&records)
-                .map_err(|e| e.to_string())?;
-            Ok(Some(ScreenTimeDto { day, app, ms }))
-        }
-        None => Ok(None),
+    // An app that cannot be read (an elevated or protected process) counts as "no app"
+    // rather than an error: the tick must still close the previous interval, or that
+    // previous app would keep being credited for time it no longer owns.
+    let process = krovi_sys::foreground_process().unwrap_or(None);
+    let presence = krovi_sys::presence();
+    let offset = local_offset_ms(now);
+    let today = krovi_sys::local_day_index(now, offset);
+
+    let credits = state
+        .sampler
+        .lock()
+        .map_err(lock_err)?
+        .tick(process, now, offset, presence);
+
+    let mut st = state.screen.lock().map_err(lock_err)?;
+    for c in &credits {
+        st.record(c.day, c.app.as_str(), c.ms);
     }
+    persist_screen_time(state, &mut st, now, today, false)?;
+    // At most two credits (a span across local midnight); report the latest day's.
+    Ok(credits.into_iter().last().map(|c| ScreenTimeDto {
+        day: c.day,
+        app: c.app,
+        ms: c.ms,
+    }))
+}
+
+/// Retention and batched persistence for screen time: a thin lock-and-call around
+/// `krovi_store::sync_screen_time` (where the policy and its tests live). Most ticks do
+/// nothing; changed `(day, app)` rows are upserted about once a minute, days past the
+/// 90-day window are expired once per local day, and `force` (quit) skips the wait.
+fn persist_screen_time(
+    state: &AppState,
+    st: &mut ScreenTime,
+    now: u64,
+    today: u32,
+    force: bool,
+) -> CmdResult<()> {
+    let mut store = state.store.lock().map_err(lock_err)?;
+    krovi_store::sync_screen_time(&mut **store, st, now, today, force).map_err(|e| e.to_string())
+}
+
+/// Write any screen-time rows still waiting for the next batch. Called once on quit
+/// (`live.rs`), so at most the last few seconds of an open interval are lost.
+pub(crate) fn flush_screen_time_now(state: &AppState) -> CmdResult<()> {
+    let now = now_ms();
+    let today = krovi_sys::local_day_index(now, local_offset_ms(now));
+    let mut st = state.screen.lock().map_err(lock_err)?;
+    persist_screen_time(state, &mut st, now, today, true)
 }
 
 /// Sample the foreground app for screen-time (SPEC C11). The live hub already does
 /// this every 5 s, so the UI does not need to call it; kept for compatibility.
+///
+/// The `now` argument is ignored on purpose: the app's own clock decides what is
+/// credited and when retention runs, so a wrong value from the UI can neither invent
+/// time nor expire the history.
 #[tauri::command]
 pub fn foreground_tick(state: State<AppState>, now: u64) -> CmdResult<Option<ScreenTimeDto>> {
-    tick_screen_time(&state, now)
+    let _ = now;
+    tick_screen_time(&state, now_ms())
 }
 
 // ---------------------------------------------------------------------------

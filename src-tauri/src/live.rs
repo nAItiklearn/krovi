@@ -28,13 +28,16 @@ use krovi_sys::{
 };
 
 use crate::commands::{
-    clipboard_dtos, lock_err, now_ms, persist_clipboard, tick_screen_time, ClipDto, CmdResult,
+    clipboard_dtos, flush_screen_time_now, lock_err, now_ms, persist_clipboard, tick_screen_time,
+    ClipDto, CmdResult,
 };
 use crate::state::AppState;
 
 const CLIP_POLL: Duration = Duration::from_millis(250);
 const STATS_EVERY: Duration = Duration::from_millis(2000);
-const SCREEN_TIME_EVERY: Duration = Duration::from_millis(5000);
+/// Foreground sampling period. The sampler's "gap = sleep/resume" cap is derived from
+/// the same constant (`krovi_sys::MAX_CREDIT_GAP_MS`), so they cannot drift apart.
+const SCREEN_TIME_EVERY: Duration = Duration::from_millis(krovi_sys::SAMPLE_INTERVAL_MS);
 
 /// Start persistence and every background watcher. Runs in the Tauri setup hook, so
 /// the state is hydrated before the first command can be served.
@@ -44,6 +47,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     spawn_clipboard_watcher(handle.clone());
     spawn_media(handle.clone());
     spawn_stats(handle.clone());
+    flush_screen_time_on_exit(&handle);
     spawn_screen_time(handle);
     Ok(())
 }
@@ -298,6 +302,26 @@ fn spawn_screen_time(app: AppHandle) {
         });
     if let Err(e) = spawned {
         eprintln!("[krovi] could not start the screen-time sampler: {e}");
+    }
+}
+
+/// Screen-time rows are written in batches (about once a minute), so on quit the runtime's
+/// `Exit` event writes whatever is still waiting. Same plugin-hook pattern as the other
+/// modules that must run at exit (`explain`, `transfer`).
+fn flush_screen_time_on_exit(app: &AppHandle) {
+    let flusher = tauri::plugin::Builder::<tauri::Wry, ()>::new("krovi-screen-time")
+        .on_event(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Err(e) = flush_screen_time_now(&state) {
+                        eprintln!("[krovi] saving screen time on exit failed: {e}");
+                    }
+                }
+            }
+        })
+        .build();
+    if let Err(e) = app.plugin(flusher) {
+        eprintln!("[krovi] could not register the screen-time exit flush: {e}");
     }
 }
 
