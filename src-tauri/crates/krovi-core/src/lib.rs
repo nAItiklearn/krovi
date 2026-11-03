@@ -9,6 +9,7 @@ pub mod alarm;
 pub mod calendar;
 pub mod clipboard;
 pub mod file_shelf;
+pub mod limits;
 pub mod notes;
 pub mod pomodoro;
 pub mod screen_time;

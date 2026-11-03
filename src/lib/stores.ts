@@ -494,7 +494,6 @@ export async function addNote(body: string): Promise<boolean> {
 export const calendarTick = writable<number>(0);
 /** Bumps when the file shelf changed elsewhere so a mounted File Shelf reloads. */
 export const shelfTick = writable<number>(0);
-const SHELF_KEY = 'krovi.shelves';
 
 /**
  * Park file references on a shelf (the first one unless named), stored exactly the way the
@@ -508,8 +507,7 @@ export async function addToShelf(
   if (!wanted.length) return null;
   let shelves: StoredShelf[] = [];
   try {
-    const raw = localStorage.getItem(SHELF_KEY);
-    shelves = raw ? (JSON.parse(raw) as StoredShelf[]) : await bridge.loadShelves();
+    shelves = await bridge.loadShelves();
   } catch {
     shelves = [];
   }
@@ -523,7 +521,7 @@ export async function addToShelf(
   if (!fresh.length) return { count: 0, shelf: shelves[idx].name };
   shelves = shelves.map((s, i) => (i === idx ? { ...s, items: [...fresh, ...s.items] } : s));
   try {
-    localStorage.setItem(SHELF_KEY, JSON.stringify(shelves));
+    await bridge.saveShelves(shelves);
   } catch {
     return null;
   }

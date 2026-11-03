@@ -48,7 +48,7 @@ pub struct TaskDto {
     pub completed_at: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShelfItemDto {
     pub id: u64,
     pub name: String,
@@ -57,7 +57,7 @@ pub struct ShelfItemDto {
     pub added_at: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShelfDto {
     pub name: String,
     pub items: Vec<ShelfItemDto>,
@@ -322,6 +322,49 @@ pub fn load_shelves(state: State<AppState>) -> CmdResult<Vec<ShelfDto>> {
                 .collect(),
         })
         .collect())
+}
+
+/// Replace every shelf with the UI's list (names + items in display order), persist it,
+/// and return what is now stored. Items are file *references*: nothing on disk is touched.
+#[tauri::command]
+pub fn save_shelves(state: State<AppState>, shelves: Vec<ShelfDto>) -> CmdResult<Vec<ShelfDto>> {
+    use krovi_core::limits::{valid_shelf_item, valid_shelf_name, MAX_SHELF_ITEMS, MAX_SHELVES};
+    use krovi_core::{FileShelf, ShelfItem};
+    if shelves.len() > MAX_SHELVES {
+        return Err(format!("at most {MAX_SHELVES} shelves"));
+    }
+    let mut parts = Vec::with_capacity(shelves.len());
+    for s in shelves {
+        if !valid_shelf_name(&s.name) {
+            return Err("invalid shelf name".into());
+        }
+        if s.items.len() > MAX_SHELF_ITEMS {
+            return Err(format!("at most {MAX_SHELF_ITEMS} items per shelf"));
+        }
+        let mut items = Vec::with_capacity(s.items.len());
+        for i in s.items {
+            if !valid_shelf_item(&i.name, &i.stored_path) {
+                return Err("invalid shelf item".into());
+            }
+            items.push(ShelfItem {
+                id: i.id,
+                name: i.name,
+                stored_path: i.stored_path,
+                size_bytes: i.size_bytes,
+                added_at: i.added_at,
+            });
+        }
+        parts.push((s.name.trim().to_string(), items));
+    }
+    let fs = FileShelf::from_parts(parts);
+    {
+        let mut store = state.store.lock().map_err(lock_err)?;
+        store
+            .save_shelves(&stored_shelves(&fs))
+            .map_err(|e| e.to_string())?;
+    }
+    *state.shelf.lock().map_err(lock_err)? = fs;
+    load_shelves(state)
 }
 
 #[tauri::command]
@@ -656,16 +699,72 @@ pub fn convert_currency(amount: f64, from: String, to: String, rates: Rates) -> 
 // fills it from `Intl`.
 // ---------------------------------------------------------------------------
 
+const WORLD_CLOCKS_KEY: &str = "world_clocks.v1";
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WorldClockDto {
+    pub label: String,
+    pub tz: String,
+}
+
+fn default_world_clocks() -> Vec<WorldClockDto> {
+    [
+        ("Local", ""),
+        ("San Francisco", "America/Los_Angeles"),
+        ("New York", "America/New_York"),
+        ("London", "Europe/London"),
+        ("Mumbai", "Asia/Kolkata"),
+        ("Tokyo", "Asia/Tokyo"),
+    ]
+    .into_iter()
+    .map(|(label, tz)| WorldClockDto {
+        label: label.into(),
+        tz: tz.into(),
+    })
+    .collect()
+}
+
+/// The user's clocks as saved, or the starter set when nothing was ever saved.
 #[tauri::command]
-pub fn load_world_clocks() -> serde_json::Value {
-    serde_json::json!([
-        {"label":"Local","tz":""},
-        {"label":"San Francisco","tz":"America/Los_Angeles"},
-        {"label":"New York","tz":"America/New_York"},
-        {"label":"London","tz":"Europe/London"},
-        {"label":"Mumbai","tz":"Asia/Kolkata"},
-        {"label":"Tokyo","tz":"Asia/Tokyo"}
-    ])
+pub fn load_world_clocks(state: State<AppState>) -> CmdResult<Vec<WorldClockDto>> {
+    let store = state.store.lock().map_err(lock_err)?;
+    let saved = store
+        .get_setting(WORLD_CLOCKS_KEY)
+        .map_err(|e| e.to_string())?
+        .and_then(|raw| serde_json::from_str::<Vec<WorldClockDto>>(&raw).ok());
+    Ok(saved.unwrap_or_else(default_world_clocks))
+}
+
+#[tauri::command]
+pub fn save_world_clocks(
+    state: State<AppState>,
+    clocks: Vec<WorldClockDto>,
+) -> CmdResult<Vec<WorldClockDto>> {
+    use krovi_core::limits::{valid_clock_label, valid_tz, MAX_CLOCKS};
+    if clocks.len() > MAX_CLOCKS {
+        return Err(format!("at most {MAX_CLOCKS} clocks"));
+    }
+    if let Some(bad) = clocks
+        .iter()
+        .find(|c| !valid_clock_label(&c.label) || !valid_tz(&c.tz))
+    {
+        return Err(format!("invalid clock {:?}", bad.label));
+    }
+    let clean: Vec<WorldClockDto> = clocks
+        .into_iter()
+        .map(|c| WorldClockDto {
+            label: c.label.trim().to_string(),
+            tz: c.tz,
+        })
+        .collect();
+    let json = serde_json::to_string(&clean).map_err(|e| e.to_string())?;
+    state
+        .store
+        .lock()
+        .map_err(lock_err)?
+        .set_setting(WORLD_CLOCKS_KEY, &json)
+        .map_err(|e| e.to_string())?;
+    Ok(clean)
 }
 
 // ---------------------------------------------------------------------------

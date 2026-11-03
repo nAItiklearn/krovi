@@ -57,6 +57,8 @@ pub fn run() {
             commands::weather_set_city,
             commands::load_media,
             commands::load_world_clocks,
+            commands::save_world_clocks,
+            commands::save_shelves,
             commands::load_currency_rates,
             commands::load_currency_info,
             commands::load_calendar,

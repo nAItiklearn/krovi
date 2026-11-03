@@ -9,7 +9,6 @@
   import { arrive, depart, pop, spotlight } from '../lib/motion';
   import type { WorldClockZone } from '../lib/types';
 
-  const KEY = 'krovi.clocks';
   const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
   let zones = $state<WorldClockZone[]>([]);
@@ -37,17 +36,14 @@
   );
 
   function save() {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(zones));
-    } catch {
-      /* ignore */
-    }
+    bridge.saveWorldClocks($state.snapshot(zones)).catch((e) => {
+      console.warn('[krovi] save_world_clocks failed', e);
+    });
   }
   async function load() {
     status = 'loading';
     try {
-      const raw = localStorage.getItem(KEY);
-      const base = raw ? (JSON.parse(raw) as WorldClockZone[]) : await bridge.loadWorldClocks();
+      const base = await bridge.loadWorldClocks();
       zones = base.map((z) => (z.label === 'Local' ? { ...z, tz: LOCAL_TZ } : z));
       status = 'ready';
     } catch {
