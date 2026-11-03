@@ -10,6 +10,7 @@
 //! Each agent edits only its own `[block]` in the handler list below.
 
 mod commands;
+mod dictation;
 mod explain;
 mod live;
 mod reminders;
@@ -32,10 +33,23 @@ pub fn run() {
             transfer::setup(app)?;
             reminders::setup(app)?;
             explain::setup(app)?;
+            dictation::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            // [dictation] — local Whisper dictation into any app (D-020)
+            dictation::dictation_status,
+            dictation::dictation_set_settings,
+            dictation::dictation_toggle,
+            dictation::dictation_cancel,
+            dictation::voice_input_devices,
+            dictation::mic_test_start,
+            dictation::mic_test_level,
+            dictation::mic_test_stop,
+            dictation::voice_model_download,
+            dictation::voice_model_cancel_download,
+            dictation::voice_model_delete,
             // [live] — owner: live-data
             commands::load_clipboard,
             commands::add_clip,

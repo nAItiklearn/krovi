@@ -598,7 +598,7 @@ fn sanitize_hit(r: HitRect, mode: Mode) -> Option<HitRect> {
     (w >= 1.0 && h >= 1.0).then_some(HitRect { x, y, w, h })
 }
 
-fn parse_shortcut(s: &str) -> Result<Shortcut, String> {
+pub(crate) fn parse_shortcut(s: &str) -> Result<Shortcut, String> {
     let s = s.trim();
     if s.is_empty() {
         return Err("The shortcut is empty.".into());

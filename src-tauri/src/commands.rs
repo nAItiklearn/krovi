@@ -94,13 +94,13 @@ async fn blocking<T: Send + 'static>(
 // Persisted settings as JSON (weather place + caches, FX cache)
 // ---------------------------------------------------------------------------
 
-fn setting_get<T: DeserializeOwned>(state: &AppState, key: &str) -> Option<T> {
+pub(crate) fn setting_get<T: DeserializeOwned>(state: &AppState, key: &str) -> Option<T> {
     let store = state.store.lock().ok()?;
     let raw = store.get_setting(key).ok().flatten()?;
     serde_json::from_str(&raw).ok()
 }
 
-fn setting_set<T: Serialize>(state: &AppState, key: &str, value: &T) -> CmdResult<()> {
+pub(crate) fn setting_set<T: Serialize>(state: &AppState, key: &str, value: &T) -> CmdResult<()> {
     let raw = serde_json::to_string(value).map_err(|e| e.to_string())?;
     let mut store = state.store.lock().map_err(lock_err)?;
     store.set_setting(key, &raw).map_err(|e| e.to_string())
