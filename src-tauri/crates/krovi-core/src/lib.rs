@@ -5,6 +5,7 @@
 //! environmental inputs are supplied by callers). Persistence lives in
 //! `krovi-store`; OS/network access lives in `krovi-sys` / `krovi-net`.
 
+pub mod alarm;
 pub mod calendar;
 pub mod clipboard;
 pub mod file_shelf;

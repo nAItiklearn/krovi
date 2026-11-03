@@ -106,6 +106,7 @@ pub fn run() {
             // [/transfer]
             // [reminders] — owner: reminders
             reminders::reminders_status,
+            reminders::alarm_sync,
             reminders::reminder_add,
             reminders::reminder_set,
             reminders::reminder_snooze,

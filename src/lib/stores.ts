@@ -235,13 +235,13 @@ function tickTimers(n: number): void {
   );
 }
 
-// ---- stopwatch (memory only) ----
+// ---- stopwatch (persisted, so a restart keeps a running stopwatch running) ----
 export interface Stopwatch {
   accumulated: number;
   runningSince: number | null;
   laps: number[];
 }
-export const stopwatch = writable<Stopwatch>({ accumulated: 0, runningSince: null, laps: [] });
+export const stopwatch = persisted<Stopwatch>('krovi.stopwatch', { accumulated: 0, runningSince: null, laps: [] });
 export const swElapsed = (s: Stopwatch, n: number): number =>
   s.accumulated + (s.runningSince != null ? Math.max(0, n - s.runningSince) : 0);
 export function swToggle(): void {
@@ -336,14 +336,62 @@ export function pomodoroResetCycle(): void {
   pomodoro.set(pomoFresh());
 }
 
+const pomoDoneText = (ph: PomoPhase): string => (ph === 'work' ? 'Focus complete' : 'Break over');
+
 function tickPomodoro(n: number): void {
   const p = get(pomodoro);
   if (p.runningSince == null || pomoElapsed(p, n) < p.duration) return;
   const completed = p.phase === 'work' ? p.completed + 1 : p.completed;
   pomodoro.set({ ...p, accumulated: p.duration, runningSince: null, finished: true, completed });
-  const text = p.phase === 'work' ? 'Focus complete' : 'Break over';
+  const text = pomoDoneText(p.phase);
   pushActivity('timer', text, 'Pomodoro', 4500);
   pushToast(text);
+}
+
+// ---------------------------------------------------------------------------------------
+// native alarms: the backend rings running countdowns even when this webview is hidden,
+// throttled or closed (src-tauri/src/reminders.rs `alarm_sync`, krovi_core::alarm). The
+// in-app banner above is UI only; the Windows toast + sound come from Rust, exactly once.
+// ---------------------------------------------------------------------------------------
+
+export interface AlarmSpec {
+  key: string;
+  label: string;
+  kind: 'timer' | 'pomodoro';
+  dueAt: number;
+}
+
+/** Every running countdown and the instant it ends (stable while it runs). */
+export function alarmSpecs(list: TimerItem[], p: PomodoroState): AlarmSpec[] {
+  const out: AlarmSpec[] = [];
+  for (const t of list) {
+    if (t.runningSince == null) continue;
+    out.push({
+      key: `timer:${t.id}`,
+      label: t.label.slice(0, 120),
+      kind: 'timer',
+      dueAt: Math.round(t.runningSince + Math.max(0, t.duration - t.accumulated)),
+    });
+  }
+  if (p.runningSince != null && !p.finished) {
+    out.push({
+      key: 'pomodoro',
+      label: pomoDoneText(p.phase),
+      kind: 'pomodoro',
+      dueAt: Math.round(p.runningSince + Math.max(0, p.duration - p.accumulated)),
+    });
+  }
+  return out.slice(0, 64);
+}
+
+if (isTauri()) {
+  let last = '';
+  derived([timers, pomodoro], ([$t, $p]) => alarmSpecs($t, $p)).subscribe((specs) => {
+    const key = JSON.stringify(specs);
+    if (key === last) return;
+    last = key;
+    void native<number>('alarm_sync', { alarms: specs });
+  });
 }
 
 /**
