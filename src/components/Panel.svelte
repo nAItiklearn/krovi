@@ -26,6 +26,7 @@
   import Settings from '../views/Settings.svelte';
   import Transfer from '../views/Transfer.svelte';
   import Explain from '../views/Explain.svelte';
+  import CleanView from '../views/CleanView.svelte';
 
   // The panel body: rail + header + the active tool. `show` flips true once the Island shape is
   // ~60% open; everything marked .enter then rises in on a stagger (and leaves first on collapse).
@@ -46,6 +47,7 @@
     clocks: WorldClocks,
     convert: Convert,
     screentime: ScreenTime,
+    clean: CleanView,
     settings: Settings,
   };
 

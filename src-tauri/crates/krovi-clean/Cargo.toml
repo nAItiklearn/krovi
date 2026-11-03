@@ -1,0 +1,26 @@
+[package]
+name = "krovi-clean"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Krovi Clean My OS: scans known junk locations, reports real paths and sizes, and moves only user-confirmed items to the Recycle Bin."
+publish = false
+
+[features]
+default = ["native"]
+# Windows pieces: known-folder lookup and Recycle Bin deletion.
+native = ["dep:windows"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+# Same windows-rs line as the other crates, so the workspace links ONE copy of the bindings.
+windows = { version = "0.58", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_System_Com",
+    # Which drive an item is on and whether that drive's Recycle Bin is switched on.
+    "Win32_Storage_FileSystem",
+    "Win32_System_Registry",
+] }

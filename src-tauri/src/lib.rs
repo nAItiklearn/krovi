@@ -9,6 +9,7 @@
 //!
 //! Each agent edits only its own `[block]` in the handler list below.
 
+mod clean;
 mod commands;
 mod dictation;
 mod explain;
@@ -34,10 +35,17 @@ pub fn run() {
             reminders::setup(app)?;
             explain::setup(app)?;
             dictation::setup(app)?;
+            clean::setup(app)?;
             Ok(())
         })
         .on_window_event(shell::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            // [clean] — Clean My OS: scan, review, Recycle Bin only
+            clean::clean_categories,
+            clean::clean_scan,
+            clean::clean_cancel,
+            clean::clean_delete,
+            clean::clean_recycle_bin_size,
             // [dictation] — local Whisper dictation into any app (D-020)
             dictation::dictation_status,
             dictation::dictation_set_settings,
