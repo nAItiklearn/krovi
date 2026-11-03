@@ -3,6 +3,8 @@
   import { listen, isTauri } from '../../lib/bridge';
   import { idleSettings, isIdle, personalityById, startIdle, styleById, type IdleStyleId, type PersonalityId } from '../../lib/idle';
   import { runCompanion, type CursorEvent, type Runner } from './runner';
+  import { stats } from '../../lib/live';
+  import { initMood, nextMood, type Mood } from './mood';
 
   // The idle pill companion: a pair of original, animated eyes that fill the pill's content box
   // (the nearest positioned ancestor, e.g. the Island's `.shape`). docs/CONTRACTS.md §7.
@@ -37,6 +39,21 @@
 
   let root: HTMLElement | undefined = $state();
   let runner: Runner | null = null;
+
+  // System-aware mood (mood.ts): only from REAL stats in the native app; the browser demo's
+  // stats are simulated, so they never drive an expression. Folding a sample is a few
+  // arithmetic ops every 2 s; the attribute only changes when the mood does.
+  let moodState = initMood(Date.now());
+  let mood = $state<Mood>('neutral');
+
+  onMount(() => {
+    if (!isTauri() || preview) return;
+    return stats.subscribe((s) => {
+      if (!s) return;
+      moodState = nextMood(moodState, s, Date.now());
+      if (moodState.mood !== mood) mood = moodState.mood;
+    });
+  });
 
   onMount(() => {
     if (!preview) startIdle();
@@ -89,7 +106,14 @@
   }
 </script>
 
-<div class="idle" class:on={shown} data-style={style} bind:this={root} aria-hidden="true">
+<div
+  class="idle"
+  class:on={shown}
+  data-style={style}
+  data-mood={mood === 'neutral' ? undefined : mood}
+  bind:this={root}
+  aria-hidden="true"
+>
   <div class="face">
     {#each ['l', 'r'] as side (side)}
       <div class="eye {side}">
@@ -221,6 +245,37 @@
     background: var(--eye-blush, transparent);
     opacity: 0;
     transition: opacity var(--fade-t);
+  }
+
+  /* ---- moods (mood.ts, from real system stats). A resting expression under the poses: a pose
+     (blink-free transforms on .shape/.face) wins while it plays. Transforms and opacity only. ---- */
+  .idle[data-mood='sad']:not([data-pose]) .shape {
+    transform: scaleY(0.62); /* heavy lids */
+  }
+  .idle[data-mood='sad']:not([data-pose]) .face {
+    --face-y: 0.9cqh;
+  }
+  .idle[data-mood='stressed']:not([data-pose]) .eye.l .shape {
+    transform: scaleY(0.6) rotate(10deg); /* narrowed, inner corners down */
+  }
+  .idle[data-mood='stressed']:not([data-pose]) .eye.r .shape {
+    transform: scaleY(0.6) rotate(-10deg);
+  }
+  .idle[data-mood='calm']:not([data-pose]) .shape {
+    transform: scaleY(0.86);
+  }
+  .idle[data-mood='calm']:not([data-pose]) .face {
+    --face-y: 0.3cqh;
+  }
+  .idle[data-mood='happy']:not([data-pose]):not([data-style='visor']) .shape {
+    opacity: 0;
+  }
+  .idle[data-mood='happy']:not([data-pose]):not([data-style='visor']) .arc {
+    opacity: 1;
+    transform: none;
+  }
+  .idle[data-mood='happy']:not([data-pose]) .cheek {
+    opacity: 1;
   }
 
   /* ---- poses. Set as `data-pose` on the root by runner.ts; transforms and opacity only. ---- */

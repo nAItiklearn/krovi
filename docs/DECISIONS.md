@@ -4,6 +4,36 @@ Every non-trivial decision is recorded here, newest first. Format: `D-NNN · YYY
 
 ---
 
+## D-021 · 2026-11-03 · Temporary, visible screen awareness (amends the AGENTS.md screen-capture ban)
+The owner's v0.3 directive keeps the ban on **passive/background** screen capture and allows exactly one
+exception: a screen-awareness session the user explicitly starts, with an always-visible indicator, a
+one-click stop, a maximum duration, frames held in memory only, nothing in logs, and no upload unless a
+configured vision provider is used with disclosure. Circle to Ask captures only the selected region.
+Nothing captures at startup or when the feature is off.
+
+## D-020 · 2026-11-03 · Voice: local Whisper dictation into any app; cloud STT stays banned
+whisper.cpp (`whisper-rs` 0.16, Unlicense) runs on-device behind the `whisper` feature; models are
+downloaded only when the user picks one (Hugging Face, SHA-256 verified, sizes shown). Capture is WASAPI
+shared mode at 16 kHz mono; text is typed with `SendInput` Unicode so the clipboard is never touched.
+Dictated text is never parsed as a command (commands get their own shortcut / Agent Mode). Optional cloud
+voice means **text-to-speech only** (ElevenLabs, existing); speech recognition never leaves the PC.
+CI builds whisper.cpp with `GGML_NATIVE=OFF` and an AVX2/FMA/F16C baseline, so the minimum CPU is
+Intel Haswell (2013) / AMD equivalents. SAPI command grammar stays until Agent Mode replaces it.
+
+## D-019 · 2026-11-03 · Companion expressions may use real local hardware state (amends D-017)
+D-017 limited expressions to app events. The owner approved adding moods from **measured** Windows
+values: battery (`GetSystemPowerStatus`; no battery = no battery moods), RAM pressure and CPU load (the
+existing 2 s `stats-tick`). EMA smoothing, enter/leave hysteresis, an 8 s settle and a 15 s minimum
+dwell prevent flicker (`src/components/idle/mood.ts`). Only the native app uses them; the browser demo's
+simulated stats never drive an expression. Values never leave the PC. The pill never moves; only the
+pupils follow the cursor, now across the whole screen (no 400 px gate); the sampler drops to 2 Hz while
+the window is hidden.
+
+## D-018 · 2026-11-03 · Calculator and Paste Stack both removed (owner decision)
+Calculator is removed as a tool (inline math stays in the command palette); Paste Stack stays removed
+(D-015). Krovi ships 15 tools. A brief attempt to restore Paste Stack was reverted the same day at the
+owner's instruction.
+
 ## D-010 · 2026-11-01 · Push + Release authorised; final-delivery plan
 Maintainer's final prompt authorises **`git push` and creating a GitHub Release** (previously gated),
 and wants a working, downloadable app + finished website, all pushed, with the README tying it together.
