@@ -1,0 +1,20 @@
+WEBVTT
+
+00:00.000 --> 00:05.567
+Typed in the Agent panel: "open youtube". The built-in planner makes a one-step plan. This is the app’s real interface in the browser demo.
+
+00:05.567 --> 00:11.133
+The demo does not open links, so no tab opens here. The next part is a real browser.
+
+00:11.133 --> 00:17.000
+A real recording of youtube.com loading in the recording browser. The installed app’s Open step opens youtube.com in your default browser.
+
+00:17.000 --> 00:25.617
+Talk to Agent: hold Ctrl + Alt + A and the pill reads "Listening for a command". The pill is the app’s real interface, put into that state by the recording script, because the browser demo has no microphone.
+
+00:25.617 --> 00:34.233
+In the app, local Whisper turns your voice into text. Here the same sentence is typed, and the same plan appears.
+
+00:34.233 --> 00:40.100
+The same real page again.
+

@@ -1,7 +1,7 @@
-/* Krovi website — shared behaviour. Vanilla JS, no dependencies, no network, no storage
+/* Krovi website: shared behaviour. Vanilla JS, no dependencies, no network, no storage
    except the theme preference (localStorage, wrapped in try/catch).
-   theme · mobile nav · nav border on scroll · scroll reveal · count-up · copy buttons ·
-   download button states · docs scroll-spy. */
+   theme (LIGHT by default; dark only when chosen) · mobile nav · nav border on scroll ·
+   scroll reveal · copy buttons · docs scroll-spy. */
 (function () {
   "use strict";
 
@@ -11,14 +11,9 @@
   function $$(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
 
   /* ---------------- theme ---------------- */
-  function isDark() {
-    var a = root.getAttribute("data-theme");
-    if (a === "dark") return true;
-    if (a === "light") return false;
-    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  }
+  function isDark() { return root.getAttribute("data-theme") === "dark"; }
   function syncDemoFrames() {
-    // The embedded demo is same-origin, so keep it in step with the site theme.
+    // An embedded demo (same origin) follows the site theme.
     $$("iframe[data-demo-frame]").forEach(function (f) {
       try {
         var d = f.contentDocument;
@@ -28,8 +23,12 @@
   }
   function syncThemeButton() {
     var btn = $(".theme-toggle");
-    if (!btn) return;
     var dark = isDark();
+    var meta = $("meta[name='theme-color']");
+    if (meta) meta.setAttribute("content", dark ? "#14130e" : "#ffffff");
+    var cs = $("meta[name='color-scheme']");
+    if (cs) cs.setAttribute("content", dark ? "dark" : "light");
+    if (!btn) return;
     btn.setAttribute("aria-pressed", String(dark));
     btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
   }
@@ -44,11 +43,6 @@
       syncThemeButton();
       syncDemoFrames();
     });
-    if (window.matchMedia) {
-      var mq = window.matchMedia("(prefers-color-scheme: dark)");
-      var onChange = function () { syncThemeButton(); syncDemoFrames(); };
-      if (mq.addEventListener) mq.addEventListener("change", onChange);
-    }
   }
   window.krovi = window.krovi || {};
   window.krovi.syncDemoFrames = syncDemoFrames;
@@ -87,36 +81,10 @@
     }
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) {
-        if (en.isIntersecting) {
-          en.target.classList.add("in");
-          io.unobserve(en.target);
-          if (en.target.hasAttribute("data-count-wrap")) countUp(en.target);
-        }
+        if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
       });
-    }, { rootMargin: "0px 0px -7% 0px", threshold: 0.06 });
+    }, { rootMargin: "0px 0px -6% 0px", threshold: 0.04 });
     els.forEach(function (el) { io.observe(el); });
-  }
-
-  /* ---------------- count-up ---------------- */
-  function countUp(scope) {
-    $$("[data-count]", scope).forEach(function (el) {
-      var to = parseInt(el.getAttribute("data-count"), 10);
-      if (isNaN(to) || reduceMotion) return;
-      var start = null, dur = 1100;
-      function frame(t) {
-        if (start === null) start = t;
-        var p = Math.min(1, (t - start) / dur);
-        var eased = 1 - Math.pow(1 - p, 3);
-        el.textContent = String(Math.round(to * eased));
-        if (p < 1) requestAnimationFrame(frame);
-      }
-      el.textContent = "0";
-      requestAnimationFrame(frame);
-    });
-  }
-  function wireCountUp() {
-    var groups = $$(".stats-grid");
-    groups.forEach(function (g) { g.setAttribute("data-count-wrap", ""); });
   }
 
   /* ---------------- copy buttons ---------------- */
@@ -148,33 +116,6 @@
         if (label) label.textContent = "Copied";
         setTimeout(function () { b.removeAttribute("data-copied"); if (label) label.textContent = "Copy"; }, 1800);
       }, function () { if (label) label.textContent = "Press Ctrl+C"; });
-    });
-  }
-
-  /* ---------------- download button: hover sheen, press, busy, done ---------------- */
-  function wireDownload() {
-    $$("[data-download]").forEach(function (btn) {
-      var status = document.getElementById(btn.getAttribute("aria-describedby"));
-      var timer;
-      btn.addEventListener("pointermove", function (e) {
-        var r = btn.getBoundingClientRect();
-        btn.style.setProperty("--mx", (e.clientX - r.left) + "px");
-        btn.style.setProperty("--my", (e.clientY - r.top) + "px");
-      });
-      btn.addEventListener("click", function () {
-        if (btn.getAttribute("data-state") === "busy") return;
-        clearTimeout(timer);
-        btn.setAttribute("data-state", "busy");
-        if (status) status.textContent = "Opening the download…";
-        timer = setTimeout(function () {
-          btn.setAttribute("data-state", "done");
-          if (status) status.textContent = "Done. Your download opened in a new tab.";
-          timer = setTimeout(function () {
-            btn.removeAttribute("data-state");
-            if (status) status.textContent = "";
-          }, 5200);
-        }, reduceMotion ? 120 : 950);
-      });
     });
   }
 
@@ -211,10 +152,8 @@
   function init() {
     wireTheme();
     wireNav();
-    wireCountUp();
     wireReveal();
     wireCopy();
-    wireDownload();
     wireToc();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
