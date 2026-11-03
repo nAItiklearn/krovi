@@ -382,6 +382,13 @@ button.day:active { transform: scale(0.92); }
 .xw-bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 0.86rem; font-weight: 620; }
 .xw-bar small { margin-left: auto; font-weight: 450; color: var(--text-3); }
 .xw-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
+/* Every mock window shows sample values, never live readings: say so on each one. */
+.xw-bar::after, .pz-head::after {
+  content: "Sample data"; flex: none; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line-2); color: var(--text-3); font-family: var(--font-body, inherit);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.pz-head::after { display: inline-block; margin-top: 8px; }
 .xw-body { padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-height: 250px; align-content: start; }
 .xr { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); font-size: 0.88rem; }
 .xr .k { flex: none; padding: 2px 8px; border-radius: 6px; background: var(--surface-3); color: var(--text-2); font-size: 0.68rem; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; }
