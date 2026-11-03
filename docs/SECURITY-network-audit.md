@@ -1,7 +1,7 @@
 ﻿# Krovi — Network / Privacy Audit
 
-_Last updated: 2026-11-02 (added "Planned (not yet implemented)" pre-declaration section, below;
-the current-build record is unchanged). This document is the evidence behind Krovi's "verifiable
+_Last updated: 2026-11-03 (added the opt-in Whisper model download: row 4 and its own section;
+2026-11-02: added the "Planned (not yet implemented)" pre-declaration section, below). This document is the evidence behind Krovi's "verifiable
 privacy" claim: a literal account of every place the app can open a network socket, what
 triggers it, what is sent, and how to turn it off. It is maintained in-repo so the claim is
 checkable against the source — and should be re-run against each released build._
@@ -10,13 +10,17 @@ checkable against the source — and should be re-run against each released buil
 
 The Krovi **desktop app** makes **no telemetry, analytics, or account calls**. Only **two**
 live network endpoints exist in the code, both **keyless** public APIs, plus a **manual-only**
-update check. The **website** (`web/`) makes **zero** network requests (no trackers, no CDN,
+update check, plus (added 2026-11-03) an **optional, user-initiated** download of a speech model
+from Hugging Face (row 4 below; the downloader exists in `krovi-net` but no app code calls it
+yet). The **website** (`web/`) makes **zero** network requests (no trackers, no CDN,
 no fonts-from-CDN) — it only contains `<a href>` links to the public GitHub repo.
 
-_Planned features (Whisper model download, BYOK AI, circle-and-ask) are **not implemented and
-not shipped**; they appear nowhere in the exhaustive table below. They are pre-described in the
-separate [Planned (not yet implemented)](#planned-not-yet-implemented) section at the bottom of
-this document, so their future network surface is declared before any code lands._
+_Planned features (BYOK AI, circle-and-ask) are **not implemented and not shipped**; they
+appear nowhere in the exhaustive table below. They are pre-described in the separate
+[Planned (not yet implemented)](#planned-not-yet-implemented) section at the bottom of this
+document, so their future network surface is declared before any code lands. The Whisper model
+download has moved out of that section: see
+[Whisper model download](#whisper-model-download-opt-in-user-initiated)._
 
 ## Method
 
@@ -32,6 +36,7 @@ its call site and classified below. (Build caches `target/` and `node_modules/` 
 | 1 | **Weather** | Weather tool open / manual refresh | `GET https://api.open-meteo.com/v1/forecast` | Coarse latitude/longitude only (coarsened to ~0.1Â° â‰ˆ 11 km before the request). No identifiers. | Don't open the Weather tool / don't grant location; the whole app works offline without it. |
 | 2 | **Currency rates** | Currency tool refresh | `GET https://api.frankfurter.dev/latest` (ECB data) | The base currency code only (e.g. `USD`). No identifiers. | Use cached rates (conversion math is offline); disable the Currency tool. |
 | 3 | **Update check** | **Manual only** (user clicks "check for updates") | GitHub Releases (public) | Nothing beyond a standard HTTPS GET. Never automatic. | N/A — only runs when the user asks. |
+| 4 | **Whisper model download** (optional) | **User action only**: the user picks a model and presses download. Never prefetched, scheduled or retried in the background. | `GET https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>`, which redirects to Hugging Face's CDN (`*.hf.co` / `*.huggingface.co`, e.g. `cdn-lfs.hf.co`, `cas-bridge.xethub.hf.co`). See [Whisper model download](#whisper-model-download-opt-in-user-initiated). | A plain GET per hop with a `Krovi/<version>` User-Agent. No request body, no cookies, no account, no identifiers, no user data. | Don't press download (speech then simply has no model installed); delete the file in settings at any time. |
 
 There are **no other outbound sockets**. The one **inbound** listener is Quick Transfer — LAN-only,
 token-gated, exists only while a share is open, auto-expires (see its section below). Weather
@@ -48,8 +53,11 @@ transmitted. Clipboard/notes/shelf/to-do data never leaves the machine.
     `https://api.open-meteo.com/v1/forecast`.
   - `src-tauri/crates/krovi-net/src/currency.rs` — endpoint constant
     `https://api.frankfurter.dev`.
-- With the `net` feature **off** (the default build), `fetch_forecast` / `fetch_rates` return
-  `NetError::Disabled` — i.e. no socket at all.
+  - `src-tauri/crates/krovi-net/src/whisper_models.rs` (`download_model`, user-initiated) via
+    `http::open_download` — base URL constant `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/`.
+    As of 2026-11-03 nothing in `src-tauri/src` or the frontend calls `download_model` yet.
+- With the `net` feature **off** (the default build), `fetch_forecast` / `fetch_rates` /
+  `download_model` return `NetError::Disabled` / `ModelError::Disabled` — i.e. no socket at all.
 - `krovi-core`, `krovi-store`, and `krovi-sys` contain **no** network code. `krovi-sys` touches
   the OS (media session, foreground window, coarse location) but opens **no** sockets.
 - The frontend (`src/`) performs **no** direct network I/O: in the app it calls Tauri commands
@@ -76,8 +84,51 @@ not requests the page makes.
 ## Comparison to the "private" claim
 
 This is exactly what makes Krovi's privacy posture **verifiable** rather than merely asserted:
-the outbound surface is two keyless GETs and a manual update check, isolated in one auditable
-module, with the source public. Anyone can re-run the grep above or trace the built binary.
+the outbound surface is two keyless GETs, a manual update check and an opt-in model download,
+isolated in one auditable module, with the source public. Anyone can re-run the grep above or
+trace the built binary.
+
+## Whisper model download (opt-in, user-initiated)
+
+_Added 2026-11-03. Code: `src-tauri/crates/krovi-net/src/whisper_models.rs` (catalog, redirect
+policy, streaming/verification core) and `src-tauri/crates/krovi-net/src/http.rs`
+(`open_download`, the only socket). **Status: implemented and unit-tested at crate level; not
+yet wired to the Tauri commands or the settings UI**, so the running app does not contain a
+button that reaches it yet._
+
+Speech recognition itself stays on-device: inference makes no network call and no audio ever
+leaves the machine. The only network step is fetching the model file the user chose.
+
+| Property | Behaviour (as implemented) |
+|---|---|
+| Trigger | `download_model()` is called only by explicit user action. No prefetch, no background or scheduled download, no automatic model choice, no retry loop. |
+| Destination | `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>` (the official whisper.cpp model repository) and the CDN it redirects to. The URL is built in the crate from the catalog file name; callers cannot pass a URL, and `download_model` only accepts an unmodified catalog entry. |
+| Redirects | Followed by hand (ureq's own redirect following is off). At most **5**. Every hop, including the first, must be `https`, on port 443, without credentials, with host `huggingface.co`, `*.huggingface.co` or `*.hf.co` (whole-label match: `huggingface.co.evil.com`, `evilhuggingface.co`, `user@host` tricks and `http://` are refused). Relative `Location` values are resolved against the current hop. |
+| Data sent | A `GET` per hop with `User-Agent: Krovi/<version>` and `Accept-Encoding: identity`. No request body, no cookies (ureq's cookie support is not compiled in), no `Authorization`, no identifiers. The only information the host sees is what any HTTPS GET reveals (IP address, the requested file name). |
+| Timeouts | Connect 15 s, write 15 s, any single read stalls at most 30 s; no overall deadline (the files are 30-190 MB). |
+| Integrity | Size and SHA-256 of each file are **constants in the source** (taken from the Git LFS pointers of the repository), never read from the server. The stream is written to `<file>.part` while being hashed; more than the expected number of bytes aborts the download; the digest must match before the file is renamed atomically to its final name. Any failure, mismatch or cancel deletes the `.part`; an existing good file is not touched until the new one is verified. `verify_model()` re-hashes an installed file on demand; `model_status()` only checks size. |
+| Storage | Written only into the directory the caller passes in; the file name is validated (`[A-Za-z0-9._-]`, no `..`). `delete_model()` removes the file and any `.part`. Deleting leaves no residual network activity and nothing re-downloads on its own. |
+| Cancel | The caller's cancel flag is polled before every read (64 KiB chunks) and between redirect hops. |
+| Opt-out | Never call it / never press the button. Without the `net` cargo feature the function returns `ModelError::Disabled` and no socket code is compiled. |
+
+Catalog (all `q5_1` ggml files from `ggerganov/whisper.cpp`; licence string "MIT, OpenAI Whisper
+weights via ggerganov/whisper.cpp"):
+
+| id | file | bytes | SHA-256 |
+|---|---|---|---|
+| `tiny` | `ggml-tiny-q5_1.bin` | 32,152,673 | `818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7` |
+| `base` | `ggml-base-q5_1.bin` | 59,707,625 | `422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898` |
+| `small` | `ggml-small-q5_1.bin` | 190,085,487 | `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb` |
+| `base.en` | `ggml-base.en-q5_1.bin` | 59,721,011 | `4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f` |
+
+Verification performed (2026-11-03): the pure logic (catalog sanity, redirect allow-list,
+size/hash enforcement through an in-memory reader, cancel and failure cleanup, status/delete/
+verify) is covered by unit tests that need no network. **Not performed:** an actual download
+(deliberately, to avoid a multi-MB transfer during development), a network trace of a real
+download, and a test against the live CDN's redirect chain; those remain to be done once the
+feature is wired into the app. The catalog sizes and hashes were read from Hugging Face's LFS
+pointers and file pages; the SHA-256 is only proven correct for the real file by a successful
+end-to-end download, which has not been run yet.
 
 
 ---
@@ -255,18 +306,16 @@ table** with verified call sites — being listed here is not evidence and must 
 a claim of implementation. *(Paste stack: this feature was removed (D-015) and never appears in
 this document's network record.)*
 
-## 1. Opt-in Whisper model download
+## 1. Opt-in Whisper model download — downloader implemented, app wiring still planned
 
-The speech-to-text runtime (Whisper via whisper.cpp) runs **entirely on-device**; inference makes
-no network call and **no audio ever leaves the machine**. Because models are large, the one
-network-adjacent step will be fetching a model file, and it will be strictly opt-in:
+The downloader itself (trigger rules, host allow-list, size/SHA-256 verification, deletion) now
+exists in `krovi-net` and is described in the main record above: see
+[Whisper model download](#whisper-model-download-opt-in-user-initiated) and row 4 of the
+exhaustive table. What is **still planned and not implemented**:
 
 | Property | Intended behaviour |
 |---|---|
-| Trigger | **User action only** (explicit "download model" button in settings). No prefetch, no background download, no automatic selection. |
-| Endpoint | **HTTPS from one pinned host** — the model is fetched from a fixed, allow-listed repository host, not from arbitrary URLs. No other endpoint is contacted for this purpose. |
-| Integrity | The model file's **SHA-256 digest is pinned at build time**; the downloaded file is hash-checked before it is accepted. A mismatch deletes the partial file and refuses to use it (no silent fallback to the server's copy of the hash). |
-| Storage | Written to a local model directory; **user-deletable** at any time from settings. Deleting the model leaves no residual network activity and the feature degrades to "no model installed" (STT unavailable, no attempt to re-download on its own). |
+| Trigger | The explicit "download model" button in settings, and the Tauri command behind it. No prefetch, no background download, no automatic selection. (Nothing in `src-tauri/src` or the frontend calls the downloader yet.) |
 | Runtime | The inference DLL is **built from pinned whisper.cpp revision b5454 on CI** as part of the release build — it is **not** downloaded ad hoc at runtime, so the app never fetches shared-library code from the network. |
 
 ## 2. BYOK AI (Gemini primary, Groq alternative)

@@ -9,6 +9,10 @@
 //!      (Open-Meteo geocoding; sends only the text the user typed — see
 //!      [`geocode`]).
 //!
+//!   4. a **user-initiated, optional** download of a speech model the user picked
+//!      (a plain GET to `huggingface.co` and its CDN; nothing about the user is
+//!      sent, the file is size- and SHA-256-verified — see [`whisper_models`]).
+//!
 //! There is **no** telemetry, analytics, or account traffic anywhere. The
 //! endpoints are listed for the Phase-4 security audit in the crate docs below
 //! and in `docs/SECURITY-network-audit.md`.
@@ -26,6 +30,9 @@
 //! * Weather:  `https://api.open-meteo.com/v1/forecast`  (keyless, GET, coarse lat/long)
 //! * FX rates: `https://api.frankfurter.dev/v1/latest`   (keyless, GET, base currency only)
 //! * Geocode:  `https://geocoding-api.open-meteo.com/v1/search` (keyless, GET, typed city name only)
+//! * Whisper model (user-initiated only): `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>`,
+//!   which redirects to Hugging Face's CDN (`*.hf.co` / `*.huggingface.co`, at most 5
+//!   redirects, every hop host-checked). GET only, no body, no cookies.
 
 mod cache;
 pub mod currency;
@@ -33,6 +40,7 @@ pub mod geocode;
 pub mod reply;
 pub mod resolve;
 pub mod weather;
+pub mod whisper_models;
 
 #[cfg(feature = "net")]
 mod http;
@@ -45,6 +53,10 @@ pub use resolve::{resolve, Cached, Resolved};
 pub use weather::{
     fetch_forecast, forecast_url, parse_forecast, weekday_abbrev, wmo_condition, wmo_icon,
     DayPoint, HourPoint, WeatherData,
+};
+pub use whisper_models::{
+    catalog as whisper_catalog, delete_model, download_model, find_model, model_status,
+    verify_model, ModelError, ModelStatus, WhisperModel,
 };
 
 /// Errors from the network layer.

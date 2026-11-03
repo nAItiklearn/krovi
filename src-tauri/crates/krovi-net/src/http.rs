@@ -10,11 +10,21 @@
 //! it is built and run only in CI on a full toolchain. No local test results are
 //! claimed for it.
 
+use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use crate::whisper_models::{check_url, resolve_redirect, ModelError, MAX_REDIRECTS};
 use crate::NetError;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Model downloads are large, so there is no overall deadline; instead the
+/// connection must open within 15 s and no single read may stall for more than
+/// 30 s.
+const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const DOWNLOAD_READ_STALL_TIMEOUT: Duration = Duration::from_secs(30);
+const DOWNLOAD_WRITE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// GET `url` and return the response body as text.
 pub fn get(url: &str) -> crate::Result<String> {
@@ -24,4 +34,83 @@ pub fn get(url: &str) -> crate::Result<String> {
         .map_err(|e| NetError::Request(e.to_string()))?;
     resp.into_string()
         .map_err(|e| NetError::Request(e.to_string()))
+}
+
+/// An opened (status 200) model download, ready to be streamed.
+pub struct Download {
+    /// The response body.
+    pub reader: Box<dyn Read + Send + Sync + 'static>,
+    /// `Content-Length`, only when the body is not content-encoded (so it is
+    /// comparable with the catalog size).
+    pub content_length: Option<u64>,
+}
+
+/// GET `url` for a model download, following redirects **by hand**.
+///
+/// ureq's own redirect following is switched off (`redirects(0)`) so that every
+/// hop (the initial URL and each `Location`) is checked against the Hugging Face
+/// host allow-list before a connection is made, at most [`MAX_REDIRECTS`] hops
+/// are followed, and nothing but a plain GET is ever sent: no body, no cookies
+/// (ureq's `cookies` feature is not enabled), no `Authorization`, and
+/// `Accept-Encoding: identity` so the bytes hashed are the bytes on the wire.
+/// `cancel` is polled between hops.
+pub fn open_download(url: &str, cancel: &AtomicBool) -> Result<Download, ModelError> {
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
+        .timeout_connect(DOWNLOAD_CONNECT_TIMEOUT)
+        .timeout_read(DOWNLOAD_READ_STALL_TIMEOUT)
+        .timeout_write(DOWNLOAD_WRITE_TIMEOUT)
+        .user_agent(concat!("Krovi/", env!("CARGO_PKG_VERSION")))
+        .build();
+
+    let mut current = url.to_string();
+    let mut hops = 0usize;
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(ModelError::Cancelled);
+        }
+        check_url(&current)?;
+        let resp = agent
+            .get(&current)
+            .set("Accept-Encoding", "identity")
+            .call()
+            .map_err(|e| match e {
+                ureq::Error::Status(code, _) => ModelError::Http(code),
+                // Not `e.to_string()`: that would echo the (signed) CDN URL.
+                ureq::Error::Transport(t) => ModelError::Request(match t.message() {
+                    Some(m) => format!("{}: {m}", t.kind()),
+                    None => t.kind().to_string(),
+                }),
+            })?;
+
+        let status = resp.status();
+        if matches!(status, 301 | 302 | 303 | 307 | 308) {
+            if hops >= MAX_REDIRECTS {
+                return Err(ModelError::TooManyRedirects);
+            }
+            let location = resp.header("Location").ok_or_else(|| {
+                ModelError::RedirectRefused("redirect without a Location header".to_string())
+            })?;
+            current = resolve_redirect(&current, location)?;
+            hops += 1;
+            continue;
+        }
+        if status != 200 {
+            return Err(ModelError::Http(status));
+        }
+
+        let encoded = resp
+            .header("Content-Encoding")
+            .map_or(false, |e| !e.trim().eq_ignore_ascii_case("identity"));
+        let content_length = if encoded {
+            None
+        } else {
+            resp.header("Content-Length")
+                .and_then(|v| v.trim().parse::<u64>().ok())
+        };
+        return Ok(Download {
+            reader: resp.into_reader(),
+            content_length,
+        });
+    }
 }
