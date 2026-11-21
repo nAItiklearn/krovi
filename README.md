@@ -2,6 +2,9 @@
 
 **website** https://www.krovi.tech/
 
+<img width="1896" height="935" alt="image" src="https://github.com/user-attachments/assets/c3430779-71a6-41c4-a8e4-533e270b127a" />
+
+
 A small partner which dont let u feel alone , by living top of your screen 
 
 ## what is it?
