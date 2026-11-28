@@ -5,24 +5,29 @@
 
 main > section,
 footer.closing {
-  min-height: min(100svh, 1080px);
-  padding-top: var(--padt);
-  padding-bottom: calc(var(--padb) + var(--bar));
+  padding-block: 88px;
   background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
 }
 
-main > section.band-alt {
+main > section.band-alt,
+footer.closing.band-alt {
   background: var(--surface);
+}
+
+@media (max-width: 639px) {
+  main > section,
+  footer.closing {
+    padding-block: 56px;
+  }
 }
 
 /* ---------- Screen 1: Hero with right-side Notch Eye look ---------- */
 main > section.hero {
-  min-height: min(100svh, 1080px);
+  min-height: min(100svh, 960px);
   padding-top: calc(var(--nav) + var(--hgap));
   padding-bottom: calc(var(--hpadb) + var(--bar));
+  display: flex;
+  flex-direction: column;
   justify-content: space-between;
 }
 .hero > .wrap {
@@ -479,28 +484,37 @@ main > section.hero {
   }
 }
 
+.privacy-table tr.group-row th {
+  padding-top: 18px;
+  padding-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-strong);
+}
+
 /* ---------- Screen 8: All 19 tools ---------- */
 .tools-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 48px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 32px;
 }
 .tools-list li {
-  display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 12px;
-  padding: 11px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0;
   border-top: 1px solid var(--border);
-  font-size: 16px;
+  font-size: 15px;
 }
 .tools-list strong {
   font-weight: 500;
   color: var(--text);
 }
 .tools-list span {
-  color: var(--text);
+  font-size: 14px;
+  color: var(--muted);
 }
 .tools-foot {
   margin-top: 20px;
@@ -510,20 +524,14 @@ main > section.hero {
 
 @media (max-width: 1023px) {
   .tools-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 24px;
-  }
-  .tools-list li {
-    grid-template-columns: 120px minmax(0, 1fr);
-    padding: 8px 0;
   }
 }
 @media (max-width: 639px) {
   .tools-list {
-    grid-template-columns: 1fr;
-  }
-  .tools-list li {
-    grid-template-columns: 116px minmax(0, 1fr);
-    padding: 8px 0;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
   }
 }
 
